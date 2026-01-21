@@ -1,2 +1,2 @@
 # panoptic-sdk
-# panoptic-sdk
+Specs: [spec.md](spec.md)
