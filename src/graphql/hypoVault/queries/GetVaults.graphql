@@ -1,0 +1,9 @@
+query GetFilteredHypoVaults($hypoVaultWhitelist: [Bytes!]!) {
+  bundle(id: "1") {
+    ethPriceUSD
+  }
+
+  hypoVaults(where: {id_in: $hypoVaultWhitelist}) {
+    ...HypoVault
+  }
+}

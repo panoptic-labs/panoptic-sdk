@@ -1,0 +1,10 @@
+fragment DepositEpochState on DepositEpochState {
+  id
+  epoch
+  assetsDeposited
+  assetsFulfilled
+  sharesReceived
+  hypoVault {
+    id
+  }
+}

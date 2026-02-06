@@ -1,0 +1,37 @@
+fragment HypoVault on HypoVault {
+  id
+  symbol
+  name
+  underlyingToken {
+    id
+    symbol
+    decimals
+    name
+    derivedETH
+  }
+  performanceFeeBps
+  owner
+  feeWallet
+  manager
+  accountant
+  withdrawalEpoch
+  depositEpoch
+  reservedWithdrawalAssets
+  depositEpochStates {
+    id
+  }
+  withdrawalEpochStates {
+    id
+  }
+  userBalances {
+    id
+  }
+  totalAssetsDeposited
+  totalAssetsWithdrawn
+  totalPerformanceFeesCollected
+  createdAt
+  updatedAt
+  createdAtBlock
+  updatedAtBlock
+}
+

@@ -1,0 +1,35 @@
+query GetQueuedDepositsForWithdrawal(
+  $account: String!
+  $hypoVault: String!
+  $hypoVaultId: ID!
+) {
+  hypoVault(id: $hypoVaultId) {
+    id
+    depositEpoch
+  }
+  userBalances(where: { account: $account, hypoVault: $hypoVault }) {
+    shares
+  }
+  queuedDeposits(
+    where: { account: $account, hypoVault: $hypoVault, amount_gt: "0" }
+    orderBy: epoch
+    orderDirection: asc
+  ) {
+    amount
+    epoch
+  }
+}
+
+query GetDepositEpochStatesForWithdrawal(
+  $hypoVault: String!
+  $minEpoch: BigInt!
+  $maxEpoch: BigInt!
+) {
+  depositEpochStates(
+    where: { hypoVault: $hypoVault, epoch_gte: $minEpoch, epoch_lt: $maxEpoch }
+    orderBy: epoch
+    orderDirection: asc
+  ) {
+    ...DepositEpochState
+  }
+}

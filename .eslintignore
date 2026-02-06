@@ -1,0 +1,14 @@
+node_modules
+
+.cache
+.output
+
+/build/
+/public/build
+/api/index.js
+/api/index.js.map
+/scripts
+
+/app/graphql/*.generated.ts
+src/graphql/*.generated.ts
+.github/**/*

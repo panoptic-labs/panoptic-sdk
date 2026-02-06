@@ -1,0 +1,10 @@
+fragment WithdrawalEpochState on WithdrawalEpochState {
+  id
+  epoch
+  sharesWithdrawn
+  assetsReceived
+  sharesFulfilled
+  hypoVault {
+    id
+  }
+}

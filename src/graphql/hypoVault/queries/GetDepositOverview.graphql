@@ -1,0 +1,48 @@
+query GetDepositOverview(
+  $account: String!
+  $hypoVault: String!
+  $hypoVaultId: ID!
+  $historyLimit: Int = 5
+) {
+  hypoVault(id: $hypoVaultId) {
+    id
+    underlyingToken {
+      symbol
+      decimals
+    }
+  }
+  queuedDeposits(
+    where: { account: $account, hypoVault: $hypoVault, amount_gt: "0" }
+    orderBy: epoch
+    orderDirection: desc
+  ) {
+    amount
+    epoch
+  }
+  queuedWithdrawals(
+    where: { account: $account, hypoVault: $hypoVault, amount_gt: "0" }
+    orderBy: epoch
+    orderDirection: desc
+  ) {
+    amount
+    epoch
+  }
+  depositExecuteds(
+    first: $historyLimit
+    orderBy: blockTimestamp
+    orderDirection: desc
+    where: { user: $account, hypoVault: $hypoVault }
+  ) {
+    assets
+    blockTimestamp
+  }
+  withdrawalExecuteds(
+    first: $historyLimit
+    orderBy: blockTimestamp
+    orderDirection: desc
+    where: { user: $account, hypoVault: $hypoVault }
+  ) {
+    assets
+    blockTimestamp
+  }
+}

@@ -1,0 +1,8 @@
+query GetLatestEpoch($hypoVault: String!) {
+  depositEpochStates(where: { hypoVault: $hypoVault }, orderBy: epoch, orderDirection: desc, first: 1) {
+    ...DepositEpochState
+  }
+  withdrawalEpochStates(where: { hypoVault: $hypoVault }, orderBy: epoch, orderDirection: desc, first: 1) {
+    ...WithdrawalEpochState
+  }
+}
