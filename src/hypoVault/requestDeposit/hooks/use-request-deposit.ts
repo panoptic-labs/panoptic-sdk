@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { Address } from 'viem'
 import { maxUint256, zeroAddress } from 'viem'
 import {
@@ -59,9 +59,6 @@ export const useRequestDeposit = ({
   const approveWait = useWaitForTransactionReceipt({
     hash: approveWrite.data,
     query: {
-      meta: {
-        onSuccess: refetchAllowance,
-      },
       refetchOnWindowFocus: false,
       refetchOnMount: false,
     },
@@ -86,13 +83,39 @@ export const useRequestDeposit = ({
   const wait = useWaitForTransactionReceipt({
     hash: write.data,
     query: {
-      meta: {
-        onSuccess: onWaitSuccess,
-      },
       refetchOnWindowFocus: false,
       refetchOnMount: false,
     },
   })
+
+  const handledApproveHashRef = useRef<`0x${string}` | undefined>(undefined)
+  const handledRequestHashRef = useRef<`0x${string}` | undefined>(undefined)
+
+  useEffect(() => {
+    const approveHash = approveWrite.data
+    if (!approveWait.isSuccess || approveHash == null) {
+      return
+    }
+    if (handledApproveHashRef.current === approveHash) {
+      return
+    }
+
+    handledApproveHashRef.current = approveHash
+    void refetchAllowance()
+  }, [approveWait.isSuccess, approveWrite.data, refetchAllowance])
+
+  useEffect(() => {
+    const requestHash = write.data
+    if (!wait.isSuccess || requestHash == null) {
+      return
+    }
+    if (handledRequestHashRef.current === requestHash) {
+      return
+    }
+
+    handledRequestHashRef.current = requestHash
+    onWaitSuccess?.()
+  }, [onWaitSuccess, wait.isSuccess, write.data])
 
   const act = useCallback(() => {
     if (tokenNeedsApproval) {

@@ -1,6 +1,12 @@
 {
   "name": "@panoptic-eng/sdk",
-  "version": "1.0.1",
+  "version": "1.0.3",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/panoptic-labs/panoptic-sdk.git"
+  },
+  "bugs": "https://github.com/panoptic-labs/panoptic-sdk/issues",
+  "homepage": "https://github.com/panoptic-labs/panoptic-sdk#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,13 +24,20 @@
     "dist"
   ],
   "scripts": {
-    "build": "pnpm run codegen && pnpm tsdown",
+    "build": "(pnpm run codegen || echo 'codegen skipped (foundry projects not available)') && pnpm tsdown",
+    "build:ci": "pnpm tsdown",
     "dev": "pnpm concurrently \"pnpm run codegen --watch\" \"pnpm tsdown --watch\"",
     "typecheck": "tsc --noEmit -p tsconfig.build.json",
     "lint": "eslint . --ext .ts,.tsx --ignore-pattern 'dist/**' --ignore-pattern 'graphql/**' --ignore-pattern 'src/graphql/**' --max-warnings=0",
     "lint:fix": "pnpm lint --fix",
     "test": "vitest run",
-    "codegen": "graphql-codegen-esm --config ./codegen.ts",
+    "test:fork": "vitest run --config src/panoptic/v2/examples/__tests__/vitest.config.fork.ts",
+    "test:fork:watch": "vitest watch --config src/panoptic/v2/examples/__tests__/vitest.config.fork.ts",
+    "test:examples": "pnpm test && pnpm test:fork",
+    "codegen": "pnpm run codegen:graphql && pnpm run codegen:wagmi",
+    "codegen:graphql": "graphql-codegen-esm --config ./codegen.ts",
+    "codegen:wagmi": "wagmi generate",
+    "sync-contracts": "./scripts/sync-contracts.sh",
     "prepack": "pnpm build",
     "prepublishOnly": "pnpm build"
   },
@@ -52,17 +65,17 @@
     "@types/react-dom": "^18.0.8",
     "@wagmi/cli": "^2.9.0",
     "concurrently": "^7.6.0",
-    "tiny-invariant": "^1.3.1",
     "dotenv": "^17.2.3",
     "jsdom": "^27.4.0",
     "react": "18.3.0-canary-c3048aab4-20240326",
     "react-dom": "18.3.0-canary-c3048aab4-20240326",
+    "tiny-invariant": "^1.3.1",
     "tsdown": "^0.9.0",
     "typescript": "5.1.6",
+    "viem": "^2.41.2",
     "viem-deal": "^2.0.4",
     "vite": "^5.4.2",
     "vite-tsconfig-paths": "^5.0.1",
-    "viem": "^2.41.2",
     "vitest": "^2.0.5",
     "wagmi": "^2.14.11"
   }

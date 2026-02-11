@@ -10,6 +10,7 @@ export default defineConfig({
     'react/jsx-dev-runtime',
     'wagmi',
     'viem',
+    '@tanstack/react-query',
     // Test utilities dependencies (exported via ./test entry point)
     'node:child_process',
   ],

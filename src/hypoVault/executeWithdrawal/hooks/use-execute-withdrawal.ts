@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { Address } from 'viem'
 import { zeroAddress } from 'viem'
 import {
@@ -109,13 +109,25 @@ export const useExecuteWithdrawal = ({
   const wait = useWaitForTransactionReceipt({
     hash: write.data,
     query: {
-      meta: {
-        onSuccess: onWaitSuccess,
-      },
       refetchOnWindowFocus: false,
       refetchOnMount: false,
     },
   })
+
+  const handledRequestHashRef = useRef<`0x${string}` | undefined>(undefined)
+
+  useEffect(() => {
+    const requestHash = write.data
+    if (!wait.isSuccess || requestHash == null) {
+      return
+    }
+    if (handledRequestHashRef.current === requestHash) {
+      return
+    }
+
+    handledRequestHashRef.current = requestHash
+    onWaitSuccess?.()
+  }, [onWaitSuccess, wait.isSuccess, write.data])
 
   const act = useCallback(() => {
     const request = simulate.data?.request
