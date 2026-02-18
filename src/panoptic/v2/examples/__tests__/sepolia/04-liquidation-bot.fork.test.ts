@@ -44,7 +44,7 @@ import { openPosition } from '../../../writes/position'
 import { deposit } from '../../../writes/vault'
 // Test config
 import {
-  createBuilderFromPoolId,
+  createTokenIdBuilder,
   fundSepoliaTestAccount,
   getAnvilRpcUrl,
   SEPOLIA_ANVIL_CONFIG,
@@ -440,7 +440,7 @@ describe('Sepolia Fork: Liquidation Bot', () => {
 
       // Build a simple short call position
       const strike = (currentTick / tickSpacing) * tickSpacing
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
 
       const tokenId = builder
         .addCall({

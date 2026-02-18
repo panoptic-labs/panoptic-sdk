@@ -35,6 +35,7 @@ import {
 } from './index'
 
 const MOCK_POOL_ADDRESS = '0x1234567890abcdef1234567890abcdef12345678' as const
+const MOCK_POOL_ID = encodePoolId(MOCK_POOL_ADDRESS, 60n)
 
 describe('TokenId Constants', () => {
   it('should have correct standard tick widths', () => {
@@ -269,12 +270,12 @@ describe('Leg Encoding/Decoding', () => {
 
 describe('TokenId Builder', () => {
   it('should create a builder with pool address', () => {
-    const builder = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const builder = createTokenIdBuilder(MOCK_POOL_ID)
     expect(builder.legCount()).toBe(0n)
   })
 
   it('should add a leg', () => {
-    const builder = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const builder = createTokenIdBuilder(MOCK_POOL_ID)
     builder.addLeg({
       asset: 1n,
       optionRatio: 1n,
@@ -289,7 +290,7 @@ describe('TokenId Builder', () => {
   it('should add call leg with correct defaults', () => {
     // Call: tokenType === asset
     // Default asset=0, so tokenType=0
-    const tokenId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const tokenId = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: false,
@@ -305,7 +306,7 @@ describe('TokenId Builder', () => {
 
   it('should allow overriding asset in addCall', () => {
     // Call with asset=1: tokenType should also be 1
-    const tokenId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const tokenId = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: false,
@@ -323,7 +324,7 @@ describe('TokenId Builder', () => {
   it('should add put leg with correct defaults', () => {
     // Put: tokenType !== asset
     // Default asset=0, so tokenType=1
-    const tokenId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const tokenId = createTokenIdBuilder(MOCK_POOL_ID)
       .addPut({
         optionRatio: 1n,
         isLong: false,
@@ -339,7 +340,7 @@ describe('TokenId Builder', () => {
 
   it('should allow overriding asset in addPut', () => {
     // Put with asset=1: tokenType should be 0 (opposite)
-    const tokenId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const tokenId = createTokenIdBuilder(MOCK_POOL_ID)
       .addPut({
         optionRatio: 1n,
         isLong: false,
@@ -355,7 +356,7 @@ describe('TokenId Builder', () => {
   })
 
   it('should chain multiple legs', () => {
-    const tokenId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const tokenId = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: false,
@@ -375,12 +376,12 @@ describe('TokenId Builder', () => {
   })
 
   it('should throw when building with no legs', () => {
-    const builder = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const builder = createTokenIdBuilder(MOCK_POOL_ID)
     expect(() => builder.build()).toThrow(InvalidTokenIdParameterError)
   })
 
   it('should throw when adding more than 4 legs', () => {
-    const builder = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const builder = createTokenIdBuilder(MOCK_POOL_ID)
     for (let i = 0; i < 4; i++) {
       builder.addCall({
         optionRatio: 1n,
@@ -400,7 +401,7 @@ describe('TokenId Builder', () => {
   })
 
   it('should throw for invalid option ratio', () => {
-    const builder = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const builder = createTokenIdBuilder(MOCK_POOL_ID)
     expect(() =>
       builder.addCall({
         optionRatio: 0n,
@@ -421,7 +422,7 @@ describe('TokenId Builder', () => {
   })
 
   it('should throw for negative width', () => {
-    const builder = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const builder = createTokenIdBuilder(MOCK_POOL_ID)
     expect(() =>
       builder.addLeg({
         asset: 0n,
@@ -435,7 +436,7 @@ describe('TokenId Builder', () => {
   })
 
   it('should throw for width exceeding max', () => {
-    const builder = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const builder = createTokenIdBuilder(MOCK_POOL_ID)
     expect(() =>
       builder.addLeg({
         asset: 0n,
@@ -449,7 +450,7 @@ describe('TokenId Builder', () => {
   })
 
   it('should reset the builder', () => {
-    const builder = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const builder = createTokenIdBuilder(MOCK_POOL_ID)
     builder.addCall({
       optionRatio: 1n,
       isLong: false,
@@ -463,7 +464,7 @@ describe('TokenId Builder', () => {
   })
 
   it('should set risk partner correctly', () => {
-    const tokenId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const tokenId = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: false,
@@ -488,7 +489,7 @@ describe('TokenId Builder', () => {
 
 describe('TokenId Decoding', () => {
   it('should decode a complete TokenId', () => {
-    const tokenId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const tokenId = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: false,
@@ -509,7 +510,7 @@ describe('TokenId Decoding', () => {
   })
 
   it('should calculate tick bounds correctly', () => {
-    const tokenId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const tokenId = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: false,
@@ -529,7 +530,7 @@ describe('TokenId Decoding', () => {
 
 describe('TokenId Helpers', () => {
   it('should detect long legs', () => {
-    const shortOnly = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const shortOnly = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: false,
@@ -538,7 +539,7 @@ describe('TokenId Helpers', () => {
       })
       .build()
 
-    const hasLong = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const hasLong = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: true,
@@ -552,7 +553,7 @@ describe('TokenId Helpers', () => {
   })
 
   it('should detect short-only positions', () => {
-    const shortOnly = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const shortOnly = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: false,
@@ -567,7 +568,7 @@ describe('TokenId Helpers', () => {
       })
       .build()
 
-    const mixed = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const mixed = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: false,
@@ -587,7 +588,7 @@ describe('TokenId Helpers', () => {
   })
 
   it('should detect spreads', () => {
-    const noSpread = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const noSpread = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: false,
@@ -596,7 +597,7 @@ describe('TokenId Helpers', () => {
       })
       .build()
 
-    const spread = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const spread = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: false,
@@ -619,7 +620,7 @@ describe('TokenId Helpers', () => {
 
   it('should get asset index', () => {
     // Both addCall and addPut default to asset: 0n (risky asset, e.g., WETH)
-    const callToken = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const callToken = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: false,
@@ -628,7 +629,7 @@ describe('TokenId Helpers', () => {
       })
       .build()
 
-    const putToken = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const putToken = createTokenIdBuilder(MOCK_POOL_ID)
       .addPut({
         optionRatio: 1n,
         isLong: false,
@@ -642,7 +643,7 @@ describe('TokenId Helpers', () => {
   })
 
   it('should get asset index with override', () => {
-    const callToken = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+    const callToken = createTokenIdBuilder(MOCK_POOL_ID)
       .addCall({
         optionRatio: 1n,
         isLong: false,
@@ -664,7 +665,7 @@ describe('TokenId Helpers', () => {
 describe('Loan/Credit TokenIds', () => {
   describe('Builder', () => {
     it('should create a loan with width=0 and isLong=false', () => {
-      const tokenId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+      const tokenId = createTokenIdBuilder(MOCK_POOL_ID)
         .addLoan({
           asset: 0n,
           tokenType: 0n,
@@ -682,7 +683,7 @@ describe('Loan/Credit TokenIds', () => {
     })
 
     it('should create a credit with width=0 and isLong=true', () => {
-      const tokenId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+      const tokenId = createTokenIdBuilder(MOCK_POOL_ID)
         .addCredit({
           asset: 0n,
           tokenType: 1n,
@@ -700,7 +701,7 @@ describe('Loan/Credit TokenIds', () => {
     })
 
     it('should create loan with custom optionRatio', () => {
-      const tokenId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+      const tokenId = createTokenIdBuilder(MOCK_POOL_ID)
         .addLoan({
           asset: 0n,
           tokenType: 0n,
@@ -714,11 +715,11 @@ describe('Loan/Credit TokenIds', () => {
     })
 
     it('should set asset equal to tokenType for loans', () => {
-      const tokenId0 = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+      const tokenId0 = createTokenIdBuilder(MOCK_POOL_ID)
         .addLoan({ asset: 0n, tokenType: 0n, strike: 100n })
         .build()
 
-      const tokenId1 = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+      const tokenId1 = createTokenIdBuilder(MOCK_POOL_ID)
         .addLoan({ asset: 1n, tokenType: 1n, strike: 100n })
         .build()
 
@@ -730,7 +731,7 @@ describe('Loan/Credit TokenIds', () => {
     })
 
     it('should allow combining loans with regular options', () => {
-      const tokenId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+      const tokenId = createTokenIdBuilder(MOCK_POOL_ID)
         .addCall({
           optionRatio: 1n,
           isLong: false,
@@ -753,7 +754,7 @@ describe('Loan/Credit TokenIds', () => {
 
   describe('Helpers', () => {
     it('should detect pure loan tokenId', () => {
-      const loanId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+      const loanId = createTokenIdBuilder(MOCK_POOL_ID)
         .addLoan({ asset: 0n, tokenType: 0n, strike: 100n })
         .build()
 
@@ -765,7 +766,7 @@ describe('Loan/Credit TokenIds', () => {
     })
 
     it('should detect pure credit tokenId', () => {
-      const creditId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+      const creditId = createTokenIdBuilder(MOCK_POOL_ID)
         .addCredit({ asset: 1n, tokenType: 1n, strike: -100n })
         .build()
 
@@ -777,7 +778,7 @@ describe('Loan/Credit TokenIds', () => {
     })
 
     it('should detect mixed loan/credit tokenId', () => {
-      const mixedId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+      const mixedId = createTokenIdBuilder(MOCK_POOL_ID)
         .addLoan({ asset: 0n, tokenType: 0n, strike: 100n })
         .addCredit({ asset: 0n, tokenType: 1n, strike: -100n })
         .build()
@@ -792,7 +793,7 @@ describe('Loan/Credit TokenIds', () => {
     })
 
     it('should not detect loan/credit on regular options', () => {
-      const optionId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+      const optionId = createTokenIdBuilder(MOCK_POOL_ID)
         .addCall({
           optionRatio: 1n,
           isLong: false,
@@ -809,7 +810,7 @@ describe('Loan/Credit TokenIds', () => {
     })
 
     it('should detect loan/credit in mixed option+loan tokenId', () => {
-      const mixedId = createTokenIdBuilder(MOCK_POOL_ADDRESS, 60n)
+      const mixedId = createTokenIdBuilder(MOCK_POOL_ID)
         .addCall({
           optionRatio: 1n,
           isLong: false,

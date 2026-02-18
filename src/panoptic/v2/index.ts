@@ -52,8 +52,9 @@ export {
   isPanopticErrorType,
   LengthMismatchError,
   LiquidityTooHighError,
-  NetLiquidityZeroError,
   // SDK errors
+  MissingPositionIdsError,
+  NetLiquidityZeroError,
   NetworkMismatchError,
   NoLegsExercisableError,
   NotALongLegError,
@@ -145,7 +146,6 @@ export {
   countLegs,
   // Builder
   createTokenIdBuilder,
-  createTokenIdBuilderV4,
   decodeAllLegs,
   decodeLeg,
   decodePoolId,
@@ -187,6 +187,9 @@ export type {
   ERC4626PreviewParams,
   ERC4626PreviewResult,
   EstimateCollateralRequiredParams,
+  // fetchPoolId params/result
+  FetchPoolIdParams,
+  FetchPoolIdResult,
   // Account read params
   GetAccountCollateralParams,
   // Account greeks params
@@ -241,6 +244,8 @@ export {
   convertToAssets,
   convertToShares,
   estimateCollateralRequired,
+  // Pool ID fetch
+  fetchPoolId,
   // Account reads
   getAccountCollateral,
   // Account greeks
@@ -382,6 +387,7 @@ export type {
   MintParams,
   OpenPositionParams,
   PokeOracleParams,
+  PositionStorageParams,
   RedeemParams,
   RollPositionParams,
   SettleParams,
@@ -489,7 +495,7 @@ export {
 // ============================================================================
 // Formatters
 // ============================================================================
-export type { PoolFormatterConfig, PoolFormatters } from './formatters'
+export type { PoolFormatterConfig, PoolFormatters, TickLimitsResult } from './formatters'
 export {
   // Pool-bound formatters
   createPoolFormatters,
@@ -538,6 +544,7 @@ export {
   roundToTickSpacing,
   sqrtPriceX96ToPriceDecimalScaled,
   sqrtPriceX96ToTick,
+  tickLimits,
   // Tick and price
   tickToPrice,
   tickToPriceDecimalScaled,

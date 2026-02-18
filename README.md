@@ -1,139 +1,156 @@
 # @panoptic-eng/sdk
 
-TypeScript SDK for interacting with Panoptic v2 protocol.
+TypeScript SDK for interacting with the Panoptic v2 perpetual options protocol on EVM chains.
 
-## Prerequisites
+## Quick Start
+
+```bash
+npm install @panoptic-eng/sdk viem
+```
+
+```typescript
+import { createPublicClient, createWalletClient, http, parseUnits } from 'viem'
+import { sepolia } from 'viem/chains'
+import { privateKeyToAccount } from 'viem/accounts'
+import {
+  getPool, fetchPoolId, approveAndWait, depositAndWait,
+  createTokenIdBuilder, simulateOpenPosition, openPositionAndWait,
+  tickLimits, formatTokenAmount,
+} from '@panoptic-eng/sdk'
+
+// 1. Setup clients
+const account = privateKeyToAccount('0xYOUR_PRIVATE_KEY')
+const client = createPublicClient({ chain: sepolia, transport: http() })
+const walletClient = createWalletClient({ account, chain: sepolia, transport: http() })
+
+// 2. Read pool data
+const pool = await getPool({ client, poolAddress: '0x...', chainId: 11155111n })
+
+// 3. Approve + deposit collateral
+await approveAndWait({
+  client, walletClient, account: account.address,
+  tokenAddress: pool.poolKey.currency0,
+  spenderAddress: pool.collateralTracker0.address,
+  amount: 2n ** 256n - 1n,
+})
+await depositAndWait({
+  client, walletClient, account: account.address,
+  collateralTrackerAddress: pool.collateralTracker0.address,
+  assets: parseUnits('1', 18),
+})
+
+// 4. Build a position and simulate
+const { poolId } = await fetchPoolId({ client, poolAddress: '0x...' })
+const tokenId = createTokenIdBuilder(poolId)
+  .addCall({ strike: 200_000n, width: 10n, optionRatio: 1n })
+  .build()
+
+const limits = tickLimits(pool.currentTick, 500n)
+const sim = await simulateOpenPosition({
+  client, poolAddress: '0x...', account: account.address,
+  tokenId, positionSize: 10n ** 15n, existingPositionIds: [],
+  tickLimitLow: limits.low, tickLimitHigh: limits.high,
+})
+
+if (!sim.success) throw new Error(`Simulation failed: ${sim.error}`)
+console.log('Gas estimate:', sim.gasEstimate)
+console.log('Token0 required:', formatTokenAmount(
+  sim.data.amount0Required, BigInt(pool.collateralTracker0.decimals), 6n
+))
+
+// 5. Execute
+await openPositionAndWait({
+  client, walletClient, account: account.address, poolAddress: '0x...',
+  tokenId, positionSize: 10n ** 15n, existingPositionIds: [],
+  tickLimitLow: limits.low, tickLimitHigh: limits.high,
+})
+```
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Getting Started](./docs/GETTING_STARTED.md) | Full walkthrough: setup, deposit, build positions, simulate, trade, monitor, close |
+| [API Reference](./docs/SDK_API_REFERENCE.md) | Every exported function grouped by module with signatures and descriptions |
+| [Examples](./src/panoptic/v2/examples/) | Runnable example scripts (bots, fork tests, common workflows) |
+
+---
+
+## Contributing
+
+### Prerequisites
 
 - **Node.js** `>=20.19.0 <23.0.0` (see `.nvmrc` in repo root)
 - **pnpm** package manager
 
-## Setup
-
-### 1. Install Node.js (via nvm)
+### Setup
 
 ```sh
-# Install nvm if you don't have it
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+# Install Node.js via nvm
+nvm install && nvm use
 
-# Restart terminal, then install the correct Node version
-nvm install
-nvm use
-```
-
-### 2. Install pnpm
-
-```sh
-# Option A: via corepack (recommended, built into Node 16.13+)
+# Enable pnpm
 corepack enable
 
-# Option B: via npm
-npm install -g pnpm
-```
-
-### 3. Install dependencies
-
-From the monorepo root:
-
-```sh
+# Install dependencies (from monorepo root)
 pnpm install
-pnpm add @panoptic-eng/sdk react viem wagmi
-```
 
-### 4. Generate types
-
-The SDK uses code generation for contract ABIs and GraphQL types:
-
-```sh
+# Generate contract types
 cd packages/sdk
 pnpm codegen
 ```
 
-This runs:
-- `codegen:graphql` - Generates TypeScript types from GraphQL schema
-- `codegen:wagmi` - Generates TypeScript types from contract ABIs
-
-### 5. Set up environment (for fork tests)
+### Development
 
 ```sh
-cp .env.template .env
-# Add your Alchemy API key to .env
+pnpm build          # Build the SDK
+pnpm dev            # Watch mode
+pnpm typecheck      # Type checking
+pnpm lint           # Linting
+pnpm lint:fix       # Auto-fix lint issues
 ```
 
-## Development
+### Testing
 
 ```sh
-# Build the SDK
-pnpm build
-
-# Watch mode (rebuilds on changes)
-pnpm dev
-
-# Type checking
-pnpm typecheck
-
-# Linting
-pnpm lint
-pnpm lint:fix
+pnpm test              # Unit tests
+pnpm test:fork         # Fork tests (requires ALCHEMY_API_KEY in .env)
+pnpm test:fork:watch   # Watch mode for fork tests
+pnpm test:examples     # All tests (unit + fork)
 ```
 
-## Testing
+### Project Structure
 
-```sh
-# Run unit tests
-pnpm test
-
-# Run fork tests (requires ALCHEMY_API_KEY)
-pnpm test:fork
-
-# Watch mode for fork tests
-pnpm test:fork:watch
-
-# Run all tests (unit + fork)
-pnpm test:examples
-```
-
-## Project Structure
-
-```
+```text
 packages/sdk/
+├── docs/                       # SDK documentation
 ├── src/
 │   ├── panoptic/
-│   │   └── v2/              # Panoptic v2 SDK
-│   │       ├── clients/     # Client utilities (getBlockMeta, etc.)
-│   │       ├── errors/      # Error types
-│   │       ├── simulations/ # Transaction simulations
-│   │       ├── sync/        # Position sync and tracking
-│   │       ├── types/       # TypeScript types
-│   │       ├── utils/       # Utility functions
-│   │       └── examples/    # Example implementations
-│   │           ├── basic/           # Basic read/write examples
-│   │           ├── liquidation-bot/ # Liquidation bot example
-│   │           └── oracle-poker/    # Oracle poker bot example
-│   └── generated/           # Auto-generated contract types
-├── contracts/               # Contract ABIs (synced from contracts repo)
-├── graphql/                 # GraphQL schema and queries
-└── scripts/                 # Build and sync scripts
+│   │   └── v2/                 # Panoptic v2 SDK
+│   │       ├── reads/          # Pool, position, account reads
+│   │       ├── writes/         # Transaction functions
+│   │       ├── simulations/    # Dry-run simulations
+│   │       ├── tokenId/        # TokenId encoding/decoding
+│   │       ├── sync/           # Position tracking via events
+│   │       ├── events/         # Event watching and polling
+│   │       ├── formatters/     # Display formatters
+│   │       ├── greeks/         # Client-side greeks
+│   │       ├── bot/            # Bot utilities
+│   │       ├── clients/        # viem client helpers
+│   │       ├── storage/        # Storage adapters
+│   │       ├── errors/         # Typed error classes
+│   │       ├── types/          # TypeScript types
+│   │       ├── utils/          # Constants
+│   │       └── examples/       # Example scripts
+│   └── generated/              # Auto-generated contract types
+├── contracts/                  # Contract ABIs
+└── scripts/                    # Build and sync scripts
 ```
 
-## Contract ABIs
+### Contract ABIs
 
 Contract ABIs are synced from the main contracts repository. See [ABI_GENERATION.md](./ABI_GENERATION.md) for details.
-
-To sync ABIs:
 
 ```sh
 pnpm sync-contracts
 ```
-
-## Usage
-
-```typescript
-import {
-  simulateOpenPosition,
-  simulateClosePosition,
-  getBlockMeta,
-  TokenIdBuilder,
-} from '@panoptic-eng/sdk'
-```
-
-See the [examples](./src/panoptic/v2/examples/) directory for usage patterns.

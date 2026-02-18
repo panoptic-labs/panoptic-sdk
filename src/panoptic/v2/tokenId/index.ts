@@ -7,9 +7,7 @@ export {
   type LegConfig,
   type LoanCreditConfig,
   type TokenIdBuilder,
-  createBuilderFromPoolId,
   createTokenIdBuilder,
-  createTokenIdBuilderV4,
 } from './builder'
 export {
   type Timescale,

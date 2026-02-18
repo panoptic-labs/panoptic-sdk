@@ -299,8 +299,8 @@ export const TOKENS = config.tokens
 export const TEST_ACCOUNTS = config.testAccounts
 export const TEST_ADDRESSES = config.testAddresses
 
-// Re-export createBuilderFromPoolId for convenience (works with contract's poolId for both V3 and V4)
-export { createBuilderFromPoolId } from '../../tokenId'
+// Re-export createTokenIdBuilder for convenience (takes poolId from getPool().poolId)
+export { createTokenIdBuilder } from '../../tokenId'
 
 // ABIs for token setup
 const weth9Abi = parseAbi([

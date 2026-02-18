@@ -50,7 +50,7 @@ import { closePosition, openPosition } from '../../../writes/position'
 import { deposit } from '../../../writes/vault'
 import {
   assertValidDeployments,
-  createBuilderFromPoolId,
+  createTokenIdBuilder,
   fundTestAccount,
   getAnvilRpcUrl,
   getNetworkConfig,
@@ -139,7 +139,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
       const strike = (currentTick / tickSpacing) * tickSpacing
 
       // Use pool.poolId from the contract for correct tokenId encoding
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
 
       const tokenId = builder
         .addCall({
@@ -180,7 +180,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
       const putStrike = (currentTick / tickSpacing - 10n) * tickSpacing
 
       // Use pool.poolId from the contract
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
 
       const tokenId = builder
         .addCall({
@@ -264,7 +264,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
       const strike = (currentTick / tickSpacing) * tickSpacing
 
       // Use pool.poolId from the contract for correct tokenId encoding
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
 
       const tokenId = builder
         .addCall({
@@ -451,7 +451,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
       const currentTick = pool.currentTick
       const strike = (currentTick / tickSpacing) * tickSpacing
 
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
 
       const tokenId = builder
         .addCall({
@@ -519,7 +519,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
         // Use a strike slightly OTM (above current for calls) to reduce collateral burden
         const strike = (currentTick / tickSpacing + 5n) * tickSpacing
 
-        const builder = createBuilderFromPoolId(pool.poolId)
+        const builder = createTokenIdBuilder(pool.poolId)
         openedTokenId = builder
           .addCall({
             strike,
@@ -647,7 +647,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
 
         // --- Short Put greeks (from decoded tokenId — no on-chain mint needed) ---
         // calculatePositionGreeks is a pure function: it only needs legs, ticks, and size.
-        const builder = createBuilderFromPoolId(pool.poolId)
+        const builder = createTokenIdBuilder(pool.poolId)
         const putTokenId = builder
           .addPut({
             strike,
@@ -715,7 +715,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
         const currentTick = pool.currentTick
         const premiaStrike = (currentTick / tickSpacing + 3n) * tickSpacing
 
-        const builder1 = createBuilderFromPoolId(pool.poolId)
+        const builder1 = createTokenIdBuilder(pool.poolId)
         const premiaTokenId = builder1
           .addCall({
             strike: premiaStrike,
@@ -775,7 +775,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
 
         // Generate swap activity with a swapAtMint open+close
         const swapStrike = (currentTick / tickSpacing) * tickSpacing
-        const builder2 = createBuilderFromPoolId(pool.poolId)
+        const builder2 = createTokenIdBuilder(pool.poolId)
         const swapTokenId = builder2
           .addCall({
             strike: swapStrike,
@@ -893,7 +893,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
         const currentTick = pool.currentTick
         const newStrike = (currentTick / tickSpacing - 10n) * tickSpacing
 
-        const builder = createBuilderFromPoolId(pool.poolId)
+        const builder = createTokenIdBuilder(pool.poolId)
         const newTokenId = builder
           .addCall({
             strike: newStrike,
@@ -1020,8 +1020,8 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
         const currentTick = pool.currentTick
         const strike = (currentTick / tickSpacing + 5n) * tickSpacing
 
-        const { createBuilderFromPoolId } = await import('../../../tokenId')
-        const builder = createBuilderFromPoolId(pool.poolId)
+        const { createTokenIdBuilder: createBuilder } = await import('../../../tokenId')
+        const builder = createBuilder(pool.poolId)
         const tokenId = builder
           .addPut({ strike, width: 2n, optionRatio: 1n, isLong: false })
           .build()
@@ -1071,7 +1071,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
       // Strike near current tick for credit
       const strike = (currentTick / tickSpacing + 2n) * tickSpacing
 
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
       creditTokenId = builder
         .addCredit({
           asset: 0n,
@@ -1170,7 +1170,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
       // Strike near current tick for loan
       const strike = (currentTick / tickSpacing - 2n) * tickSpacing
 
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
       loanTokenId = builder
         .addLoan({
           asset: 0n,
@@ -1336,7 +1336,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
       const currentTick = pool.currentTick
       const strike = (currentTick / tickSpacing + 4n) * tickSpacing
 
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
       const swapCreditTokenId = builder
         .addCredit({
           asset: 0n,
@@ -1450,7 +1450,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
       const currentTick = pool.currentTick
       const strike = (currentTick / tickSpacing - 4n) * tickSpacing
 
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
       const swapLoanTokenId = builder
         .addLoan({
           asset: 0n,
@@ -1566,7 +1566,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
       const currentTick = pool.currentTick
       const strike = (currentTick / tickSpacing) * tickSpacing
 
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
 
       const tokenId = builder
         .addCall({

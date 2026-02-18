@@ -699,4 +699,56 @@ function parsePoolKey(poolKeyBytes: `0x${string}`): PoolKey {
   }
 }
 
+/**
+ * Parameters for fetchPoolId.
+ */
+export interface FetchPoolIdParams {
+  /** viem PublicClient */
+  client: PublicClient
+  /** PanopticPool address */
+  poolAddress: Address
+}
+
+/**
+ * Result of fetchPoolId, including block metadata for same-block consistency.
+ */
+export interface FetchPoolIdResult {
+  /** The encoded 64-bit pool ID */
+  poolId: bigint
+  /** Block metadata from the pinned read */
+  _meta: BlockMeta
+}
+
+/**
+ * Fetch the encoded 64-bit pool ID from a PanopticPool contract.
+ *
+ * Use this when you need the poolId without fetching the full pool state.
+ * The returned poolId can be passed directly to `createTokenIdBuilder()`.
+ * The read is pinned to the latest block at call time.
+ *
+ * @param params - The parameters
+ * @returns The pool ID and block metadata
+ */
+export async function fetchPoolId(params: FetchPoolIdParams): Promise<FetchPoolIdResult> {
+  const { client, poolAddress } = params
+
+  const block = await client.getBlock({ blockTag: 'latest' })
+
+  const poolId = await client.readContract({
+    address: poolAddress,
+    abi: panopticPoolAbi,
+    functionName: 'poolId',
+    blockNumber: block.number,
+  })
+
+  return {
+    poolId,
+    _meta: {
+      blockNumber: block.number,
+      blockTimestamp: block.timestamp,
+      blockHash: block.hash,
+    },
+  }
+}
+
 export { tickToSqrtPriceX96 }

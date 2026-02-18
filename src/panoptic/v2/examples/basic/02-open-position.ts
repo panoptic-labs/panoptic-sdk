@@ -12,7 +12,6 @@
  * - RPC_URL environment variable
  * - PRIVATE_KEY environment variable (for signing transactions)
  * - POOL_ADDRESS environment variable
- * - UNISWAP_POOL environment variable
  */
 
 import { type Address, createPublicClient, createWalletClient, http } from 'viem'
@@ -24,6 +23,7 @@ import {
   type SimulationResult,
   type TxResult,
   createTokenIdBuilder,
+  fetchPoolId,
   openPosition,
   PanopticError,
   parsePanopticError,
@@ -34,7 +34,6 @@ import {
 const RPC_URL = process.env.RPC_URL || 'https://eth.llamarpc.com'
 const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}`
 const POOL_ADDRESS = process.env.POOL_ADDRESS as Address
-const UNISWAP_POOL = process.env.UNISWAP_POOL as Address
 
 if (!PRIVATE_KEY) {
   console.error('Error: PRIVATE_KEY environment variable is required')
@@ -43,11 +42,6 @@ if (!PRIVATE_KEY) {
 
 if (!POOL_ADDRESS) {
   console.error('Error: POOL_ADDRESS environment variable is required')
-  process.exit(1)
-}
-
-if (!UNISWAP_POOL) {
-  console.error('Error: UNISWAP_POOL environment variable is required')
   process.exit(1)
 }
 
@@ -69,11 +63,9 @@ async function main() {
   console.log(`   Account: ${account.address}\n`)
 
   // Step 2: Build TokenId
-  console.log('2. Building TokenId...')
-  const builder = createTokenIdBuilder(
-    UNISWAP_POOL,
-    60n, // Standard 0.3% fee tier (tick spacing)
-  )
+  console.log('2. Fetching pool ID and building TokenId...')
+  const { poolId } = await fetchPoolId({ client: publicClient, poolAddress: POOL_ADDRESS })
+  const builder = createTokenIdBuilder(poolId)
 
   // Add a simple short call at current strike
   // (In production, you'd fetch current tick from getPool)

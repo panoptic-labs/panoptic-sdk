@@ -32,7 +32,7 @@ import { simulateOpenPosition } from '../../../simulations/simulateOpenPosition'
 import { simulateDeposit } from '../../../simulations/simulateVault'
 import { deposit } from '../../../writes/vault'
 import {
-  createBuilderFromPoolId,
+  createTokenIdBuilder,
   fundSepoliaTestAccount,
   getAnvilRpcUrl,
   SEPOLIA_ANVIL_CONFIG,
@@ -82,7 +82,7 @@ describe('Sepolia Fork: Write Simulations', () => {
       const strike = (currentTick / tickSpacing) * tickSpacing
 
       // Use pool.poolId from the contract for correct tokenId encoding
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
 
       const tokenId = builder
         .addCall({
@@ -119,7 +119,7 @@ describe('Sepolia Fork: Write Simulations', () => {
       const putStrike = (currentTick / tickSpacing - 10n) * tickSpacing
 
       // Use pool.poolId from the contract
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
 
       const tokenId = builder
         .addCall({
@@ -200,7 +200,7 @@ describe('Sepolia Fork: Write Simulations', () => {
       const strike = (currentTick / tickSpacing) * tickSpacing
 
       // Use pool.poolId from the contract for correct tokenId encoding
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
 
       const tokenId = builder
         .addCall({
@@ -441,7 +441,7 @@ describe('Sepolia Fork: Write Simulations', () => {
       const strike = (currentTick / tickSpacing) * tickSpacing
 
       // Use pool.poolId directly - it's the 64-bit encoded value from the contract
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
 
       const tokenId = builder
         .addCall({
@@ -500,7 +500,7 @@ describe('Sepolia Fork: Write Simulations', () => {
       const strike = (currentTick / tickSpacing) * tickSpacing
 
       // Use pool.poolId directly from the contract
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
 
       const tokenId = builder
         .addCall({

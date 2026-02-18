@@ -565,3 +565,60 @@ export function roundToTickSpacing(tick: bigint, tickSpacing: bigint): bigint {
     ? tick - (tickSpacing - absRemainder)
     : tick + absRemainder
 }
+
+/**
+ * Result of {@link tickLimits}.
+ */
+export interface TickLimitsResult {
+  /** Lower tick limit (clamped to MIN_TICK). */
+  low: bigint
+  /** Upper tick limit (clamped to MAX_TICK). */
+  high: bigint
+}
+
+/**
+ * Compute slippage-bounded tick limits around the current tick.
+ *
+ * 1 tick ≈ 1 basis point (0.01 %) of price change, so a `toleranceBps`
+ * of 500 allows roughly 5 % price movement.  The result is clamped to
+ * the protocol's `[MIN_TICK, MAX_TICK]` range.
+ *
+ * Useful for setting `tickLimitLow` / `tickLimitHigh` on `openPosition`
+ * and `closePosition` to protect against MEV sandwiches and volatile
+ * tick moves.
+ *
+ * @param currentTick - The current pool tick (must be within [MIN_TICK, MAX_TICK]).
+ * @param toleranceBps - Slippage tolerance in basis points (≈ ticks). Must be non-negative.
+ * @returns Clamped `{ low, high }` tick limits.
+ * @throws {RangeError} If `toleranceBps` is negative or `currentTick` is out of bounds.
+ *
+ * @example
+ * ```typescript
+ * const { low, high } = tickLimits(200_000n, 500n)
+ * // low  = 199_500n
+ * // high = 200_500n
+ *
+ * await openPosition({ ..., tickLimitLow: low, tickLimitHigh: high })
+ * ```
+ */
+export function tickLimits(currentTick: bigint, toleranceBps: bigint): TickLimitsResult {
+  if (toleranceBps < 0n) {
+    throw new RangeError(`toleranceBps must be non-negative, got ${toleranceBps}`)
+  }
+  if (currentTick < MIN_TICK || currentTick > MAX_TICK) {
+    throw new RangeError(`currentTick ${currentTick} is out of bounds [${MIN_TICK}, ${MAX_TICK}]`)
+  }
+
+  const rawLow = currentTick - toleranceBps
+  const rawHigh = currentTick + toleranceBps
+  const low = rawLow < MIN_TICK ? MIN_TICK : rawLow
+  const high = rawHigh > MAX_TICK ? MAX_TICK : rawHigh
+
+  if (low > high) {
+    throw new RangeError(
+      `Computed tick limits are inverted: low ${low} > high ${high} (currentTick=${currentTick}, toleranceBps=${toleranceBps})`,
+    )
+  }
+
+  return { low, high }
+}

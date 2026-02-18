@@ -58,7 +58,7 @@ import { closePosition, openPosition } from '../../../writes/position'
 import { deposit } from '../../../writes/vault'
 import {
   assertValidDeployments,
-  createBuilderFromPoolId,
+  createTokenIdBuilder,
   fundTestAccount,
   getAnvilRpcUrl,
   getNetworkConfig,
@@ -144,7 +144,7 @@ async function seedPoolLiquidity(
 
   // Width in the tokenId is a tickSpacing multiplier: actualTicks = width * tickSpacing
   const straddleWidth = STANDARD_TICK_WIDTHS['1D'] / tickSpacing
-  const straddleTokenId = createBuilderFromPoolId(pool.poolId)
+  const straddleTokenId = createTokenIdBuilder(pool.poolId)
     .addCall({ strike: atmStrike, width: straddleWidth, optionRatio: 1n, isLong: false })
     .addPut({ strike: atmStrike, width: straddleWidth, optionRatio: 1n, isLong: false })
     .build()
@@ -352,7 +352,7 @@ describe('Intermediate 01: Delta-Neutral Hedging (Fork Test)', () => {
 
       // Width in the tokenId is a tickSpacing multiplier: actualTicks = width * tickSpacing
       const callWidth = STANDARD_TICK_WIDTHS['1W'] / tickSpacing
-      callTokenId = createBuilderFromPoolId(pool.poolId)
+      callTokenId = createTokenIdBuilder(pool.poolId)
         .addCall({
           strike,
           width: callWidth, // ~1-month DTE gamma profile
@@ -512,7 +512,7 @@ describe('Intermediate 01: Delta-Neutral Hedging (Fork Test)', () => {
       })
 
       // Build hedge tokenId from params computed in Step 3
-      hedgeTokenId = createBuilderFromPoolId(pool.poolId)
+      hedgeTokenId = createTokenIdBuilder(pool.poolId)
         .addLoan({
           asset: hedgeParams.hedgeLeg.asset,
           tokenType: hedgeParams.hedgeLeg.tokenType,

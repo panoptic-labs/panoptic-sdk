@@ -6,9 +6,56 @@
 import type { Address, PublicClient, WalletClient } from 'viem'
 
 import { panopticPoolAbi } from '../../../generated'
-import { InvalidTickLimitsError } from '../errors'
+import { InvalidTickLimitsError, MissingPositionIdsError } from '../errors'
+import type { StorageAdapter } from '../storage'
+import { getPositionsKey, jsonSerializer } from '../storage'
+import { getTrackedPositionIds } from '../sync/getTrackedPositionIds'
 import type { TxOverrides, TxReceipt, TxResult } from '../types'
 import { submitWrite } from './utils'
+
+/**
+ * Optional storage parameters for auto-tracking positions.
+ * When provided, `*AndWait` variants will automatically update the local
+ * position cache after a successful transaction.
+ */
+export interface PositionStorageParams {
+  /** Storage adapter for position tracking */
+  storage: StorageAdapter
+  /** Chain ID (required for storage key construction) */
+  chainId: bigint
+}
+
+/**
+ * Resolve the position ID list: use the explicit param if provided,
+ * otherwise read from storage. Throws if neither is available.
+ */
+async function resolvePositionIds(
+  explicit: bigint[] | undefined,
+  storage: StorageAdapter | undefined,
+  chainId: bigint | undefined,
+  poolAddress: Address,
+  account: Address,
+): Promise<bigint[]> {
+  if (explicit !== undefined) return explicit
+  if (storage && chainId !== undefined) {
+    return getTrackedPositionIds({ chainId, poolAddress, account, storage })
+  }
+  throw new MissingPositionIdsError()
+}
+
+/**
+ * Save a position ID list to storage.
+ */
+async function savePositionIds(
+  storage: StorageAdapter,
+  chainId: bigint,
+  poolAddress: Address,
+  account: Address,
+  positionIds: bigint[],
+): Promise<void> {
+  const key = getPositionsKey(chainId, poolAddress, account)
+  await storage.set(key, jsonSerializer.stringify(positionIds))
+}
 
 /**
  * Tick and spread limits for position operations.
@@ -23,7 +70,7 @@ export type TickAndSpreadLimits = readonly [bigint, bigint, bigint]
 /**
  * Parameters for opening a position.
  */
-export interface OpenPositionParams {
+export interface OpenPositionParams extends Partial<PositionStorageParams> {
   /** Public client */
   client: PublicClient
   /** Wallet client */
@@ -32,8 +79,8 @@ export interface OpenPositionParams {
   account: Address
   /** PanopticPool address */
   poolAddress: Address
-  /** Existing position IDs held by the account (before this mint) */
-  existingPositionIds: bigint[]
+  /** Existing position IDs held by the account (before this mint). Optional if storage + chainId are provided. */
+  existingPositionIds?: bigint[]
   /** TokenId of the position to open */
   tokenId: bigint
   /** Position size (number of contracts) */
@@ -95,7 +142,7 @@ export async function openPosition(params: OpenPositionParams): Promise<TxResult
     walletClient,
     account,
     poolAddress,
-    existingPositionIds,
+    existingPositionIds: explicitIds,
     tokenId,
     positionSize,
     tickLimitLow,
@@ -104,6 +151,8 @@ export async function openPosition(params: OpenPositionParams): Promise<TxResult
     swapAtMint = false,
     usePremiaAsCollateral = false,
     builderCode = 0n,
+    storage,
+    chainId,
     txOverrides,
   } = params
 
@@ -111,6 +160,14 @@ export async function openPosition(params: OpenPositionParams): Promise<TxResult
   if (tickLimitLow > tickLimitHigh) {
     throw new InvalidTickLimitsError(tickLimitLow, tickLimitHigh)
   }
+
+  const existingPositionIds = await resolvePositionIds(
+    explicitIds,
+    storage,
+    chainId,
+    poolAddress,
+    account,
+  )
 
   // Prepare position lists for dispatch:
   // - positionIdList: positions being minted in this call (just the new tokenId)
@@ -152,13 +209,30 @@ export async function openPosition(params: OpenPositionParams): Promise<TxResult
  */
 export async function openPositionAndWait(params: OpenPositionParams): Promise<TxReceipt> {
   const result = await openPosition(params)
-  return result.wait()
+  const receipt = await result.wait()
+
+  // Auto-update storage if provided
+  const {
+    storage,
+    chainId,
+    account,
+    poolAddress,
+    tokenId,
+    existingPositionIds: explicitIds,
+  } = params
+  if (storage && chainId !== undefined) {
+    const base =
+      explicitIds ?? (await getTrackedPositionIds({ chainId, poolAddress, account, storage }))
+    await savePositionIds(storage, chainId, poolAddress, account, [...base, tokenId])
+  }
+
+  return receipt
 }
 
 /**
  * Parameters for closing a position.
  */
-export interface ClosePositionParams {
+export interface ClosePositionParams extends Partial<PositionStorageParams> {
   /** Public client */
   client: PublicClient
   /** Wallet client */
@@ -167,8 +241,8 @@ export interface ClosePositionParams {
   account: Address
   /** PanopticPool address */
   poolAddress: Address
-  /** Current position ID list */
-  positionIdList: bigint[]
+  /** Current position ID list. Optional if storage + chainId are provided. */
+  positionIdList?: bigint[]
   /** TokenId of the position to close */
   tokenId: bigint
   /** Position size to close (use full size for complete close) */
@@ -211,7 +285,7 @@ export async function closePosition(params: ClosePositionParams): Promise<TxResu
     walletClient,
     account,
     poolAddress,
-    positionIdList,
+    positionIdList: explicitList,
     tokenId,
     tickLimitLow,
     tickLimitHigh,
@@ -219,6 +293,8 @@ export async function closePosition(params: ClosePositionParams): Promise<TxResu
     swapAtMint = false,
     usePremiaAsCollateral = false,
     builderCode = 0n,
+    storage,
+    chainId,
     txOverrides,
   } = params
 
@@ -226,6 +302,14 @@ export async function closePosition(params: ClosePositionParams): Promise<TxResu
   if (tickLimitLow > tickLimitHigh) {
     throw new InvalidTickLimitsError(tickLimitLow, tickLimitHigh)
   }
+
+  const positionIdList = await resolvePositionIds(
+    explicitList,
+    storage,
+    chainId,
+    poolAddress,
+    account,
+  )
 
   // For closing, final list excludes the closed position
   const finalPositionIdList = positionIdList.filter((id) => id !== tokenId)
@@ -254,13 +338,29 @@ export async function closePosition(params: ClosePositionParams): Promise<TxResu
  */
 export async function closePositionAndWait(params: ClosePositionParams): Promise<TxReceipt> {
   const result = await closePosition(params)
-  return result.wait()
+  const receipt = await result.wait()
+
+  // Auto-update storage if provided
+  const { storage, chainId, account, poolAddress, tokenId, positionIdList: explicitList } = params
+  if (storage && chainId !== undefined) {
+    const base =
+      explicitList ?? (await getTrackedPositionIds({ chainId, poolAddress, account, storage }))
+    await savePositionIds(
+      storage,
+      chainId,
+      poolAddress,
+      account,
+      base.filter((id) => id !== tokenId),
+    )
+  }
+
+  return receipt
 }
 
 /**
  * Parameters for rolling a position.
  */
-export interface RollPositionParams {
+export interface RollPositionParams extends Partial<PositionStorageParams> {
   /** Public client */
   client: PublicClient
   /** Wallet client */
@@ -269,8 +369,8 @@ export interface RollPositionParams {
   account: Address
   /** PanopticPool address */
   poolAddress: Address
-  /** Current position ID list */
-  positionIdList: bigint[]
+  /** Current position ID list. Optional if storage + chainId are provided. */
+  positionIdList?: bigint[]
   /** TokenId of position to close */
   oldTokenId: bigint
   /** Size of position being closed */
@@ -315,7 +415,7 @@ export async function rollPosition(params: RollPositionParams): Promise<TxResult
     walletClient,
     account,
     poolAddress,
-    positionIdList,
+    positionIdList: explicitList,
     oldTokenId,
     oldPositionSize,
     newTokenId,
@@ -330,6 +430,8 @@ export async function rollPosition(params: RollPositionParams): Promise<TxResult
     openSwapAtMint = false,
     usePremiaAsCollateral = false,
     builderCode = 0n,
+    storage,
+    chainId,
     txOverrides,
   } = params
 
@@ -340,6 +442,14 @@ export async function rollPosition(params: RollPositionParams): Promise<TxResult
   if (openTickLimitLow > openTickLimitHigh) {
     throw new InvalidTickLimitsError(openTickLimitLow, openTickLimitHigh)
   }
+
+  const positionIdList = await resolvePositionIds(
+    explicitList,
+    storage,
+    chainId,
+    poolAddress,
+    account,
+  )
 
   // Final list: remove old, add new
   const finalPositionIdList = positionIdList.filter((id) => id !== oldTokenId).concat([newTokenId])
@@ -380,5 +490,24 @@ export async function rollPosition(params: RollPositionParams): Promise<TxResult
  */
 export async function rollPositionAndWait(params: RollPositionParams): Promise<TxReceipt> {
   const result = await rollPosition(params)
-  return result.wait()
+  const receipt = await result.wait()
+
+  // Auto-update storage if provided
+  const {
+    storage,
+    chainId,
+    account,
+    poolAddress,
+    oldTokenId,
+    newTokenId,
+    positionIdList: explicitList,
+  } = params
+  if (storage && chainId !== undefined) {
+    const base =
+      explicitList ?? (await getTrackedPositionIds({ chainId, poolAddress, account, storage }))
+    const updated = base.filter((id) => id !== oldTokenId).concat([newTokenId])
+    await savePositionIds(storage, chainId, poolAddress, account, updated)
+  }
+
+  return receipt
 }

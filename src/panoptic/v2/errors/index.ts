@@ -73,6 +73,7 @@ export {
   CrossPoolError,
   // Validation
   InvalidTickLimitsError,
+  MissingPositionIdsError,
   // Configuration & Network
   NetworkMismatchError,
   // Oracle

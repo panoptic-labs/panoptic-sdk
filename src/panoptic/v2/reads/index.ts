@@ -12,12 +12,15 @@
 
 // Pool reads
 export {
+  type FetchPoolIdParams,
+  type FetchPoolIdResult,
   type GetOracleStateParams,
   type GetPoolMetadataParams,
   type GetPoolParams,
   type GetRiskParametersParams,
   type GetUtilizationParams,
   type PoolMetadata,
+  fetchPoolId,
   getOracleState,
   getPool,
   getPoolMetadata,

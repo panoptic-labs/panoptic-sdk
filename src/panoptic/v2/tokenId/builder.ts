@@ -3,11 +3,9 @@
  * @module v2/tokenId/builder
  */
 
-import type { Address, Hex } from 'viem'
-
 import { InvalidTokenIdParameterError } from '../errors'
 import { LEG_LIMITS, TOKEN_ID_BITS } from './constants'
-import { type EncodeLegParams, addLegToTokenId, encodePoolId, encodeV4PoolId } from './encoding'
+import { type EncodeLegParams, addLegToTokenId } from './encoding'
 
 /**
  * Leg configuration for the builder.
@@ -116,57 +114,24 @@ export interface TokenIdBuilder {
 }
 
 /**
- * Create a TokenId builder for a Uniswap V3 pool.
+ * Create a TokenId builder from an encoded pool ID.
  *
- * @param poolAddress - The Uniswap V3 pool address
- * @param tickSpacing - The tick spacing of the pool
- * @param vegoid - Optional vegoid value (defaults to 4)
+ * Use the 64-bit poolId from `getPool().poolId` or `fetchPoolId()`.
+ * For offline encoding, use `encodePoolId()` or `encodeV4PoolId()` first.
+ *
+ * @param poolId - The encoded 64-bit pool ID
  * @returns A TokenId builder instance
  *
  * @example
  * ```typescript
- * const tokenId = createTokenIdBuilder(poolAddress, 60n)
+ * const pool = await getPool({ client, poolAddress, chainId })
+ * const tokenId = createTokenIdBuilder(pool.poolId)
  *   .addCall({ strike: 100n, width: 10n, optionRatio: 1n, isLong: false })
  *   .addPut({ strike: -100n, width: 10n, optionRatio: 1n, isLong: false })
  *   .build()
  * ```
  */
-export function createTokenIdBuilder(
-  poolAddress: Address,
-  tickSpacing: bigint,
-  vegoid?: bigint,
-): TokenIdBuilder {
-  const poolId = encodePoolId(poolAddress, tickSpacing, vegoid)
-  return createBuilderFromPoolId(poolId)
-}
-
-/**
- * Create a TokenId builder for a Uniswap V4 pool.
- *
- * @param poolIdHex - The V4 pool ID (bytes32 hex string)
- * @param tickSpacing - The tick spacing of the pool
- * @param vegoid - Optional vegoid value (defaults to 4)
- * @returns A TokenId builder instance
- */
-export function createTokenIdBuilderV4(
-  poolIdHex: Hex,
-  tickSpacing: bigint,
-  vegoid?: bigint,
-): TokenIdBuilder {
-  const poolId = encodeV4PoolId(poolIdHex, tickSpacing, vegoid)
-  return createBuilderFromPoolId(poolId)
-}
-
-/**
- * Create a TokenId builder from an existing encoded pool ID.
- *
- * Use this when you already have the 64-bit poolId (e.g. from `getPool().poolId`).
- * This works for both V3 and V4 pools since it bypasses address-based encoding.
- *
- * @param poolId - The encoded 64-bit pool ID
- * @returns A TokenId builder instance
- */
-export function createBuilderFromPoolId(poolId: bigint): TokenIdBuilder {
+export function createTokenIdBuilder(poolId: bigint): TokenIdBuilder {
   let tokenId = poolId
   let currentLegIndex = 0n
 

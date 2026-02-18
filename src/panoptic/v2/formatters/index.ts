@@ -7,6 +7,7 @@
  */
 
 // Tick and price formatters
+export type { TickLimitsResult } from './tick'
 export {
   formatPriceRange,
   formatTick,
@@ -17,6 +18,7 @@ export {
   roundToTickSpacing,
   sqrtPriceX96ToPriceDecimalScaled,
   sqrtPriceX96ToTick,
+  tickLimits,
   tickToPrice,
   tickToPriceDecimalScaled,
   tickToSqrtPriceX96,

@@ -1157,16 +1157,17 @@ Users specify positions using:
 ```typescript
 import {
   createTokenIdBuilder,
+  fetchPoolId,
   STANDARD_TICK_WIDTHS,
   priceToTick,
   tickToPrice
 } from 'panoptic-v2-sdk'
 
 // Fetch fresh pool state
-const pool = await getPool({ client, poolAddress })
+const pool = await getPool({ client, poolAddress, chainId })
 
-// Create builder with pool address and tick spacing
-const builder = createTokenIdBuilder(pool.address, pool.poolKey.tickSpacing)
+// Create builder with pool's encoded poolId
+const builder = createTokenIdBuilder(pool.poolId)
 
 // Build tokenId using addCall/addPut + build() pattern
 const tokenId = builder
@@ -1180,7 +1181,7 @@ const tokenId = builder
 // Returns: bigint (the tokenId)
 
 // Short put example
-const tokenId2 = createTokenIdBuilder(pool.address, pool.poolKey.tickSpacing)
+const tokenId2 = createTokenIdBuilder(pool.poolId)
   .addPut({
     strike: 199500n,
     width: 1000n,
@@ -1188,6 +1189,10 @@ const tokenId2 = createTokenIdBuilder(pool.address, pool.poolKey.tickSpacing)
     isLong: false,
   })
   .build()
+
+// If you only need the poolId (without full pool state):
+const { poolId, _meta } = await fetchPoolId({ client, poolAddress })
+const builder2 = createTokenIdBuilder(poolId)
 
 // Use tokenId in all operations
 await openPosition({ client, walletClient, account, poolAddress, existingPositionIds: [], tokenId, positionSize: 1000n, ... })
@@ -1305,35 +1310,25 @@ interface TokenIdBuilder {
   reset(): TokenIdBuilder
 }
 
-// Create builder from pool address + tick spacing
-function createTokenIdBuilder(
-  poolAddress: Address,
-  tickSpacing: bigint,
-  vegoid?: bigint
-): TokenIdBuilder
+// Create builder from encoded pool ID (from getPool().poolId or fetchPoolId().poolId)
+function createTokenIdBuilder(poolId: bigint): TokenIdBuilder
 
-// Create builder from V4 pool ID hex
-function createTokenIdBuilderV4(
-  poolIdHex: Hex,
-  tickSpacing: bigint,
-  vegoid?: bigint
-): TokenIdBuilder
-
-// Create builder from numeric pool ID
-function createBuilderFromPoolId(poolId: bigint): TokenIdBuilder
+// Fetch pool ID from contract (lightweight alternative to getPool())
+// Read is pinned to the latest block at call time
+function fetchPoolId(params: { client: PublicClient, poolAddress: Address }): Promise<{ poolId: bigint; _meta: { blockNumber: bigint; blockTimestamp: bigint; blockHash: `0x${string}` } }>
 ```
 
 Multi-leg strategies are composed by chaining `addCall`/`addPut` calls:
 
 ```typescript
 // Call spread example
-const callSpreadId = createTokenIdBuilder(pool.address, pool.poolKey.tickSpacing)
+const callSpreadId = createTokenIdBuilder(pool.poolId)
   .addCall({ strike: 200000n, width: 720n, optionRatio: 1n, isLong: true, riskPartner: 1n })
   .addCall({ strike: 201000n, width: 720n, optionRatio: 1n, isLong: false, riskPartner: 0n })
   .build()
 
 // Iron condor example
-const ironCondorId = createTokenIdBuilder(pool.address, pool.poolKey.tickSpacing)
+const ironCondorId = createTokenIdBuilder(pool.poolId)
   .addPut({ strike: 198000n, width: 720n, optionRatio: 1n, isLong: true, riskPartner: 1n })
   .addPut({ strike: 199000n, width: 720n, optionRatio: 1n, isLong: false, riskPartner: 0n })
   .addCall({ strike: 201000n, width: 720n, optionRatio: 1n, isLong: false, riskPartner: 3n })
@@ -1341,7 +1336,7 @@ const ironCondorId = createTokenIdBuilder(pool.address, pool.poolKey.tickSpacing
   .build()
 
 // Loan example
-const loanId = createTokenIdBuilder(pool.address, pool.poolKey.tickSpacing)
+const loanId = createTokenIdBuilder(pool.poolId)
   .addLoan({ tokenType: 0n, optionRatio: 1n })
   .build()
 ```
@@ -1389,18 +1384,17 @@ function isExercisable(tokenId: bigint): boolean      // Has exercisable long le
 
 **Usage example:**
 ```typescript
-const pool = await getPool(config)
-const builder = createTokenIdBuilder(pool)
+const pool = await getPool({ client, poolAddress, chainId })
 
 // Traditional options strategies
 // Call spread: long call at lower strike + short call at higher strike
-const callSpreadId = createTokenIdBuilder(pool.address, pool.poolKey.tickSpacing)
+const callSpreadId = createTokenIdBuilder(pool.poolId)
   .addCall({ strike: 200000n, width: 2400n, optionRatio: 1n, isLong: true, riskPartner: 1n })
   .addCall({ strike: 201000n, width: 2400n, optionRatio: 1n, isLong: false, riskPartner: 0n })
   .build()
 
 // Iron condor: put spread + call spread
-const ironCondorId = createTokenIdBuilder(pool.address, pool.poolKey.tickSpacing)
+const ironCondorId = createTokenIdBuilder(pool.poolId)
   .addPut({ strike: 198000n, width: 720n, optionRatio: 1n, isLong: true, riskPartner: 1n })
   .addPut({ strike: 199000n, width: 720n, optionRatio: 1n, isLong: false, riskPartner: 0n })
   .addCall({ strike: 201000n, width: 720n, optionRatio: 1n, isLong: false, riskPartner: 3n })
@@ -1408,12 +1402,12 @@ const ironCondorId = createTokenIdBuilder(pool.address, pool.poolKey.tickSpacing
   .build()
 
 // Loan (width = 0n, isLong = false)
-const loanId = createTokenIdBuilder(pool.address, pool.poolKey.tickSpacing)
+const loanId = createTokenIdBuilder(pool.poolId)
   .addLoan({ tokenType: 0n, optionRatio: 1n })
   .build()
 
 // Credit (width = 0n, isLong = true)
-const creditId = createTokenIdBuilder(pool.address, pool.poolKey.tickSpacing)
+const creditId = createTokenIdBuilder(pool.poolId)
   .addCredit({ tokenType: 1n, optionRatio: 1n })
   .build()
 
@@ -1441,7 +1435,7 @@ A credit leg "abstracts away" the ITM amount by immediately returning it to the 
 
 ```typescript
 // Step 1: Build the ITM short put
-const builder = createTokenIdBuilder(pool)
+const builder = createTokenIdBuilder(pool.poolId)
 
 // Step 2: Get the required credit to offset ITM value
 const creditParams = await getRequiredCreditForITM({
@@ -1456,7 +1450,7 @@ const creditParams = await getRequiredCreditForITM({
 })
 
 // Step 3: Build combined tokenId with option + credit as risk partners
-const tokenId = createTokenIdBuilder(pool)
+const tokenId = createTokenIdBuilder(pool.poolId)
   .addPut({
     strike: 250000n,
     width: 720n,
@@ -1482,7 +1476,7 @@ Long options in Panoptic don't pay premium upfront—instead, premium accrues ov
 // Without credit: they get liquidated when accumulated streamia > 200 USDC
 // With credit: they "lock in" 200 USDC as max loss
 
-const builder = createTokenIdBuilder(pool)
+const builder = createTokenIdBuilder(pool.poolId)
 
 // Long call + 200 USDC credit to pre-pay premium
 const tokenId = builder
@@ -1518,7 +1512,7 @@ Loans and credits can adjust a position's delta exposure. This enables delta-neu
 Example: Create a delta-neutral short put (synthetic straddle):
 
 ```typescript
-const builder = createTokenIdBuilder(pool)
+const builder = createTokenIdBuilder(pool.poolId)
 
 // Short put has positive delta (~0.5 for ATM)
 // To neutralize, add a loan to short ~50% of notional
@@ -1537,7 +1531,7 @@ const hedgeParams = await getDeltaHedgeParams({
 })
 
 // Step 2: Build combined position with hedge
-const tokenId = createTokenIdBuilder(pool)
+const tokenId = createTokenIdBuilder(pool.poolId)
   .addPut({
     strike: currentTick,
     width: 720n,
@@ -2583,7 +2577,7 @@ All write functions use `tokenId` as the position identifier. Use `*AndWait()` v
 
 ```typescript
 // Create tokenId first
-const tokenId = createTokenIdBuilder(pool.address, pool.poolKey.tickSpacing)
+const tokenId = createTokenIdBuilder(pool.poolId)
   .addCall({ strike: 200000n, width: 100n, optionRatio: 1n, isLong: true })
   .build()
 
@@ -4035,6 +4029,10 @@ tickToPriceDecimalScaled(tick: bigint, precision: bigint): string
 priceToTick(price: string, decimals0: bigint, decimals1: bigint): bigint
 // Example: priceToTick("1234.56", 18n, 6n) → 200000n
 
+// Slippage-bounded tick limits (clamped to [MIN_TICK, MAX_TICK])
+tickLimits(currentTick: bigint, toleranceBps: bigint): { low: bigint; high: bigint }
+// Example: tickLimits(200_000n, 500n) → { low: 199_500n, high: 200_500n }
+
 // ─────────────────────────────────────────────────────────────
 // Token amounts
 // ─────────────────────────────────────────────────────────────
@@ -4446,8 +4444,11 @@ export {
   // ... all contract and SDK-specific errors
 
   // TokenId builder
-  createTokenIdBuilder, createTokenIdBuilderV4, createBuilderFromPoolId,
+  createTokenIdBuilder,
   decodeTokenId, countLegs,
+
+  // Pool ID fetch
+  fetchPoolId,
   type TokenIdBuilder,
 
   // Greeks
@@ -4559,7 +4560,8 @@ convertToShares(config, { token, assets }): Promise<bigint>
 convertToAssets(config, { token, shares }): Promise<bigint>
 
 // TokenId utilities
-createTokenIdBuilder(poolAddress, tickSpacing, vegoid?): TokenIdBuilder
+createTokenIdBuilder(poolId: bigint): TokenIdBuilder
+fetchPoolId({ client, poolAddress }): Promise<{ poolId: bigint; _meta: BlockMeta }>
 decodeTokenId(tokenId): DecodedTokenId
 
 // Position Greeks
@@ -4585,6 +4587,7 @@ getDeltaHedgeParams({ client, poolAddress, chainId, tokenId, positionSize, targe
 tickToPrice(tick, decimals0, decimals1, precision): string   // Human-readable with decimals
 tickToPriceDecimalScaled(tick, precision): string            // Raw, no decimal adjustment
 priceToTick(price, decimals0, decimals1): bigint
+tickLimits(currentTick, toleranceBps): { low, high }         // Slippage tick bounds
 formatTokenAmount(amount, decimals, precision): string       // precision REQUIRED
 parseTokenAmount(amount, decimals): bigint
 formatBps(bps, precision): string                            // precision REQUIRED
@@ -4737,7 +4740,7 @@ Features explicitly deferred for potential v0.2+:
 | Auto-approve | **Dropped** - explicit approve() calls |
 | Wait pattern | **Separate functions** - openPosition() vs openPositionAndWait() |
 | Subgraph | **Removed** - position tracking via local event sync with persistent storage |
-| TokenId utils | **Exported** - createTokenIdBuilder, decodeTokenId, countLegs, etc. |
+| TokenId utils | **Exported** - createTokenIdBuilder(poolId), fetchPoolId, decodeTokenId, countLegs, etc. |
 | Position computed values | **From core contracts** - PanopticPool.getAccumulatedFeesAndPositionsData() + RiskEngine.getMargin() |
 | Prepare methods | **Dropped** - use viem directly |
 | Collateral estimation | **RiskEngine.getMargin()** - no separate helper contract needed |

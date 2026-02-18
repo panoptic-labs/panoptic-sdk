@@ -263,6 +263,22 @@ export class StorageDataNotFoundError extends PanopticError {
 }
 
 /**
+ * Position ID list was not provided and could not be resolved from storage.
+ *
+ * Either pass `existingPositionIds` / `positionIdList` explicitly, or provide
+ * `storage` + `chainId` so the SDK can read tracked positions automatically.
+ */
+export class MissingPositionIdsError extends PanopticError {
+  override readonly name = 'MissingPositionIdsError'
+
+  constructor() {
+    super(
+      'Either existingPositionIds/positionIdList must be provided, or storage + chainId for auto-resolution.',
+    )
+  }
+}
+
+/**
  * Tick limits are invalid for the given operation.
  *
  * tickLimitLow must be <= tickLimitHigh regardless of swapAtMint.

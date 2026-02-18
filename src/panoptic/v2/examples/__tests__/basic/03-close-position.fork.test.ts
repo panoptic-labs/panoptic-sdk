@@ -37,7 +37,7 @@ import { closePosition, openPosition } from '../../../writes/position'
 import { deposit } from '../../../writes/vault'
 import {
   assertValidDeployments,
-  createBuilderFromPoolId,
+  createTokenIdBuilder,
   fundTestAccount,
   getAnvilRpcUrl,
   getNetworkConfig,
@@ -116,7 +116,7 @@ describe('Basic Example 03: Close Position (Fork Test)', () => {
       // Place strike slightly OTM (above current for calls)
       const strike = (currentTick / tickSpacing + 5n) * tickSpacing
 
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
       tokenId = builder
         .addCall({
           strike,
@@ -266,7 +266,7 @@ describe('Basic Example 03: Close Position (Fork Test)', () => {
       const currentTick = pool.currentTick
       const fakeStrike = (currentTick / tickSpacing + 50n) * tickSpacing
 
-      const builder = createBuilderFromPoolId(pool.poolId)
+      const builder = createTokenIdBuilder(pool.poolId)
       const fakeTokenId = builder
         .addCall({
           strike: fakeStrike,

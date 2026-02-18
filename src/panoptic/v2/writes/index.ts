@@ -57,6 +57,7 @@ export {
 export {
   type ClosePositionParams,
   type OpenPositionParams,
+  type PositionStorageParams,
   type RollPositionParams,
   type TickAndSpreadLimits,
   closePosition,
