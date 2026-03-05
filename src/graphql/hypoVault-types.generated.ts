@@ -4217,6 +4217,15 @@ export type GetLatestEpochQueryVariables = Exact<{
 
 export type GetLatestEpochQuery = { __typename?: 'Query', depositEpochStates: Array<{ __typename?: 'DepositEpochState', id: any, epoch: string, assetsDeposited: string, assetsFulfilled: string, sharesReceived: string, hypoVault: { __typename?: 'HypoVault', id: any } }>, withdrawalEpochStates: Array<{ __typename?: 'WithdrawalEpochState', id: any, epoch: string, sharesWithdrawn: string, assetsReceived: string, sharesFulfilled: string, hypoVault: { __typename?: 'HypoVault', id: any } }> };
 
+export type GetVaultHistoryQueryVariables = Exact<{
+  hypoVault: Scalars['String']['input'];
+  first?: InputMaybe<Scalars['Int']['input']>;
+  skip?: InputMaybe<Scalars['Int']['input']>;
+}>;
+
+
+export type GetVaultHistoryQuery = { __typename?: 'Query', depositRequesteds: Array<{ __typename?: 'DepositRequested', id: any, assets: string, blockTimestamp: string, transactionHash: any, user: { __typename?: 'Account', id: any } }>, depositsFulfilleds: Array<{ __typename?: 'DepositsFulfilled', id: any, assetsFulfilled: string, sharesReceived: string, blockTimestamp: string, transactionHash: any }>, withdrawalRequesteds: Array<{ __typename?: 'WithdrawalRequested', id: any, shares: string, blockTimestamp: string, transactionHash: any, user: { __typename?: 'Account', id: any } }>, withdrawalsFulfilleds: Array<{ __typename?: 'WithdrawalsFulfilled', id: any, assetsReceived: string, sharesFulfilled: string, blockTimestamp: string, transactionHash: any }>, depositCancelleds: Array<{ __typename?: 'DepositCancelled', id: any, assets: string, blockTimestamp: string, transactionHash: any, user: { __typename?: 'Account', id: any } }>, withdrawalCancelleds: Array<{ __typename?: 'WithdrawalCancelled', id: any, shares: string, blockTimestamp: string, transactionHash: any, user: { __typename?: 'Account', id: any } }>, depositExecuteds: Array<{ __typename?: 'DepositExecuted', id: any, assets: string, shares: string, blockTimestamp: string, transactionHash: any, user: { __typename?: 'Account', id: any } }>, withdrawalExecuteds: Array<{ __typename?: 'WithdrawalExecuted', id: any, assets: string, shares: string, performanceFee: string, blockTimestamp: string, transactionHash: any, user: { __typename?: 'Account', id: any } }> };
+
 export type GetFilteredHypoVaultsQueryVariables = Exact<{
   hypoVaultWhitelist: Array<Scalars['Bytes']['input']> | Scalars['Bytes']['input'];
 }>;

@@ -14,8 +14,10 @@ export {
 
 // Position tracking
 export {
+  type GetOpenPositionIdsParams,
   type GetTrackedPositionIdsParams,
   clearTrackedPositions,
+  getOpenPositionIds,
   getTrackedPositionIds,
   isPositionTracked,
 } from './getTrackedPositionIds'
@@ -95,8 +97,10 @@ export {
 } from './reorgHandling'
 export {
   type DispatchCalldata,
+  type RecoverSnapshotFromTxParams,
   type RecoverSnapshotParams,
   type SnapshotRecoveryResult,
   decodeDispatchCalldata,
   recoverSnapshot,
+  recoverSnapshotFromTx,
 } from './snapshotRecovery'

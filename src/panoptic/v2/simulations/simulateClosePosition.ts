@@ -119,7 +119,9 @@ export async function simulateClosePosition(
     })
 
     if (!flowResult.success || !flowResult.tokenFlow) {
-      throw new PanopticError(flowResult.error || 'Token flow simulation failed')
+      throw (
+        flowResult.rawError ?? new PanopticError(flowResult.error || 'Token flow simulation failed')
+      )
     }
 
     const tokenFlow = flowResult.tokenFlow

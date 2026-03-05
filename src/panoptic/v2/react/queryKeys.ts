@@ -202,6 +202,26 @@ export const queryKeys = {
     ] as const,
 
   /**
+   * Key for max withdrawable assets from a collateral tracker.
+   */
+  maxWithdrawable: (
+    chainId: bigint,
+    collateralTrackerAddress: Address,
+    positionIdList: bigint[],
+    totalAssets: bigint,
+    account: Address,
+  ) =>
+    [
+      ...queryKeys.all,
+      chainId.toString(),
+      'maxWithdrawable',
+      collateralTrackerAddress,
+      positionIdList.map(String).join(','),
+      totalAssets.toString(),
+      account,
+    ] as const,
+
+  /**
    * Key for approval check.
    */
   approval: (chainId: bigint, token: Address, owner: Address, spender: Address) =>
@@ -249,4 +269,52 @@ export const queryKeys = {
    */
   poolLiquidities: (chainId: bigint, poolAddress: Address) =>
     [...queryKeys.all, 'poolLiquidities', chainId.toString(), poolAddress] as const,
+
+  /**
+   * Key for optimized risk partners.
+   */
+  optimizeRiskPartners: (chainId: bigint, poolAddress: Address, tokenId: bigint) =>
+    [
+      ...queryKeys.all,
+      'optimizeRiskPartners',
+      chainId.toString(),
+      poolAddress,
+      tokenId.toString(),
+    ] as const,
+  /**
+   * Key for price history.
+   * Uses a hash of timestamps for cache busting when the time range changes.
+   */
+  priceHistory: (chainId: bigint, poolAddress: string, timestampsHash: string) =>
+    [...queryKeys.all, 'priceHistory', chainId.toString(), poolAddress, timestampsHash] as const,
+
+  /**
+   * Key for streamia history.
+   */
+  streamiaHistory: (chainId: bigint, poolAddress: string, rangeHash: string) =>
+    [...queryKeys.all, 'streamiaHistory', chainId.toString(), poolAddress, rangeHash] as const,
+
+  /**
+   * Key for Uniswap fee history.
+   */
+  uniswapFeeHistory: (chainId: bigint, poolAddress: string, rangeHash: string) =>
+    [...queryKeys.all, 'uniswapFeeHistory', chainId.toString(), poolAddress, rangeHash] as const,
+
+  /**
+   * Key for required credit for ITM position.
+   */
+  requiredCreditForITM: (
+    chainId: bigint,
+    poolAddress: Address,
+    account: Address,
+    tokenId: bigint,
+  ) =>
+    [
+      ...queryKeys.all,
+      'requiredCreditForITM',
+      chainId.toString(),
+      poolAddress,
+      account,
+      tokenId.toString(),
+    ] as const,
 } as const

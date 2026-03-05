@@ -23,6 +23,8 @@ export interface DepositParams {
   collateralTrackerAddress: Address
   /** Amount of assets to deposit */
   assets: bigint
+  /** Whether the collateral tracker wraps native ETH (requires sending msg.value) */
+  isNativeETH?: boolean
   /** Receiver of shares (defaults to account) */
   receiver?: Address
   /** Gas and transaction overrides */
@@ -54,6 +56,7 @@ export async function deposit(params: DepositParams): Promise<TxResult> {
     account,
     collateralTrackerAddress,
     assets,
+    isNativeETH,
     receiver = account,
     txOverrides,
   } = params
@@ -66,6 +69,7 @@ export async function deposit(params: DepositParams): Promise<TxResult> {
     abi: collateralTrackerAbi,
     functionName: 'deposit',
     args: [assets, receiver],
+    value: isNativeETH ? assets : undefined,
     txOverrides,
   })
 }

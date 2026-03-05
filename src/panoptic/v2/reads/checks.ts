@@ -11,28 +11,35 @@ import type { Address, PublicClient } from 'viem'
 import { panopticPoolAbi } from '../../../generated'
 import { panopticQueryAbi } from '../abis/panopticQuery'
 import { getBlockMeta } from '../clients/blockMeta'
-import { PanopticHelperNotDeployedError } from '../errors'
 import type { BlockMeta } from '../types'
 import { decodeLeftRightUnsigned } from '../writes/utils'
 
 /**
  * Liquidation check result with detailed margin breakdown.
+ *
+ * **Denomination**: all margin values are cross-converted into a single
+ * token by `checkCollateral`. See {@link MarginBuffer.denominatedInToken}.
  */
 export interface LiquidationCheck {
   /** Whether the account is liquidatable */
   isLiquidatable: boolean
-  /** Margin shortfall for token 0 (positive = shortfall, negative = excess) */
+  /** Margin shortfall for slot 0 (positive = shortfall, negative = excess) */
   marginShortfall0: bigint
-  /** Margin shortfall for token 1 (positive = shortfall, negative = excess) */
+  /** Margin shortfall for slot 1 (positive = shortfall, negative = excess) */
   marginShortfall1: bigint
-  /** Current margin (collateral balance) for token 0 */
+  /** Current margin (collateral balance) for slot 0 */
   currentMargin0: bigint
-  /** Current margin (collateral balance) for token 1 */
+  /** Current margin (collateral balance) for slot 1 */
   currentMargin1: bigint
-  /** Required margin for token 0 */
+  /** Required margin for slot 0 */
   requiredMargin0: bigint
-  /** Required margin for token 1 */
+  /** Required margin for slot 1 */
   requiredMargin1: bigint
+  /**
+   * Which token all margin values are denominated in.
+   * 0n = token0 (when atTick < 0), 1n = token1 (when atTick >= 0).
+   */
+  denominatedInToken: bigint
   /** Tick at which liquidation was checked */
   atTick: bigint
   /** Block metadata */
@@ -97,10 +104,6 @@ export interface IsLiquidatableParams {
 export async function isLiquidatable(params: IsLiquidatableParams): Promise<LiquidationCheck> {
   const { client, poolAddress, account, tokenIds, atTick, queryAddress, blockNumber } = params
 
-  if (!queryAddress) {
-    throw new PanopticHelperNotDeployedError()
-  }
-
   const targetBlockNumber =
     blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
 
@@ -155,6 +158,7 @@ export async function isLiquidatable(params: IsLiquidatableParams): Promise<Liqu
     currentMargin1,
     requiredMargin0,
     requiredMargin1,
+    denominatedInToken: effectiveTick < 0n ? 0n : 1n,
     atTick: effectiveTick,
     _meta,
   }

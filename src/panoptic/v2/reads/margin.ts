@@ -12,9 +12,7 @@ import type { Address, PublicClient } from 'viem'
 import { panopticPoolAbi } from '../../../generated'
 import { panopticQueryAbi } from '../abis/panopticQuery'
 import { getBlockMeta } from '../clients/blockMeta'
-import { PanopticHelperNotDeployedError } from '../errors'
 import type { BlockMeta } from '../types'
-import { decodeLeftRightUnsigned } from '../writes/utils'
 
 // Sentinel ticks used by PanopticQuery to indicate "no liquidation at this boundary"
 const MIN_TICK = -887272n
@@ -42,24 +40,35 @@ export interface GetMarginBufferParams {
 
 /**
  * Margin buffer result with distance-to-liquidation.
+ *
+ * **Denomination**: `checkCollateral` cross-converts both collateral slots
+ * into a single token so they can be compared directly.
+ * When `currentTick < 0` (`sqrtPriceX96 < FP96`) all values are in **token0**
+ * units; otherwise they are in **token1** units.
+ * The `denominatedInToken` field tells you which (0 or 1).
  */
 export interface MarginBuffer {
-  /** Excess margin for token0 (positive = safe, negative = shortfall) */
+  /** Excess margin for slot 0 (positive = safe, negative = shortfall) */
   buffer0: bigint
-  /** Excess margin for token1 (positive = safe, negative = shortfall) */
+  /** Excess margin for slot 1 (positive = safe, negative = shortfall) */
   buffer1: bigint
-  /** Buffer as percentage of required margin in bps (token0). null if no requirement. */
+  /** Buffer as percentage of required margin in bps (slot 0). null if no requirement. */
   bufferPercent0: bigint | null
-  /** Buffer as percentage of required margin in bps (token1). null if no requirement. */
+  /** Buffer as percentage of required margin in bps (slot 1). null if no requirement. */
   bufferPercent1: bigint | null
-  /** Current collateral balance for token0 */
+  /** Current collateral balance for slot 0 */
   currentMargin0: bigint
-  /** Current collateral balance for token1 */
+  /** Current collateral balance for slot 1 */
   currentMargin1: bigint
-  /** Required margin for token0 */
+  /** Required margin for slot 0 */
   requiredMargin0: bigint
-  /** Required margin for token1 */
+  /** Required margin for slot 1 */
   requiredMargin1: bigint
+  /**
+   * Which token all margin values are denominated in.
+   * 0 = token0 (when currentTick < 0), 1 = token1 (when currentTick >= 0).
+   */
+  denominatedInToken: 0 | 1
   /** Tick distance to nearest liquidation boundary (null if no liquidation boundaries) */
   liquidationDistance: bigint | null
   /** Lower liquidation tick (null if safe at MIN_TICK) */
@@ -108,10 +117,6 @@ export interface MarginBuffer {
 export async function getMarginBuffer(params: GetMarginBufferParams): Promise<MarginBuffer> {
   const { client, poolAddress, account, tokenIds, queryAddress, blockNumber } = params
 
-  if (!queryAddress) {
-    throw new PanopticHelperNotDeployedError()
-  }
-
   const targetBlockNumber =
     blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
 
@@ -133,7 +138,7 @@ export async function getMarginBuffer(params: GetMarginBufferParams): Promise<Ma
       functionName: 'checkCollateral',
       args: [poolAddress, account, tokenIds, Number(currentTick)],
       blockNumber: targetBlockNumber,
-    }) as Promise<[bigint, bigint]>,
+    }) as Promise<readonly [bigint, bigint, bigint, bigint]>,
     client.readContract({
       address: queryAddress,
       abi: panopticQueryAbi,
@@ -144,16 +149,14 @@ export async function getMarginBuffer(params: GetMarginBufferParams): Promise<Ma
     params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
   ])
 
-  const [collateralBalance, requiredCollateral] = checkResult
+  // checkCollateral returns uint256[4]: [effectiveBal0, effectiveReq0, effectiveBal1, effectiveReq1]
+  // All values are in the same denomination: token0 if tick < 0, token1 if tick >= 0
+  const [effectiveBal0, effectiveReq0, effectiveBal1, effectiveReq1] = checkResult
 
-  // Decode LeftRightUnsigned packed values (right=token0, left=token1)
-  const balances = decodeLeftRightUnsigned(collateralBalance)
-  const required = decodeLeftRightUnsigned(requiredCollateral)
-
-  const currentMargin0 = balances.right
-  const currentMargin1 = balances.left
-  const requiredMargin0 = required.right
-  const requiredMargin1 = required.left
+  const currentMargin0 = effectiveBal0
+  const currentMargin1 = effectiveBal1
+  const requiredMargin0 = effectiveReq0
+  const requiredMargin1 = effectiveReq1
 
   // Buffer = current - required (positive = safe, negative = shortfall)
   const buffer0 = currentMargin0 - requiredMargin0
@@ -191,6 +194,7 @@ export async function getMarginBuffer(params: GetMarginBufferParams): Promise<Ma
     currentMargin1,
     requiredMargin0,
     requiredMargin1,
+    denominatedInToken: currentTick < 0n ? 0 : 1,
     liquidationDistance,
     lowerLiquidationTick,
     upperLiquidationTick,

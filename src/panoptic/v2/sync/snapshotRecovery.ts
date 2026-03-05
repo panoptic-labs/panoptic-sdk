@@ -90,8 +90,8 @@ export async function recoverSnapshot(
         name: 'OptionBurnt',
         inputs: [
           { type: 'address', name: 'recipient', indexed: true },
+          { type: 'uint128', name: 'positionSize', indexed: false },
           { type: 'uint256', name: 'tokenId', indexed: true },
-          { type: 'uint256', name: 'positionSize', indexed: false },
           { type: 'int256[4]', name: 'premiaByLeg', indexed: false },
         ],
       },
@@ -110,8 +110,17 @@ export async function recoverSnapshot(
     return Number(b.logIndex - a.logIndex)
   })
 
+  // Deduplicate by transaction hash — multiple events from the same tx
+  // (e.g. OptionMinted for each leg) would produce duplicate entries
+  const seen = new Set<string>()
+  const uniqueEvents = allEvents.filter((e) => {
+    if (seen.has(e.transactionHash)) return false
+    seen.add(e.transactionHash)
+    return true
+  })
+
   // Find the most recent transaction with position data
-  for (const event of allEvents) {
+  for (const event of uniqueEvents) {
     try {
       const [tx, block] = await Promise.all([
         client.getTransaction({ hash: event.transactionHash }),
@@ -119,7 +128,9 @@ export async function recoverSnapshot(
       ])
 
       const decoded = decodeDispatchCalldata(tx.input)
-      if (!decoded) continue
+      if (!decoded) {
+        continue
+      }
 
       // For dispatchFrom, verify target account matches
       if (decoded.targetAccount && decoded.targetAccount.toLowerCase() !== account.toLowerCase()) {
@@ -140,6 +151,87 @@ export async function recoverSnapshot(
 
   // No snapshot found
   return null
+}
+
+/**
+ * Parameters for recovering a snapshot from a known transaction hash.
+ */
+export interface RecoverSnapshotFromTxParams {
+  /** viem public client */
+  client: PublicClient
+  /** Transaction hash of a known dispatch() call */
+  transactionHash: Hash
+  /** Account to verify. When set, rejects transactions not sent by (or targeting) this account. */
+  account?: Address
+  /** Pool address to validate against. When set, rejects transactions not sent to this pool. */
+  pool?: Address
+}
+
+/**
+ * Recover position snapshot from a specific dispatch transaction hash.
+ *
+ * This is an O(1) alternative to {@link recoverSnapshot} when you already
+ * know the tx hash of the most recent dispatch. It fetches the transaction,
+ * decodes the `finalPositionIdList` from the calldata, and returns the result
+ * — no event scanning required.
+ *
+ * @param params - Recovery parameters including the transaction hash
+ * @returns Snapshot recovery result, or null if the tx is not a dispatch call
+ *
+ * @example
+ * ```typescript
+ * const snapshot = await recoverSnapshotFromTx({
+ *   client,
+ *   transactionHash: '0xabc...',
+ * })
+ * if (snapshot) {
+ *   console.log('Open positions:', snapshot.positionIds)
+ * }
+ * ```
+ */
+export async function recoverSnapshotFromTx(
+  params: RecoverSnapshotFromTxParams,
+): Promise<SnapshotRecoveryResult | null> {
+  const { client, transactionHash, account, pool } = params
+
+  const tx = await client.getTransaction({ hash: transactionHash })
+
+  // Pending transactions have no block number — cannot recover snapshot
+  if (tx.blockNumber == null) return null
+
+  // Validate pool: transaction must have been sent to the expected pool address
+  if (pool && tx.to?.toLowerCase() !== pool.toLowerCase()) {
+    return null
+  }
+
+  const decoded = decodeDispatchCalldata(tx.input)
+  if (!decoded) return null
+
+  // Validate account context:
+  // - dispatch: tx.from must be the account (msg.sender is the trader)
+  // - dispatchFrom: decoded.targetAccount must be the account (builder sends on behalf of trader)
+  if (account) {
+    if (decoded.targetAccount) {
+      if (decoded.targetAccount.toLowerCase() !== account.toLowerCase()) {
+        return null
+      }
+    } else {
+      if (tx.from.toLowerCase() !== account.toLowerCase()) {
+        return null
+      }
+    }
+  }
+
+  const blockNumber = tx.blockNumber
+  const block = await client.getBlock({ blockNumber })
+
+  return {
+    success: true,
+    positionIds: decoded.positionIds,
+    blockNumber,
+    blockHash: block.hash,
+    transactionHash,
+  }
 }
 
 /**

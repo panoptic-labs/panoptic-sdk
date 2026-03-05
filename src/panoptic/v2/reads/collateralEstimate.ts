@@ -10,10 +10,10 @@
 import type { Address, PublicClient } from 'viem'
 import { encodeFunctionData } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { collateralTrackerAbi, panopticPoolAbi } from '../../../generated'
 import { panopticQueryAbi } from '../abis/panopticQuery'
 import { getBlockMeta } from '../clients/blockMeta'
-import { PanopticError, PanopticHelperNotDeployedError } from '../errors'
+import { PanopticError } from '../errors'
 import { type TokenFlow, simulateWithTokenFlow } from '../simulations/tokenFlow'
 import type { StorageAdapter } from '../storage'
 import { getTrackedPositionIds } from '../sync/getTrackedPositionIds'
@@ -48,8 +48,8 @@ export interface EstimateCollateralRequiredParams {
   positionSize: bigint
   /** Optional: Tick to calculate collateral at (defaults to current tick) */
   atTick?: bigint
-  /** PanopticQuery address (required for collateral estimates) */
-  queryAddress?: Address
+  /** PanopticQuery address */
+  queryAddress: Address
   /** Optional block number for historical queries */
   blockNumber?: bigint
   /** Optional pre-fetched block metadata (skips getBlockMeta RPC call) */
@@ -64,16 +64,11 @@ export interface EstimateCollateralRequiredParams {
  *
  * @param params - The parameters
  * @returns Estimated collateral requirements with block metadata
- * @throws PanopticHelperNotDeployedError - PanopticQuery contract is required
  */
 export async function estimateCollateralRequired(
   params: EstimateCollateralRequiredParams,
 ): Promise<CollateralEstimate> {
   const { client, poolAddress, tokenId, atTick, queryAddress, blockNumber } = params
-
-  if (!queryAddress) {
-    throw new PanopticHelperNotDeployedError()
-  }
 
   const targetBlockNumber =
     blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
@@ -172,7 +167,6 @@ export interface GetMaxPositionSizeParams {
  *
  * @param params - The parameters
  * @returns Maximum position size with bounds and block metadata
- * @throws PanopticHelperNotDeployedError - PanopticQuery contract is required but not provided
  */
 export async function getMaxPositionSize(
   params: GetMaxPositionSizeParams,
@@ -191,10 +185,6 @@ export async function getMaxPositionSize(
     swapAtMint = false,
     blockNumber,
   } = params
-
-  if (!queryAddress) {
-    throw new PanopticHelperNotDeployedError()
-  }
 
   const targetBlockNumber =
     blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
@@ -246,15 +236,15 @@ export async function getMaxPositionSize(
   }
 
   // Binary search between widened bounds using dispatch simulation
-  // Widen by 100x in each direction to capture swapAtMint differences
+  // Widen by 2x in each direction to account for swapAtMint price impact
   const maxSize = await binarySearchMaxSize({
     client,
     poolAddress,
     account,
     tokenId,
     existingPositionIds: positionIds,
-    low: maxSizeAtMaxUtil / 100n,
-    high: maxSizeAtMinUtil * 100n,
+    low: maxSizeAtMaxUtil / 2n,
+    high: maxSizeAtMinUtil * 2n,
     precisionDivisor,
     swapAtMint,
   })
@@ -268,7 +258,8 @@ export async function getMaxPositionSize(
 }
 
 /**
- * Binary search to find exact max position size using dispatch simulation.
+ * Parallel search to find max position size using dispatch simulation.
+ * Tests 5 points per round (sextiles), narrowing the range by 6x each iteration.
  */
 async function binarySearchMaxSize(params: {
   client: PublicClient
@@ -292,24 +283,49 @@ async function binarySearchMaxSize(params: {
   } = params
   let { low, high } = params
 
-  // Binary search with relative precision (e.g., 20n = 5%, 10n = 10%)
-  while (high - low > 1n && high - low > low / precisionDivisor) {
-    const mid = low + (high - low) / 2n
-
-    const success = await tryDispatchSimulation({
+  const trySize = (positionSize: bigint) =>
+    tryDispatchSimulation({
       client,
       poolAddress,
       account,
       tokenId,
       existingPositionIds,
-      positionSize: mid,
+      positionSize,
       swapAtMint,
     })
 
-    if (success) {
-      low = mid
+  while (high - low > 1n && high - low > low / precisionDivisor) {
+    const range = high - low
+    const p1 = low + range / 6n
+    const p2 = low + (range * 2n) / 6n
+    const p3 = low + (range * 3n) / 6n
+    const p4 = low + (range * 4n) / 6n
+    const p5 = low + (range * 5n) / 6n
+
+    const [s1, s2, s3, s4, s5] = await Promise.all([
+      trySize(p1),
+      trySize(p2),
+      trySize(p3),
+      trySize(p4),
+      trySize(p5),
+    ])
+
+    if (s5) {
+      low = p5
+    } else if (s4) {
+      low = p4
+      high = p5
+    } else if (s3) {
+      low = p3
+      high = p4
+    } else if (s2) {
+      low = p2
+      high = p3
+    } else if (s1) {
+      low = p1
+      high = p2
     } else {
-      high = mid
+      high = p1
     }
   }
 
@@ -500,5 +516,122 @@ export async function getRequiredCreditForITM(
     creditAmount1: -result.tokenFlow.delta1,
     tokenFlow: result.tokenFlow,
     _meta,
+  }
+}
+
+/**
+ * Parameters for getMaxWithdrawable.
+ */
+export interface GetMaxWithdrawableParams {
+  /** viem PublicClient */
+  client: PublicClient
+  /** CollateralTracker address */
+  collateralTrackerAddress: Address
+  /** Account address */
+  account: Address
+  /** Position IDs held by the account (required for solvency-checked withdraw) */
+  positionIdList: bigint[]
+  /** Upper bound for the binary search (e.g. user's total assets in this tracker) */
+  totalAssets: bigint
+  /** Whether to use premia as collateral (default: false) */
+  usePremiaAsCollateral?: boolean
+  /** Precision for binary search as percentage (default: 1 = 1%) */
+  precisionPct?: number
+}
+
+/**
+ * Find the maximum withdrawable amount from a CollateralTracker using binary search.
+ *
+ * When a user has open positions, the standard `maxWithdraw()` returns 0 because
+ * the basic ERC4626 withdraw doesn't check solvency. The overloaded
+ * `withdraw(assets, receiver, owner, positionIdList, usePremiaAsCollateral)` does
+ * check solvency, so we binary search for the largest amount that doesn't revert.
+ *
+ * @param params - The parameters
+ * @returns Maximum withdrawable amount in underlying asset units
+ */
+export async function getMaxWithdrawable(
+  params: GetMaxWithdrawableParams,
+): Promise<{ maxWithdrawable: bigint; _meta: BlockMeta }> {
+  const {
+    client,
+    collateralTrackerAddress,
+    account,
+    positionIdList,
+    totalAssets,
+    usePremiaAsCollateral = false,
+    precisionPct = 1,
+  } = params
+
+  const _meta = await getBlockMeta({ client })
+
+  if (totalAssets <= 0n || positionIdList.length === 0) {
+    // No positions: use the standard maxWithdraw
+    const maxWithdraw = await client.readContract({
+      address: collateralTrackerAddress,
+      abi: collateralTrackerAbi,
+      functionName: 'maxWithdraw',
+      args: [account],
+    })
+    return { maxWithdrawable: maxWithdraw, _meta }
+  }
+
+  const precisionDivisor = BigInt(Math.floor(100 / precisionPct))
+  let low = 0n
+  let high = totalAssets
+
+  while (high - low > 1n && high - low > low / precisionDivisor) {
+    const mid = low + (high - low) / 2n
+
+    const success = await tryWithdrawSimulation({
+      client,
+      collateralTrackerAddress,
+      account,
+      assets: mid,
+      positionIdList,
+      usePremiaAsCollateral,
+    })
+
+    if (success) {
+      low = mid
+    } else {
+      high = mid
+    }
+  }
+
+  return { maxWithdrawable: low, _meta }
+}
+
+/**
+ * Try to simulate a solvency-checked withdraw with the given amount.
+ */
+async function tryWithdrawSimulation(params: {
+  client: PublicClient
+  collateralTrackerAddress: Address
+  account: Address
+  assets: bigint
+  positionIdList: bigint[]
+  usePremiaAsCollateral: boolean
+}): Promise<boolean> {
+  const {
+    client,
+    collateralTrackerAddress,
+    account,
+    assets,
+    positionIdList,
+    usePremiaAsCollateral,
+  } = params
+
+  try {
+    await client.estimateContractGas({
+      address: collateralTrackerAddress,
+      abi: collateralTrackerAbi,
+      functionName: 'withdraw',
+      args: [assets, account, account, positionIdList, usePremiaAsCollateral],
+      account,
+    })
+    return true
+  } catch {
+    return false
   }
 }

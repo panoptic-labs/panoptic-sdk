@@ -15,6 +15,7 @@ export {
   CastingError,
   // Liquidity
   ChunkHasZeroLiquidityError,
+  CreateFailError,
   DepositTooLargeError,
   DuplicateTokenIdError,
   EffectiveLiquidityAboveThresholdError,
@@ -72,6 +73,7 @@ export {
   ChunkLimitError,
   CrossPoolError,
   // Validation
+  InvalidHistoryRangeError,
   InvalidTickLimitsError,
   MissingPositionIdsError,
   // Configuration & Network
@@ -80,6 +82,8 @@ export {
   OracleRateLimitedError,
   // Helper Contract
   PanopticHelperNotDeployedError,
+  // Input Validation
+  PanopticValidationError,
   PositionSnapshotNotFoundError,
   ProviderLagError,
   // RPC

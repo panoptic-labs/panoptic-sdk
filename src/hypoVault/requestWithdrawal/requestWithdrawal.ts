@@ -155,6 +155,7 @@ export function buildExecuteDepositCalldatas({
 export function buildRequestWithdrawalCalldatas({
   user,
   desiredAssets,
+  requestAllAvailableShares = false,
   sharePrice,
   walletShares,
   queuedDeposits,
@@ -163,6 +164,7 @@ export function buildRequestWithdrawalCalldatas({
 }: {
   user: Address
   desiredAssets: bigint
+  requestAllAvailableShares?: boolean
   sharePrice: SharePrice
   walletShares: bigint
   queuedDeposits: QueuedDepositSnapshot[]
@@ -185,7 +187,11 @@ export function buildRequestWithdrawalCalldatas({
     sharePrice,
   })
 
-  const sharesToRequest = sharesForAssets > availableShares ? availableShares : sharesForAssets
+  const sharesToRequest = requestAllAvailableShares
+    ? availableShares
+    : sharesForAssets > availableShares
+      ? availableShares
+      : sharesForAssets
 
   const executeDepositCalldatas = buildExecuteDepositCalldatas({
     user,

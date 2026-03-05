@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest'
 import type { TokenIdLeg } from '../types'
 import {
   calculatePositionDelta,
+  calculatePositionDeltaWithSwap,
   calculatePositionGamma,
   calculatePositionGreeks,
   calculatePositionValue,
   getLegDelta,
   getLegGamma,
   getLegValue,
+  getLoanEffectiveDelta,
   isCall,
   isDefinedRisk,
 } from './index'
@@ -399,20 +401,18 @@ describe('greeks module', () => {
       expect(below).not.toBe(above)
     })
 
-    it('getLegDelta should return m below strike for width=0', () => {
-      // asset=1 avoids tick negation: qStrikeTick = strike, qCurrentTick = currentTick
-      const leg = createWidth0Leg({ strike: 1000n, tokenType: 0n, asset: 1n }) // put (asset=1, tokenType=0)
+    it('getLegDelta for loan borrowing numeraire → 0 (tick-independent)', () => {
+      // asset=1n, tokenType=0n → borrows numeraire (not asset) → delta = 0
+      const leg = createWidth0Leg({ strike: 1000n, tokenType: 0n, asset: 1n })
       const delta = getLegDelta(leg, -500n, positionSize, poolTickSpacing, 0n, false)
-      // For a short put, m = positionSize * optionRatio = positionSize
-      // vDelta below strike = m
-      expect(delta).toBe(positionSize)
+      expect(delta).toBe(0n)
     })
 
-    it('getLegDelta should return 0 above strike for put with width=0', () => {
-      // asset=1 avoids tick negation: qStrikeTick = strike, qCurrentTick = currentTick
-      const leg = createWidth0Leg({ strike: -1000n, tokenType: 0n, asset: 1n }) // put (asset=1, tokenType=0)
+    it('getLegDelta for loan borrowing asset → -positionSize', () => {
+      // asset=1n, tokenType=1n → borrows asset → delta = -m = -positionSize
+      const leg = createWidth0Leg({ strike: 1000n, tokenType: 1n, asset: 1n })
       const delta = getLegDelta(leg, 500n, positionSize, poolTickSpacing, 0n, false)
-      expect(delta).toBe(0n)
+      expect(delta).toBe(-positionSize)
     })
 
     it('getLegGamma should return 0 for width=0', () => {
@@ -434,6 +434,156 @@ describe('greeks module', () => {
       expect(typeof greeks.value).toBe('bigint')
       expect(typeof greeks.delta).toBe('bigint')
       expect(greeks.gamma).toBe(0n)
+    })
+  })
+
+  describe('true loans (leg.width === 0n) delta', () => {
+    const poolTickSpacing = 10n
+    const positionSize = 1000000n
+
+    function createLoanLeg(overrides: Partial<TokenIdLeg> = {}): TokenIdLeg {
+      return createLeg({ width: 0n, strike: 0n, tickLower: 0n, tickUpper: 0n, ...overrides })
+    }
+
+    it('short loan borrowing asset token → delta = -positionSize', () => {
+      // asset=token0 (asset=0n), tokenType=0n → borrows asset
+      const leg = createLoanLeg({ asset: 0n, tokenType: 0n, isLong: false })
+      const delta = getLegDelta(leg, 100n, positionSize, poolTickSpacing, 0n, false)
+      // m = positionSize (short), borrowsAsset=true → -m = -positionSize
+      expect(delta).toBe(-positionSize)
+    })
+
+    it('short loan borrowing numeraire → delta = 0', () => {
+      // asset=token0 (asset=0n), tokenType=1n → borrows numeraire
+      const leg = createLoanLeg({ asset: 0n, tokenType: 1n, isLong: false })
+      const delta = getLegDelta(leg, 100n, positionSize, poolTickSpacing, 0n, false)
+      expect(delta).toBe(0n)
+    })
+
+    it('long credit lending asset → delta = +positionSize', () => {
+      // asset=token0, tokenType=0n, isLong=true → m = -positionSize, borrowsAsset=true → -m = positionSize
+      const leg = createLoanLeg({ asset: 0n, tokenType: 0n, isLong: true })
+      const delta = getLegDelta(leg, 100n, positionSize, poolTickSpacing, 0n, false)
+      expect(delta).toBe(positionSize)
+    })
+
+    it('long credit lending numeraire → delta = 0', () => {
+      const leg = createLoanLeg({ asset: 0n, tokenType: 1n, isLong: true })
+      const delta = getLegDelta(leg, 100n, positionSize, poolTickSpacing, 0n, false)
+      expect(delta).toBe(0n)
+    })
+
+    it('loan delta is tick-independent (same at any price)', () => {
+      const leg = createLoanLeg({ asset: 0n, tokenType: 0n, isLong: false })
+      const d1 = getLegDelta(leg, -50000n, positionSize, poolTickSpacing, 0n, false)
+      const d2 = getLegDelta(leg, 0n, positionSize, poolTickSpacing, 0n, false)
+      const d3 = getLegDelta(leg, 50000n, positionSize, poolTickSpacing, 0n, false)
+      expect(d1).toBe(d2)
+      expect(d2).toBe(d3)
+    })
+
+    it('loan gamma is always 0', () => {
+      const leg = createLoanLeg({ asset: 0n, tokenType: 0n })
+      const gamma = getLegGamma(leg, 0n, positionSize, poolTickSpacing)
+      expect(gamma).toBe(0n)
+    })
+  })
+
+  describe('getLoanEffectiveDelta', () => {
+    const positionSize = 1000000n
+
+    function createLoanLeg(overrides: Partial<TokenIdLeg> = {}): TokenIdLeg {
+      return createLeg({ width: 0n, strike: 0n, tickLower: 0n, tickUpper: 0n, ...overrides })
+    }
+
+    it('no swap → 0 regardless of borrow direction', () => {
+      const leg = createLoanLeg({ asset: 0n, tokenType: 0n, isLong: false })
+      expect(getLoanEffectiveDelta(leg, positionSize, false)).toBe(0n)
+    })
+
+    it('swap + borrows asset (short) → -positionSize', () => {
+      const leg = createLoanLeg({ asset: 0n, tokenType: 0n, isLong: false })
+      expect(getLoanEffectiveDelta(leg, positionSize, true)).toBe(-positionSize)
+    })
+
+    it('swap + borrows numeraire (short) → +positionSize', () => {
+      const leg = createLoanLeg({ asset: 0n, tokenType: 1n, isLong: false })
+      expect(getLoanEffectiveDelta(leg, positionSize, true)).toBe(positionSize)
+    })
+
+    it('swap + borrows asset (long/credit) → +positionSize', () => {
+      // isLong=true → m = -positionSize, borrowsAsset=true → -m = positionSize
+      const leg = createLoanLeg({ asset: 0n, tokenType: 0n, isLong: true })
+      expect(getLoanEffectiveDelta(leg, positionSize, true)).toBe(positionSize)
+    })
+
+    it('respects assetIndex override', () => {
+      const leg = createLoanLeg({ asset: 0n, tokenType: 0n, isLong: false })
+      // With assetIndex=1n, token0 is NOT asset, so tokenType=0n does NOT borrow asset
+      const d = getLoanEffectiveDelta(leg, positionSize, true, 1n)
+      expect(d).toBe(positionSize) // borrows numeraire → +m
+    })
+  })
+
+  describe('calculatePositionDeltaWithSwap', () => {
+    const poolTickSpacing = 10n
+    const positionSize = 1000000n
+
+    it('mixed option+loan position sums correctly', () => {
+      const optionLeg = createLeg({ strike: 0n, width: 10n, tokenType: 0n, isLong: false })
+      const loanLeg = createLeg({
+        width: 0n,
+        strike: 0n,
+        tokenType: 0n,
+        isLong: false,
+        asset: 0n,
+        index: 1n,
+        tickLower: 0n,
+        tickUpper: 0n,
+      })
+
+      const optionOnly = calculatePositionDelta({
+        legs: [optionLeg],
+        currentTick: 0n,
+        mintTick: 0n,
+        positionSize,
+        poolTickSpacing,
+      })
+
+      const combined = calculatePositionDeltaWithSwap({
+        legs: [optionLeg, loanLeg],
+        currentTick: 0n,
+        mintTick: 0n,
+        positionSize,
+        poolTickSpacing,
+        swapAtMint: true,
+      })
+
+      // Loan borrows asset with swap → -positionSize delta
+      expect(combined).toBe(optionOnly + -positionSize)
+    })
+
+    it('no swap → loan contributes 0 delta', () => {
+      const loanLeg = createLeg({
+        width: 0n,
+        strike: 0n,
+        tokenType: 0n,
+        isLong: false,
+        asset: 0n,
+        tickLower: 0n,
+        tickUpper: 0n,
+      })
+
+      const delta = calculatePositionDeltaWithSwap({
+        legs: [loanLeg],
+        currentTick: 0n,
+        mintTick: 0n,
+        positionSize,
+        poolTickSpacing,
+        swapAtMint: false,
+      })
+
+      expect(delta).toBe(0n)
     })
   })
 

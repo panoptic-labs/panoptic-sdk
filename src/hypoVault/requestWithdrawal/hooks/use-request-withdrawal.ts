@@ -19,6 +19,7 @@ import type { DepositEpochStateSnapshot, QueuedDepositSnapshot, SharePrice } fro
 export const useRequestWithdrawal = ({
   vaultAddress,
   desiredAssets,
+  requestAllAvailableShares = false,
   sharePrice,
   walletShares,
   queuedDeposits,
@@ -28,6 +29,7 @@ export const useRequestWithdrawal = ({
 }: {
   vaultAddress: Address
   desiredAssets: bigint
+  requestAllAvailableShares?: boolean
   sharePrice: SharePrice
   walletShares: bigint
   queuedDeposits: QueuedDepositSnapshot[]
@@ -43,6 +45,7 @@ export const useRequestWithdrawal = ({
       buildRequestWithdrawalCalldatas({
         user,
         desiredAssets,
+        requestAllAvailableShares,
         sharePrice,
         walletShares,
         queuedDeposits,
@@ -52,6 +55,7 @@ export const useRequestWithdrawal = ({
     [
       user,
       desiredAssets,
+      requestAllAvailableShares,
       sharePrice,
       walletShares,
       queuedDeposits,

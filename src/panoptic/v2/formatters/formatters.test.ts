@@ -29,6 +29,11 @@ import {
 } from './display'
 import { formatBps, formatRatioPercent, formatUtilization, parseBps } from './percentage'
 import {
+  annualizePerSecondRateWad,
+  formatPerSecondRateWadAsAprPct,
+  formatPerSecondRateWadAsApyPct,
+} from './rates'
+import {
   formatPriceRange,
   formatTickRange,
   getPricesAtTick,
@@ -231,6 +236,20 @@ describe('percentage and wad formatters', () => {
   })
 })
 
+describe('per-second rate helpers', () => {
+  it('annualizes per-second WAD rates', () => {
+    expect(annualizePerSecondRateWad(766044742n)).toBe(24157986983712000n)
+  })
+
+  it('formats per-second rate as APY percent', () => {
+    expect(formatPerSecondRateWadAsApyPct(766044742n, 4n)).toBe('2.4157%')
+  })
+
+  it('formats per-second rate as APR percent', () => {
+    expect(formatPerSecondRateWadAsAprPct(766044742n, 4n)).toBe('2.4157%')
+  })
+})
+
 describe('amount helpers', () => {
   it('formats token amounts with truncation', () => {
     expect(formatTokenAmount(1500500n, 6n, 2n)).toBe('1.50')
@@ -266,6 +285,8 @@ describe('amount helpers', () => {
       balanceBefore1: 1_000_000_000_000_000_000n,
       balanceAfter0: 3_500_000n,
       balanceAfter1: 3_000_000_000_000_000_000n,
+      tickBefore: null,
+      tickAfter: null,
     }
 
     const formatted = formatTokenFlow(flow, 6n, 18n, 2n, 2n)

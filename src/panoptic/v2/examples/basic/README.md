@@ -326,4 +326,4 @@ Ensure you're using a valid Panoptic v2 pool address for your network.
 - See error details with `parsePanopticError()`
 
 ### Type errors with imports
-Examples use `@panoptic/sdk/panoptic/v2` which assumes the SDK is built. Run `pnpm build` in the SDK root first.
+Examples use `@panoptic-eng/sdk/v2` which assumes the SDK is built. Run `pnpm build` in the SDK root first.

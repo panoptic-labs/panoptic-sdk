@@ -14,6 +14,7 @@ import {
   type SimulateLiquidateParams,
   type SimulateOpenPositionParams,
   type SimulateSettleParams,
+  type SimulateSFPMParams,
   type SimulateWithdrawParams,
   simulateClosePosition,
   simulateDeposit,
@@ -22,6 +23,8 @@ import {
   simulateLiquidate,
   simulateOpenPosition,
   simulateSettle,
+  simulateSFPMBurn,
+  simulateSFPMMint,
   simulateWithdraw,
 } from '../../simulations'
 import { getClientCacheScopeKey } from '../cacheScopes'
@@ -188,6 +191,48 @@ export function useSimulateDispatch(
       params,
     ] as const,
     queryFn: () => simulateDispatch({ client: publicClient, poolAddress, ...params! }),
+    enabled: params !== undefined,
+    staleTime: 0,
+  })
+}
+
+export function useSimulateSFPMMint(params?: OmitClient<SimulateSFPMParams>) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sim',
+      'sfpmMint',
+      params?.sfpmAddress,
+      params?.tokenId?.toString(),
+      getClientCacheScopeKey(publicClient, clientScope),
+      params,
+    ] as const,
+    queryFn: () => {
+      if (!params) throw new Error('params required for simulateSFPMMint')
+      return simulateSFPMMint({ client: publicClient, ...params })
+    },
+    enabled: params !== undefined,
+    staleTime: 0,
+  })
+}
+
+export function useSimulateSFPMBurn(params?: OmitClient<SimulateSFPMParams>) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sim',
+      'sfpmBurn',
+      params?.sfpmAddress,
+      params?.tokenId?.toString(),
+      getClientCacheScopeKey(publicClient, clientScope),
+      params,
+    ] as const,
+    queryFn: () => {
+      if (!params) throw new Error('params required for simulateSFPMBurn')
+      return simulateSFPMBurn({ client: publicClient, ...params })
+    },
     enabled: params !== undefined,
     staleTime: 0,
   })

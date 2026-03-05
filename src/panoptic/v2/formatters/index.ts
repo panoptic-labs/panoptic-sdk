@@ -39,6 +39,13 @@ export { formatBps, formatRatioPercent, formatUtilization, parseBps } from './pe
 // WAD formatters
 export { formatRateWad, formatWad, formatWadPercent, formatWadSigned, parseWad } from './wad'
 
+// Per-second rate helpers
+export {
+  annualizePerSecondRateWad,
+  formatPerSecondRateWadAsAprPct,
+  formatPerSecondRateWadAsApyPct,
+} from './rates'
+
 // Pool-bound formatters
 export type { PoolFormatterConfig, PoolFormatters } from './poolFormatters'
 export { createPoolFormatters } from './poolFormatters'

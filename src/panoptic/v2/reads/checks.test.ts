@@ -6,7 +6,6 @@
 import type { PublicClient } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
-import { PanopticHelperNotDeployedError } from '../errors'
 import { isLiquidatable } from './checks'
 
 // Common mock addresses
@@ -40,20 +39,6 @@ function createMockClient(): PublicClient {
 
 describe('Liquidation Checks with PanopticQuery', () => {
   describe('isLiquidatable', () => {
-    it('should throw PanopticHelperNotDeployedError with invalid queryAddress', async () => {
-      const client = createMockClient()
-
-      await expect(
-        isLiquidatable({
-          client,
-          poolAddress: POOL_ADDRESS,
-          account: ACCOUNT_ADDRESS,
-          tokenIds: [123n],
-          queryAddress: '' as `0x${string}`,
-        }),
-      ).rejects.toThrow(PanopticHelperNotDeployedError)
-    })
-
     it('should return isLiquidatable=true when margin shortfall exists', async () => {
       const client = createMockClient()
 

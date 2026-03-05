@@ -16,7 +16,7 @@ All functions use a flat API (no classes). Numeric values are `bigint` unless no
 | `getRiskParameters(params)` | Protocol risk params (millitick scale: 10M = 100%) |
 | `getSafeMode(params)` | Safe mode status (restricts minting/burning) |
 | `getPoolLiquidities(params)` | Cumulative liquidity distribution across a tick range |
-| `getCurrentRates(params)` | Current interest rates for both tokens |
+| `getCurrentRates(params)` | Current per-second WAD interest rates for both tokens |
 | `getCollateralData(params)` | Collateral tracker data (total assets, shares, rates) |
 | `getCollateralAddresses(pool)` | Extract collateral tracker addresses from a Pool object |
 
@@ -148,9 +148,11 @@ All return `Promise<SimulationResult<T>>` — either `{ success: true, data, gas
 | `hasLongLeg(tokenId)` | True if any leg is long |
 | `isShortOnly(tokenId)` | True if all legs are short |
 | `isSpread(tokenId)` | True if position is a spread |
-| `isLoan(tokenId)` | True if tokenId is a pure loan |
-| `isCredit(tokenId)` | True if tokenId is a pure credit |
-| `hasLoanOrCredit(tokenId)` | True if tokenId contains loan or credit legs |
+| `isLoan(tokenId)` | True if tokenId is a pure loan (all legs are loan legs) |
+| `isCredit(tokenId)` | True if tokenId is a pure credit (all legs are credit legs) |
+| `hasLoanOrCredit(tokenId)` | True if tokenId contains any loan or credit legs |
+| `isLoanLeg(leg)` | True if a single decoded leg is a loan (width = 0, isLong = true) |
+| `isCreditLeg(leg)` | True if a single decoded leg is a credit (width = 0, isLong = false) |
 | `validatePoolId(tokenId, expectedPoolId)` | Validate embedded pool ID matches |
 
 ---
@@ -237,7 +239,7 @@ All formatters require explicit `precision` (bigint) — no defaults.
 
 ## Client-side Greeks (`greeks/`)
 
-All outputs are WAD-scaled bigints (1e18 = 1.0).
+Outputs are in **natural token units** — value and gamma in numeraire token smallest units (e.g. USDC wei), delta in asset token smallest units (e.g. WETH wei). No WAD scaling.
 
 | Function | Description |
 |----------|-------------|
@@ -248,6 +250,8 @@ All outputs are WAD-scaled bigints (1e18 = 1.0).
 | `calculatePositionDelta(input)` | Total delta across all legs |
 | `calculatePositionGamma(input)` | Total gamma across all legs |
 | `calculatePositionGreeks(input)` | All greeks at once: `{ value, delta, gamma }` |
+| `calculatePositionDeltaWithSwap(input)` | Total delta including loan swap effects |
+| `getLoanEffectiveDelta(params)` | Effective delta of a single loan leg (accounts for borrowed token direction) |
 | `isCall(tokenType, isAssetToken0)` | True if leg is a call |
 | `isDefinedRisk(legs)` | True if position has defined risk (has a long leg) |
 
@@ -282,6 +286,28 @@ Assertion functions throw typed errors. Classification functions return booleans
 `getPositionsKey`, `getSyncCheckpointKey`, `getClosedPositionsKey`, `getPositionMetaKey`, `getTrackedChunksKey`, `getPendingPositionsKey`, `getPoolMetaKey`, `getPoolPrefix`, `getSchemaVersionKey`
 
 Key format: `panoptic-v2-sdk:v{VERSION}:chain{chainId}:pool{address}:{entity}:{id}`
+
+---
+
+## Price & History (`reads/`)
+
+| Function | Description |
+|----------|-------------|
+| `getPriceHistory(params)` | Historical tick/sqrtPriceX96 at specific block numbers (for charting) |
+| `getStreamiaHistory(params)` | Premia and fee accrual over time for a position |
+| `getUniswapFeeHistory(params)` | Historical Uniswap fee data for a pool |
+
+---
+
+## Factory (`reads/factory`, `writes/factory`)
+
+| Function | Description |
+|----------|-------------|
+| `getPanopticPoolAddress(params)` | Look up the Panoptic pool address for a given pool key and risk engine |
+| `minePoolAddress(params)` | Mine a vanity pool address by iterating salts |
+| `simulateDeployNewPool(params)` | Simulate pool deployment and return the predicted address |
+| `deployNewPool(params)` | Deploy a new Panoptic pool |
+| `deployNewPoolAndWait(params)` | Deploy and wait for confirmation |
 
 ---
 

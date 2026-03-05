@@ -41,6 +41,18 @@ export {
 
 // HypoVault
 export {
+  type LendingAllocationResult,
+  type LendingAllocationRow,
+  getLendingAllocationRows,
+} from './hypoVault/analytics/lendingAllocation'
+export {
+  cancelDeposit,
+  encodeCancelDepositFunctionData,
+  getCancelDepositContractConfig,
+  simulateCancelDeposit,
+} from './hypoVault/cancelDeposit/cancelDeposit'
+export { useCancelDeposit } from './hypoVault/cancelDeposit/hooks/use-cancel-deposit'
+export {
   buildExecuteWithdrawalCalldatas,
   encodeExecuteWithdrawalFunctionData,
   encodeExecuteWithdrawalMulticallFunctionData,
@@ -57,6 +69,8 @@ export {
   type WithdrawalEpochStateSnapshot,
   calculateClaimableAssetsFromQueuedWithdrawals,
 } from './hypoVault/executeWithdrawal/utils'
+export { ProductionUSDCGammaStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/ProductionUSDCGammaStrategistLeaves'
+export { ProductionUSDCGammaVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts/ProductionUSDCGammaVaultPoolInfos'
 export { ProductionUSDCPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/ProductionUSDCPLPStrategistLeaves'
 export { ProductionUSDCPLPVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts/ProductionUSDCPLPVaultPoolInfos'
 export { ProductionWETHPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/ProductionWETHPLPStrategistLeaves'
@@ -119,6 +133,10 @@ export {
   buildManagerInput,
 } from './hypoVault/utils/buildManagerInput'
 export {
+  type BuildManagerInputAtBlockParams,
+  buildManagerInputAtBlock,
+} from './hypoVault/utils/buildManagerInputAtBlock'
+export {
   type ManageLeaf,
   convertJsonTreeToArray,
   generateProof,
@@ -139,10 +157,21 @@ export { getAlchemyRpcUrl, getAlchemyWsRpcUrl } from './rpc'
 // GraphQL
 export type * from './graphql/hypoVault-sdk.generated'
 export type * from './graphql/hypoVault-types.generated'
-export { type HypoVaultGraphQLClient, getHypoVaultGraphQLClient } from './graphqlClient'
+export {
+  type HypoVaultGraphQLClient,
+  chainToHypoVaultGraphQlAPI,
+  getHypoVaultGraphQLClient,
+} from './graphqlClient'
 
 // Errors
 export { type DecodedError, parseCustomError } from './errors/ethereum'
 
 // Types
 export { type BaseContractWriteHookOutput } from './types/baseContractWriteHookOutput'
+
+// Panoptic V2 rate helpers
+export {
+  annualizePerSecondRateWad,
+  formatPerSecondRateWadAsAprPct,
+  formatPerSecondRateWadAsApyPct,
+} from './panoptic/v2/formatters/rates'

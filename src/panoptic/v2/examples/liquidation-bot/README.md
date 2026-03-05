@@ -135,8 +135,7 @@ console.log(`Liquidation tx: ${receipt.hash}`)
 The bot uses the SDK's `syncPositions()` function for automatic position discovery:
 
 ```typescript
-import { syncPositions, getTrackedPositionIds } from '@panoptic/sdk/sync'
-import { createFileStorage } from '@panoptic/sdk/storage'
+import { syncPositions, getTrackedPositionIds, createFileStorage } from '@panoptic-eng/sdk/v2'
 
 // Create storage adapter
 const storage = createFileStorage('./data')

@@ -1,15 +1,16 @@
 import type { HypoVaultManagerConfig } from './schema'
 
 export const WethPlpVaultSepoliaProdConfig: HypoVaultManagerConfig = {
+  deployment: 'prod',
   manageCycleIntervalMs: 86400000,
-  vaultCapInUnderlying: 100000000000000000000n,
+  vaultCapInUnderlying: 1000000000000000000n, // 1 WETH
   chainId: 11155111,
-  hypoVaultAddress: '0x69a3Dd63BCB02E89a70630294EDCe0e78377B876',
+  hypoVaultAddress: '0x225Bf020d280E98C3037fb3c5aa291De6F618834',
   addresses: {
-    wethUsdc500bpsV4Collateral0: '0x4f29B472bebbFcEEc250a4A5BC33312F00025600',
-    wethUsdc500bpsV4PanopticPool: '0x2aafC1D2Af4dEB9FD8b02cDE5a8C0922cA4D6c78',
-    hypoVaultManagerWithMerkleVerification: '0xcCaB9842150F19552B137f4dA28DeEB6101542cF',
-    hypoVault: '0x69a3Dd63BCB02E89a70630294EDCe0e78377B876',
+    ethUsdc500bpsV4Collateral0: '0x4d2579A5F9BC32641D6AdbFC47C6dAceF30027F1',
+    ethUsdc500bpsV4PanopticPool: '0x5D44F6574B8dE88ffa2CCAEba0B07aD3C204571E',
+    hypoVaultManagerWithMerkleVerification: '0xe675A002d7f8C9476Ebf3706550b80221BA2AE5E',
+    hypoVault: '0x225Bf020d280E98C3037fb3c5aa291De6F618834',
     underlyingToken: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
   },
 }

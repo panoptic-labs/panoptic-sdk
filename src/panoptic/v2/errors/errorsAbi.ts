@@ -4,6 +4,8 @@
  * Contains all custom errors from Errors.sol with their signatures.
  * Used for decoding contract revert data.
  *
+ * Selectors sourced from `forge selectors list` output.
+ *
  * @module v2/errors/errorsAbi
  */
 
@@ -13,7 +15,7 @@
  * Selector computation: keccak256(errorSignature)[:4]
  */
 export const panopticErrorsAbi = [
-  // AccountInsolvent(uint256 solvent, uint256 numberOfTicks) - 0x3218b99e
+  // AccountInsolvent(uint256 solvent, uint256 numberOfTicks) - 0xcdef092d
   {
     type: 'error',
     name: 'AccountInsolvent',
@@ -23,27 +25,6 @@ export const panopticErrorsAbi = [
     ],
   },
 
-  // CastingError() - 0x93daf810
-  {
-    type: 'error',
-    name: 'CastingError',
-    inputs: [],
-  },
-
-  // BelowMinimumRedemption() - 0x2aef283e
-  {
-    type: 'error',
-    name: 'BelowMinimumRedemption',
-    inputs: [],
-  },
-
-  // ChunkHasZeroLiquidity() - 0x64a18bfa
-  {
-    type: 'error',
-    name: 'ChunkHasZeroLiquidity',
-    inputs: [],
-  },
-
   // AlreadyInitialized() - 0x0dc149f0
   {
     type: 'error',
@@ -51,77 +32,105 @@ export const panopticErrorsAbi = [
     inputs: [],
   },
 
-  // DepositTooLarge() - 0xf3036c6e
+  // BelowMinimumRedemption() - 0x13185bd7
+  {
+    type: 'error',
+    name: 'BelowMinimumRedemption',
+    inputs: [],
+  },
+
+  // CastingError() - 0xb6680045
+  {
+    type: 'error',
+    name: 'CastingError',
+    inputs: [],
+  },
+
+  // ChunkHasZeroLiquidity() - 0x126ae3af
+  {
+    type: 'error',
+    name: 'ChunkHasZeroLiquidity',
+    inputs: [],
+  },
+
+  // CreateFail() - 0xebfef188
+  {
+    type: 'error',
+    name: 'CreateFail',
+    inputs: [],
+  },
+
+  // DepositTooLarge() - 0xc56d46d3
   {
     type: 'error',
     name: 'DepositTooLarge',
     inputs: [],
   },
 
-  // DuplicateTokenId() - 0x744b5fb5
+  // DuplicateTokenId() - 0x2bd1a05a
   {
     type: 'error',
     name: 'DuplicateTokenId',
     inputs: [],
   },
 
-  // EffectiveLiquidityAboveThreshold() - 0xb21f44b1
+  // EffectiveLiquidityAboveThreshold() - 0x3a8795c2
   {
     type: 'error',
     name: 'EffectiveLiquidityAboveThreshold',
     inputs: [],
   },
 
-  // ExceedsMaximumRedemption() - 0x45eb47f9
+  // ExceedsMaximumRedemption() - 0x20adf2ea
   {
     type: 'error',
     name: 'ExceedsMaximumRedemption',
     inputs: [],
   },
 
-  // InputListFail() - 0x9e1e7504
+  // InputListFail() - 0x99e877ce
   {
     type: 'error',
     name: 'InputListFail',
     inputs: [],
   },
 
-  // InvalidTick() - 0x4d0d02a6
-  {
-    type: 'error',
-    name: 'InvalidTick',
-    inputs: [],
-  },
-
-  // LiquidityTooHigh() - 0x6c91bc63
-  {
-    type: 'error',
-    name: 'LiquidityTooHigh',
-    inputs: [],
-  },
-
-  // InsufficientCreditLiquidity() - 0xd87fb8e5
+  // InsufficientCreditLiquidity() - 0x7a70c281
   {
     type: 'error',
     name: 'InsufficientCreditLiquidity',
     inputs: [],
   },
 
-  // InvalidBuilderCode() - 0x4b8b8ff9
+  // InvalidBuilderCode() - 0x15b3fb46
   {
     type: 'error',
     name: 'InvalidBuilderCode',
     inputs: [],
   },
 
-  // InvalidTokenIdParameter(uint256 parameterType) - 0x3cfb2764
+  // InvalidTick() - 0xce8ef7fc
+  {
+    type: 'error',
+    name: 'InvalidTick',
+    inputs: [],
+  },
+
+  // InvalidTickBound() - 0x1577d966
+  {
+    type: 'error',
+    name: 'InvalidTickBound',
+    inputs: [],
+  },
+
+  // InvalidTokenIdParameter(uint256 parameterType) - 0x93db0263
   {
     type: 'error',
     name: 'InvalidTokenIdParameter',
     inputs: [{ name: 'parameterType', type: 'uint256' }],
   },
 
-  // InvalidUniswapCallback() - 0xd988f608
+  // InvalidUniswapCallback() - 0x3a94c705
   {
     type: 'error',
     name: 'InvalidUniswapCallback',
@@ -135,42 +144,49 @@ export const panopticErrorsAbi = [
     inputs: [],
   },
 
-  // NetLiquidityZero() - 0x18a52143
+  // LiquidityTooHigh() - 0xa500e7ea
+  {
+    type: 'error',
+    name: 'LiquidityTooHigh',
+    inputs: [],
+  },
+
+  // NetLiquidityZero() - 0x73582ea0
   {
     type: 'error',
     name: 'NetLiquidityZero',
     inputs: [],
   },
 
-  // NoLegsExercisable() - 0x2ce255b0
+  // NoLegsExercisable() - 0x7721f7da
   {
     type: 'error',
     name: 'NoLegsExercisable',
     inputs: [],
   },
 
-  // NotALongLeg() - 0x7f0b6b9c
+  // NotALongLeg() - 0xb7d44f76
   {
     type: 'error',
     name: 'NotALongLeg',
     inputs: [],
   },
 
-  // NotBuilder() - 0x15ad5773
+  // NotBuilder() - 0x0404714e
   {
     type: 'error',
     name: 'NotBuilder',
     inputs: [],
   },
 
-  // NotEnoughLiquidityInChunk() - 0x4ffe6c2d
+  // NotEnoughLiquidityInChunk() - 0xc56d518e
   {
     type: 'error',
     name: 'NotEnoughLiquidityInChunk',
     inputs: [],
   },
 
-  // NotEnoughTokens(address tokenAddress, uint256 assetsRequested, uint256 assetBalance) - 0x4c5c7d56
+  // NotEnoughTokens(address tokenAddress, uint256 assetsRequested, uint256 assetBalance) - 0x71c3730b
   {
     type: 'error',
     name: 'NotEnoughTokens',
@@ -181,84 +197,98 @@ export const panopticErrorsAbi = [
     ],
   },
 
-  // NotGuardian() - 0xc6c37d89
+  // NotGuardian() - 0xef6d0f02
   {
     type: 'error',
     name: 'NotGuardian',
     inputs: [],
   },
 
-  // NotMarginCalled() - 0xb0a49d1c
+  // NotMarginCalled() - 0x2a23f1ad
   {
     type: 'error',
     name: 'NotMarginCalled',
     inputs: [],
   },
 
-  // NotPanopticPool() - 0x4c1c778d
+  // NotPanopticPool() - 0x2dd1912a
   {
     type: 'error',
     name: 'NotPanopticPool',
     inputs: [],
   },
 
-  // PoolNotInitialized() - 0x20b22a6a
+  // PoolNotInitialized() - 0x486aa307
   {
     type: 'error',
     name: 'PoolNotInitialized',
     inputs: [],
   },
 
-  // PositionCountNotZero() - 0xa10d6e3b
+  // PositionCountNotZero() - 0x2501f81e
   {
     type: 'error',
     name: 'PositionCountNotZero',
     inputs: [],
   },
 
-  // PositionNotOwned() - 0x67f6e0b0
+  // PositionNotOwned() - 0x00bd51c8
   {
     type: 'error',
     name: 'PositionNotOwned',
     inputs: [],
   },
 
-  // PositionTooLarge() - 0x61a3f549
+  // PositionTooLarge() - 0x543a6e10
   {
     type: 'error',
     name: 'PositionTooLarge',
     inputs: [],
   },
 
-  // PriceBoundFail(int24 currentTick) - 0x79a0f63e
+  // PriceBoundFail(int24 currentTick) - 0x618ea40c
   {
     type: 'error',
     name: 'PriceBoundFail',
     inputs: [{ name: 'currentTick', type: 'int24' }],
   },
 
-  // PriceImpactTooLarge() - 0x2aba45d8
+  // PriceImpactTooLarge() - 0xcbe5b9a6
   {
     type: 'error',
     name: 'PriceImpactTooLarge',
     inputs: [],
   },
 
-  // StaleOracle() - 0x17308f56
+  // Reentrancy() - 0xab143c06
+  {
+    type: 'error',
+    name: 'Reentrancy',
+    inputs: [],
+  },
+
+  // StaleOracle() - 0x88cce429
   {
     type: 'error',
     name: 'StaleOracle',
     inputs: [],
   },
 
-  // TooManyLegsOpen() - 0x1c03e9d0
+  // TokenIdHasZeroLegs() - 0x9cd92fb2
+  {
+    type: 'error',
+    name: 'TokenIdHasZeroLegs',
+    inputs: [],
+  },
+
+  // TooManyLegsOpen() - 0x0ed7e777
   {
     type: 'error',
     name: 'TooManyLegsOpen',
     inputs: [],
   },
 
-  // TransferFailed(address token, address from, uint256 amount, uint256 balance) - 0x4e487b71
+  // TransferFailed(address token, address from, uint256 amount, uint256 balance) - 0x81f20f86
   {
     type: 'error',
     name: 'TransferFailed',
@@ -270,42 +300,28 @@ export const panopticErrorsAbi = [
     ],
   },
 
-  // InvalidTickBound() - 0x1577d966
-  {
-    type: 'error',
-    name: 'InvalidTickBound',
-    inputs: [],
-  },
-
-  // UnauthorizedUniswapCallback() - 0xec19dc87
+  // UnauthorizedUniswapCallback() - 0x3e30718a
   {
     type: 'error',
     name: 'UnauthorizedUniswapCallback',
     inputs: [],
   },
 
-  // UnderOverFlow() - 0xf5c787f1
+  // UnderOverFlow() - 0xd2190174
   {
     type: 'error',
     name: 'UnderOverFlow',
     inputs: [],
   },
 
-  // Reentrancy() - 0xab143c06
-  {
-    type: 'error',
-    name: 'Reentrancy',
-    inputs: [],
-  },
-
-  // WrongPoolId() - 0x8a3c9c0b
+  // WrongPoolId() - 0xcfa4bfa2
   {
     type: 'error',
     name: 'WrongPoolId',
     inputs: [],
   },
 
-  // WrongUniswapPool() - 0x68d1bc36
+  // WrongUniswapPool() - 0x768778de
   {
     type: 'error',
     name: 'WrongUniswapPool',
@@ -319,17 +335,10 @@ export const panopticErrorsAbi = [
     inputs: [],
   },
 
-  // ZeroCollateralRequirement() - 0xe24c9f94
+  // ZeroCollateralRequirement() - 0x5b8edb4a
   {
     type: 'error',
     name: 'ZeroCollateralRequirement',
-    inputs: [],
-  },
-
-  // TokenIdHasZeroLegs() - 0x11ec0e81
-  {
-    type: 'error',
-    name: 'TokenIdHasZeroLegs',
     inputs: [],
   },
 ] as const

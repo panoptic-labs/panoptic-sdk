@@ -4,7 +4,7 @@
  */
 
 import type { PublicClient } from 'viem'
-import { encodeAbiParameters } from 'viem'
+import { encodeAbiParameters, encodeFunctionResult } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -26,19 +26,44 @@ function encodeAssetsOf(assets0: bigint, assets1: bigint): `0x${string}` {
 }
 
 /**
+ * Encode a mock getCurrentTick return value (int24).
+ */
+const getCurrentTickAbi = [
+  {
+    type: 'function' as const,
+    name: 'getCurrentTick' as const,
+    inputs: [] as const,
+    outputs: [{ name: 'currentTick' as const, type: 'int24' as const }] as const,
+    stateMutability: 'view' as const,
+  },
+]
+
+function encodeCurrentTick(tick: number): `0x${string}` {
+  return encodeFunctionResult({
+    abi: getCurrentTickAbi,
+    functionName: 'getCurrentTick',
+    result: tick,
+  })
+}
+
+/**
  * Create a mock simulateContract that handles the multicall pattern
- * used by simulateWithTokenFlow: [getAssetsOf, dispatch, getAssetsOf].
+ * used by simulateWithTokenFlow: [getAssetsOf, getCurrentTick, dispatch, getCurrentTick, getAssetsOf].
  */
 function createMulticallSimulateContract(
   assetsBefore0: bigint,
   assetsBefore1: bigint,
   assetsAfter0: bigint,
   assetsAfter1: bigint,
+  tickBefore = 0,
+  tickAfter = 0,
 ) {
   return vi.fn().mockResolvedValue({
     result: [
       encodeAssetsOf(assetsBefore0, assetsBefore1),
+      encodeCurrentTick(tickBefore),
       '0x' as `0x${string}`, // dispatch result (unused)
+      encodeCurrentTick(tickAfter),
       encodeAssetsOf(assetsAfter0, assetsAfter1),
     ],
     request: {},

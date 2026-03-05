@@ -3,10 +3,13 @@ import { encodeAbiParameters, parseAbi } from 'viem'
 import { readContract } from 'viem/actions'
 
 import { PanopticVaultAccountantManagerInputAbi } from '../../abis/PanopticVaultAccountantManagerInput'
-import type { ProductionWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/ProductionWETHPLPVaultPoolInfos'
 
-// Derive PoolInfo type from the existing const
-export type PoolInfo = (typeof ProductionWETHPLPVaultPoolInfos.poolInfos)[number]
+export type PoolInfo = {
+  pool: Address
+  token0: Address
+  token1: Address
+  maxPriceDeviation: number
+}
 
 export type BuildManagerInputParams = {
   viemClient: Client

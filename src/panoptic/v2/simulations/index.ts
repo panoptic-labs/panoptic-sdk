@@ -16,6 +16,15 @@ export {
   simulateWithdraw,
 } from './simulateVault'
 
+// SFPM simulations (mintTokenizedPosition / burnTokenizedPosition)
+export {
+  type SFPMSimulationResult,
+  type SimulateSFPMParams,
+  encodePoolKeyBytes,
+  simulateSFPMBurn,
+  simulateSFPMMint,
+} from './sfpm'
+
 // Token flow utilities (uses PanopticPool.multicall + getAssetsOf)
 export {
   type PoolTokens,

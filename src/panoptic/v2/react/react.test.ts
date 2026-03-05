@@ -77,6 +77,28 @@ describe('queryKeys', () => {
     })
   })
 
+  describe('maxWithdrawable', () => {
+    it('serializes bigint inputs to string key parts', () => {
+      const key = queryKeys.maxWithdrawable(
+        11155111n,
+        poolAddress,
+        [123n, 456n, 789n],
+        1000n,
+        account,
+      )
+
+      expect(key).toEqual([
+        'panoptic-v2',
+        '11155111',
+        'maxWithdrawable',
+        poolAddress,
+        '123,456,789',
+        '1000',
+        account,
+      ])
+    })
+  })
+
   describe('key uniqueness', () => {
     it('different chainIds produce different keys', () => {
       const key1 = queryKeys.pool(1n, poolAddress)

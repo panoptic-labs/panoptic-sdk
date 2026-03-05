@@ -41,10 +41,7 @@ export const panopticQueryAbi = [
       { name: 'positionIdList', type: 'uint256[]', internalType: 'TokenId[]' },
       { name: 'atTick', type: 'int24', internalType: 'int24' },
     ],
-    outputs: [
-      { name: '', type: 'uint256', internalType: 'uint256' },
-      { name: '', type: 'uint256', internalType: 'uint256' },
-    ],
+    outputs: [{ name: 'balancesAndRequired', type: 'uint256[4]', internalType: 'uint256[4]' }],
     stateMutability: 'view',
   },
   {

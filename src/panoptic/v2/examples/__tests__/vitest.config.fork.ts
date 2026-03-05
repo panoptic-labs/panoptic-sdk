@@ -21,7 +21,7 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     globals: true,
-    setupFiles: ['../../../../../setup-tests.ts'],
+    setupFiles: ['./setup-tests.ts'],
     testTimeout: 30_000, // 30 seconds for RPC calls
     hookTimeout: 30_000,
     pool: 'forks',

@@ -1,15 +1,16 @@
 import type { HypoVaultManagerConfig } from './schema'
 
 export const UsdcPlpVaultSepoliaProdConfig: HypoVaultManagerConfig = {
+  deployment: 'prod',
   manageCycleIntervalMs: 86400000,
-  vaultCapInUnderlying: 100000000000n, // 100,000 USDC
+  vaultCapInUnderlying: 150_000_000n, // 150 USDC
   chainId: 11155111,
-  hypoVaultAddress: '0x91760623ce2BBE50001e18F0973Ffe37c0C6b948',
+  hypoVaultAddress: '0xC4Bcfe746fdAB946Ac79244c5Fd5E4f3c08c9F87',
   addresses: {
-    wethUsdc500bpsV4Collateral0: '0x244Bf88435Be52e8dFb642a718ef4b6d0A1166BF',
-    wethUsdc500bpsV4PanopticPool: '0x2aafC1D2Af4dEB9FD8b02cDE5a8C0922cA4D6c78',
-    hypoVaultManagerWithMerkleVerification: '0x7dd0055110306e9D648C56996020425826605cd3',
-    hypoVault: '0x91760623ce2BBE50001e18F0973Ffe37c0C6b948',
+    ethUsdc500bpsV4Collateral1: '0xe2BD879109f84313AC986B2390110F5A240a9fa9',
+    ethUsdc500bpsV4PanopticPool: '0x5D44F6574B8dE88ffa2CCAEba0B07aD3C204571E',
+    hypoVaultManagerWithMerkleVerification: '0x2FDaAeb3401DC87c2A8082Bf42c7ea05856c200b',
+    hypoVault: '0xC4Bcfe746fdAB946Ac79244c5Fd5E4f3c08c9F87',
     underlyingToken: '0xFFFeD8254566B7F800f6D8CDb843ec75AE49B07A',
   },
 }

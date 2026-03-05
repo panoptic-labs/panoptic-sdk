@@ -24,6 +24,7 @@ function createMockPublicClient(): PublicClient {
       status: 'success',
       logs: [],
     }),
+    estimateContractGas: vi.fn().mockResolvedValue(200000n),
   } as unknown as PublicClient
 }
 
@@ -217,7 +218,7 @@ describe('submitWrite', () => {
     expect(receipt.blockNumber).toBe(12345678n)
   })
 
-  it('should not spread gas overrides when none provided', async () => {
+  it('should not spread fee/nonce overrides when none provided, but should auto-estimate gas', async () => {
     const client = createMockPublicClient()
     const walletClient = createMockWalletClient()
 
@@ -235,7 +236,8 @@ describe('submitWrite', () => {
     const callArgs = (walletClient.writeContract as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(callArgs).not.toHaveProperty('maxFeePerGas')
     expect(callArgs).not.toHaveProperty('maxPriorityFeePerGas')
-    expect(callArgs).not.toHaveProperty('gas')
     expect(callArgs).not.toHaveProperty('nonce')
+    // gas is auto-estimated with 20% buffer when no explicit gas override
+    expect(callArgs.gas).toBe(240000n) // 200000 * 120 / 100
   })
 })

@@ -15,6 +15,7 @@
  */
 
 import type { Address, PublicClient } from 'viem'
+import { decodeAbiParameters, keccak256, zeroAddress } from 'viem'
 
 import { collateralTrackerAbi, panopticPoolAbi, riskEngineAbi } from '../../../generated'
 import { getBlockMeta } from '../clients/blockMeta'
@@ -44,6 +45,13 @@ const erc20Abi = [
     name: 'decimals',
     inputs: [],
     outputs: [{ type: 'uint8' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'name',
+    inputs: [],
+    outputs: [{ type: 'string' }],
     stateMutability: 'view',
   },
 ] as const
@@ -76,6 +84,16 @@ export interface PoolMetadata {
   token0Decimals: bigint
   /** Token 1 decimals */
   token1Decimals: bigint
+  /** Token 0 name */
+  token0Name: string
+  /** Token 1 name */
+  token1Name: string
+  /** Underlying pool ID (V3: pool address, V4: keccak256(poolKeyBytes)) */
+  underlyingPoolId: string
+  /** Whether this is a V4 pool (poolManager is non-zero) */
+  isV4: boolean
+  /** Tick spacing */
+  tickSpacing: bigint
 }
 
 /**
@@ -128,6 +146,11 @@ export async function getPoolMetadata(params: GetPoolMetadataParams): Promise<Po
         abi: panopticPoolAbi,
         functionName: 'riskEngine',
       },
+      {
+        address: poolAddress,
+        abi: panopticPoolAbi,
+        functionName: 'poolManager',
+      },
     ],
     allowFailure: false,
   })
@@ -138,6 +161,7 @@ export async function getPoolMetadata(params: GetPoolMetadataParams): Promise<Po
     collateralToken0Address,
     collateralToken1Address,
     riskEngineAddress,
+    poolManager,
   ] = basicResults
 
   // Second call: get underlying asset addresses from collateral trackers
@@ -159,40 +183,56 @@ export async function getPoolMetadata(params: GetPoolMetadataParams): Promise<Po
 
   const [token0Asset, token1Asset] = assetResults
 
-  // Third call: get token metadata (symbols, decimals)
-  const metadataResults = await client.multicall({
-    contracts: [
-      {
-        address: token0Asset,
-        abi: erc20Abi,
-        functionName: 'symbol',
-      },
-      {
-        address: token0Asset,
-        abi: erc20Abi,
-        functionName: 'decimals',
-      },
-      {
-        address: token1Asset,
-        abi: erc20Abi,
-        functionName: 'symbol',
-      },
-      {
-        address: token1Asset,
-        abi: erc20Abi,
-        functionName: 'decimals',
-      },
-    ],
-    allowFailure: false,
-  })
+  // Native ETH (address zero) has no ERC20 contract — use hardcoded metadata
+  const NATIVE_ETH_ADDRESS = '0x0000000000000000000000000000000000000000'
+  const isToken0Native = token0Asset.toLowerCase() === NATIVE_ETH_ADDRESS
+  const isToken1Native = token1Asset.toLowerCase() === NATIVE_ETH_ADDRESS
 
-  const [token0Symbol, token0Decimals, token1Symbol, token1Decimals] = metadataResults
+  // Third call: get token metadata (symbols, decimals, names) — skip native ETH tokens
+  const erc20Contracts = [
+    ...(isToken0Native
+      ? []
+      : [
+          { address: token0Asset, abi: erc20Abi, functionName: 'symbol' as const },
+          { address: token0Asset, abi: erc20Abi, functionName: 'decimals' as const },
+          { address: token0Asset, abi: erc20Abi, functionName: 'name' as const },
+        ]),
+    ...(isToken1Native
+      ? []
+      : [
+          { address: token1Asset, abi: erc20Abi, functionName: 'symbol' as const },
+          { address: token1Asset, abi: erc20Abi, functionName: 'decimals' as const },
+          { address: token1Asset, abi: erc20Abi, functionName: 'name' as const },
+        ]),
+  ]
+
+  const erc20Results =
+    erc20Contracts.length > 0
+      ? await client.multicall({ contracts: erc20Contracts, allowFailure: false })
+      : []
+
+  // Reconstruct metadata, inserting native ETH defaults where needed
+  let resultIdx = 0
+  const token0Symbol = isToken0Native ? 'ETH' : (erc20Results[resultIdx++] as string)
+  const token0Decimals = isToken0Native ? 18 : (erc20Results[resultIdx++] as number)
+  const token0Name = isToken0Native ? 'Ether' : (erc20Results[resultIdx++] as string)
+  const token1Symbol = isToken1Native ? 'ETH' : (erc20Results[resultIdx++] as string)
+  const token1Decimals = isToken1Native ? 18 : (erc20Results[resultIdx++] as number)
+  const token1Name = isToken1Native ? 'Ether' : (erc20Results[resultIdx++] as string)
+
+  // Derive underlyingPoolId and tickSpacing
+  const isV4 = poolManager !== zeroAddress
+  const parsedPoolKey = parsePoolKey(poolKeyBytes)
+  const underlyingPoolId = isV4
+    ? keccak256(poolKeyBytes)
+    : decodeAbiParameters([{ type: 'address' }], poolKeyBytes)[0]
 
   return {
     poolKeyBytes,
     poolId,
     collateralToken0Address,
     collateralToken1Address,
+    isV4,
     riskEngineAddress,
     token0Asset,
     token1Asset,
@@ -200,6 +240,10 @@ export async function getPoolMetadata(params: GetPoolMetadataParams): Promise<Po
     token1Symbol,
     token0Decimals: BigInt(token0Decimals),
     token1Decimals: BigInt(token1Decimals),
+    token0Name,
+    token1Name,
+    underlyingPoolId,
+    tickSpacing: parsedPoolKey.tickSpacing,
   }
 }
 
@@ -328,12 +372,13 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
   // Parse pool key
   const poolKey = parsePoolKey(metadata.poolKeyBytes)
 
-  // Calculate rates (simplified - borrow rate from interestRate, supply rate derived)
-  const borrowRate0 = BigInt(token0InterestRate)
-  const borrowRate1 = BigInt(token1InterestRate)
+  // Annualize rates: interestRate() returns WAD/s, multiply by seconds/year
+  const SECONDS_PER_YEAR = 31_536_000n
+  const borrowRate0 = BigInt(token0InterestRate) * SECONDS_PER_YEAR
+  const borrowRate1 = BigInt(token1InterestRate) * SECONDS_PER_YEAR
   const utilization0 = token0PoolData[3]
   const utilization1 = token1PoolData[3]
-  // Supply rate = borrow rate * utilization (simplified)
+  // Supply rate = borrow rate * utilization (utilization is in bps, so /10000)
   const supplyRate0 = (borrowRate0 * utilization0) / 10000n
   const supplyRate1 = (borrowRate1 * utilization1) / 10000n
 
@@ -391,6 +436,7 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
     currentTick: BigInt(currentTick),
     sqrtPriceX96,
     healthStatus,
+    metadata,
     _meta,
   }
 }

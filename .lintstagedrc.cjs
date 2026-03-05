@@ -5,13 +5,16 @@ function toAbsolutePath(filename) {
 }
 
 module.exports = {
-  'packages/sdk/**/*.{ts,tsx}': (filenames) => {
+  '**/*.{ts,tsx}': (filenames) => {
     // Filter out dist, generated files, and example bot directories.
     const filtered = filenames.filter((filename) => {
       const normalized = filename.replace(/\\/g, '/')
       return (
         !normalized.includes('/dist/') &&
+        !normalized.includes('/lib/') &&
         !normalized.includes('src/generated.ts') &&
+        !normalized.includes('/src/graphql/') &&
+        !normalized.includes('/graphql/') &&
         !normalized.includes('/examples/liquidation-bot/') &&
         !normalized.includes('/examples/oracle-poker/')
       )

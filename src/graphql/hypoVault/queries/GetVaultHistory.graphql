@@ -1,0 +1,124 @@
+# NOTE: GetVaultHistory applies first/skip independently per event stream.
+# Consumers that need unified timeline pagination should merge/sort client-side
+# and then page the merged list (for example in fetchVaultHistoryRows).
+query GetVaultHistory($hypoVault: String!, $first: Int = 200, $skip: Int = 0) {
+  depositRequesteds(
+    where: { hypoVault: $hypoVault }
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    assets
+    blockTimestamp
+    transactionHash
+    user {
+      id
+    }
+  }
+  depositsFulfilleds(
+    where: { hypoVault: $hypoVault }
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    assetsFulfilled
+    sharesReceived
+    blockTimestamp
+    transactionHash
+  }
+  withdrawalRequesteds(
+    where: { hypoVault: $hypoVault }
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    shares
+    blockTimestamp
+    transactionHash
+    user {
+      id
+    }
+  }
+  withdrawalsFulfilleds(
+    where: { hypoVault: $hypoVault }
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    assetsReceived
+    sharesFulfilled
+    blockTimestamp
+    transactionHash
+  }
+  depositCancelleds(
+    where: { hypoVault: $hypoVault }
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    assets
+    blockTimestamp
+    transactionHash
+    user {
+      id
+    }
+  }
+  withdrawalCancelleds(
+    where: { hypoVault: $hypoVault }
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    shares
+    blockTimestamp
+    transactionHash
+    user {
+      id
+    }
+  }
+  depositExecuteds(
+    where: { hypoVault: $hypoVault }
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    assets
+    shares
+    blockTimestamp
+    transactionHash
+    user {
+      id
+    }
+  }
+  withdrawalExecuteds(
+    where: { hypoVault: $hypoVault }
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    assets
+    shares
+    performanceFee
+    blockTimestamp
+    transactionHash
+    user {
+      id
+    }
+  }
+}

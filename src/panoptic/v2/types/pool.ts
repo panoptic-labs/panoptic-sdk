@@ -5,6 +5,7 @@
 
 import type { Address } from 'viem'
 
+import type { PoolMetadata } from '../reads/pool'
 import type { BlockMeta } from './meta'
 
 /**
@@ -34,9 +35,9 @@ export interface CollateralTracker {
   totalShares: bigint
   /** Current utilization (0-10000 bps) */
   utilization: bigint
-  /** Current borrow rate (annualized, in WAD) */
+  /** Current borrow rate (annualized, WAD-scaled: 1e18 = 100%/year) */
   borrowRate: bigint
-  /** Current supply rate (annualized, in WAD) */
+  /** Current supply rate (annualized, WAD-scaled: 1e18 = 100%/year) */
   supplyRate: bigint
 }
 
@@ -94,6 +95,8 @@ export interface Pool {
   sqrtPriceX96: bigint
   /** Pool health status */
   healthStatus: PoolHealthStatus
+  /** Immutable pool metadata (addresses, symbols, decimals, names, underlyingPoolId) */
+  metadata: PoolMetadata
   /** Block metadata */
   _meta: BlockMeta
 }

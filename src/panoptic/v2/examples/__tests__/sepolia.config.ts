@@ -24,7 +24,7 @@ export const SEPOLIA_CONTRACTS = {
   panopticFactory: '0xE0bcA80Dfa46c81682f085b6fBD94DEDc3DDcd7a' as Address,
   /** @deprecated Use panopticQuery instead */
   panopticHelper: '0x687F616d68c483A7223E6922F59Aef7452E26c1D' as Address,
-  panopticQuery: '0xDdaCA435B8eA737Dc40941cC54df9c164078afC7' as Address,
+  panopticQuery: '0x7e119d73d572F22f1F4cbDaEFe6170BAD4c3Ed30' as Address,
 
   // WETH/USDC 500 pool
   pool: {

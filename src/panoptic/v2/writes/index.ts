@@ -87,6 +87,9 @@ export {
 // Oracle
 export { type PokeOracleParams, pokeOracle, pokeOracleAndWait } from './pokeOracle'
 
+// Factory deployment
+export { type DeployNewPoolParams, deployNewPool, deployNewPoolAndWait } from './factory'
+
 // Transaction management
 export {
   type CancelParams,

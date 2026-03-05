@@ -41,6 +41,7 @@ function createMockPublicClient(): PublicClient {
   return {
     waitForTransactionReceipt: vi.fn().mockResolvedValue(MOCK_RECEIPT),
     getTransactionCount: vi.fn().mockResolvedValue(0n),
+    estimateContractGas: vi.fn().mockResolvedValue(200000n),
   } as unknown as PublicClient
 }
 

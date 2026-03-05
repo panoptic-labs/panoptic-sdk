@@ -65,6 +65,8 @@ export async function simulateForceExercise(
     balanceBefore1: 0n,
     balanceAfter0: 0n,
     balanceAfter1: 0n,
+    tickBefore: null,
+    tickAfter: null,
   }
 
   try {

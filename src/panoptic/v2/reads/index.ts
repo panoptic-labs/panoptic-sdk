@@ -10,6 +10,23 @@
  * @module v2/reads
  */
 
+// Factory reads
+export {
+  type GetFactoryConstructMetadataParams,
+  type GetFactoryOwnerOfParams,
+  type GetFactoryTokenURIParams,
+  type GetPanopticPoolAddressParams,
+  type MinePoolAddressParams,
+  type MinePoolAddressResult,
+  type SimulateDeployNewPoolParams,
+  getFactoryConstructMetadata,
+  getFactoryOwnerOf,
+  getFactoryTokenURI,
+  getPanopticPoolAddress,
+  minePoolAddress,
+  simulateDeployNewPool,
+} from './factory'
+
 // Pool reads
 export {
   type FetchPoolIdParams,
@@ -76,16 +93,18 @@ export {
   getCurrentRates,
 } from './collateral'
 
-// Collateral estimation (requires PanopticHelper)
+// Collateral estimation (requires PanopticQuery / CollateralTracker)
 export {
   type CollateralEstimate,
   type EstimateCollateralRequiredParams,
   type GetMaxPositionSizeParams,
+  type GetMaxWithdrawableParams,
   type GetRequiredCreditForITMParams,
   type MaxPositionSize,
   type RequiredCreditForITM,
   estimateCollateralRequired,
   getMaxPositionSize,
+  getMaxWithdrawable,
   getRequiredCreditForITM,
 } from './collateralEstimate'
 
@@ -149,6 +168,29 @@ export { type GetMarginBufferParams, type MarginBuffer, getMarginBuffer } from '
 // Delta hedging utilities
 export { type DeltaHedgeResult, type GetDeltaHedgeParamsInput, getDeltaHedgeParams } from './hedge'
 
+// Collateral share price (for APY calculations)
+export { type CollateralSharePriceData, getCollateralSharePrices } from './collateralSharePrice'
+
+// Collateral total assets (batch read)
+export { getCollateralTotalAssetsBatch } from './collateralTotalAssets'
+
+// Account buying power
+export {
+  type AccountBuyingPower,
+  type GetAccountBuyingPowerParams,
+  getAccountBuyingPower,
+} from './buyingPower'
+
+// Open position preview
+export {
+  type GetOpenPositionPreviewParams,
+  type OpenPositionPreview,
+  getOpenPositionPreview,
+} from './openPositionPreview'
+
+// Native token price (on-chain via PanopticPool tick)
+export { type GetNativeTokenPriceParams, getNativeTokenPrice } from './nativeTokenPrice'
+
 // Account trade history
 export {
   type AccountHistory,
@@ -156,3 +198,42 @@ export {
   type GetAccountHistoryParams,
   getAccountHistory,
 } from './history'
+
+// Streamia history (historical premia + Uniswap fee tracking)
+export {
+  type GetStreamiaHistoryParams,
+  type PoolVersionConfig,
+  type SettledEvent,
+  type StreamiaHistoryResult,
+  type StreamiaLeg,
+  type StreamiaSnapshot,
+  type V3PoolConfig,
+  type V4PoolConfig,
+  getStreamiaHistory,
+} from './streamiaHistory'
+
+// Uniswap fee history (standalone, no Panoptic pool required)
+export {
+  type GetUniswapFeeHistoryParams,
+  type UniswapFeeHistoryResult,
+  type UniswapFeeSnapshot,
+  getUniswapFeeHistory,
+} from './uniswapFeeHistory'
+
+// Price history (historical tick + sqrtPriceX96)
+export {
+  type GetPriceHistoryParams,
+  type PriceHistoryResult,
+  type PriceSnapshot,
+  getPriceHistory,
+} from './priceHistory'
+
+// Position enrichment (batched reads for UI display)
+export {
+  type GetPositionEnrichmentDataParams,
+  type GetPositionEnrichmentDataResult,
+  type PositionEnrichmentResult,
+  type PositionInput,
+  EnrichmentCallError,
+  getPositionEnrichmentData,
+} from './enrichment'

@@ -10,6 +10,7 @@ import {
   type ApproveParams,
   type ApprovePoolParams,
   type ClosePositionParams,
+  type DeployNewPoolParams,
   type DepositParams,
   type DispatchParams,
   type ForceExerciseParams,
@@ -25,6 +26,7 @@ import {
   approve,
   approvePool,
   closePosition,
+  deployNewPool,
   deposit,
   dispatch,
   forceExercise,
@@ -427,6 +429,22 @@ export function useDispatch(poolAddress: Address) {
         queryClient,
         mutationEffects.openPosition({ chainId, poolAddress, account: context.signerAccount }),
       )
+    },
+  })
+}
+
+export function useDeployNewPool() {
+  const { publicClient, walletClient, account } = usePanopticContext()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    onMutate: () => createWalletMutationContext({ walletClient, account }),
+    mutationFn: (params: OmitInjected<DeployNewPoolParams>) => {
+      const wallet = requireWallet({ walletClient, account })
+      return deployNewPool({ client: publicClient, ...wallet, ...params })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...queryKeys.all, 'factory'] })
     },
   })
 }

@@ -3,14 +3,30 @@
  * @module v2/simulations/simulateSettle
  */
 
-import type { Address, PublicClient } from 'viem'
-import { encodeFunctionData } from 'viem'
+import type { Address, Hex, PublicClient } from 'viem'
+import { decodeFunctionResult, encodeFunctionData } from 'viem'
 
 import { panopticPoolAbi } from '../../../generated'
 import { getBlockMeta } from '../clients'
 import { PanopticError } from '../errors'
 import type { SettleSimulation, SimulationResult, TokenFlow } from '../types'
 import { simulateWithTokenFlow } from './tokenFlow'
+
+/** BIT_MASK_128 = (1n << 128n) - 1n */
+const BIT_MASK_128 = (1n << 128n) - 1n
+
+/**
+ * PanopticPool multicall ABI (inherited from Uniswap).
+ */
+const multicallAbi = [
+  {
+    type: 'function',
+    name: 'multicall',
+    inputs: [{ name: 'data', type: 'bytes[]' }],
+    outputs: [{ name: 'results', type: 'bytes[]' }],
+    stateMutability: 'nonpayable',
+  },
+] as const
 
 /**
  * Parameters for simulating premium settlement.
@@ -24,6 +40,8 @@ export interface SimulateSettleParams {
   account: Address
   /** Current position ID list */
   positionIdList: bigint[]
+  /** Optional tokenId to compute forfeit amounts for */
+  tokenId?: bigint
   /** Optional block number for simulation */
   blockNumber?: bigint
 }
@@ -31,13 +49,17 @@ export interface SimulateSettleParams {
 /**
  * Simulate premium settlement.
  *
+ * When `tokenId` is provided, the simulation also computes forfeit amounts
+ * by chaining the dispatch with `getAccumulatedFeesAndPositionsData` reads
+ * in a single multicall.
+ *
  * @param params - Simulation parameters
  * @returns Simulation result with settlement data or error
  */
 export async function simulateSettle(
   params: SimulateSettleParams,
 ): Promise<SimulationResult<SettleSimulation>> {
-  const { client, poolAddress, account, positionIdList, blockNumber } = params
+  const { client, poolAddress, account, positionIdList, tokenId, blockNumber } = params
 
   const targetBlockNumber = blockNumber ?? (await client.getBlockNumber())
   const metaPromise = getBlockMeta({ client, blockNumber: targetBlockNumber })
@@ -73,10 +95,26 @@ export async function simulateSettle(
     })
 
     if (!flowResult.success || !flowResult.tokenFlow) {
-      throw new PanopticError(flowResult.error || 'Token flow simulation failed')
+      throw (
+        flowResult.rawError ?? new PanopticError(flowResult.error || 'Token flow simulation failed')
+      )
     }
 
     const tokenFlow: TokenFlow = flowResult.tokenFlow
+
+    // Compute forfeit amounts if tokenId is provided
+    let forfeitAmounts: [bigint, bigint] | undefined
+    if (tokenId !== undefined) {
+      forfeitAmounts = await computeForfeitAmounts({
+        client,
+        poolAddress,
+        account,
+        positionIdList,
+        tokenId,
+        dispatchCallData: callData,
+        blockNumber: targetBlockNumber,
+      })
+    }
 
     const _meta = await metaPromise
 
@@ -87,6 +125,7 @@ export async function simulateSettle(
       premiaReceived1: tokenFlow.delta1 > 0n ? tokenFlow.delta1 : 0n,
       postCollateral0: tokenFlow.balanceAfter0,
       postCollateral1: tokenFlow.balanceAfter1,
+      forfeitAmounts,
     }
 
     return {
@@ -109,5 +148,69 @@ export async function simulateSettle(
             ),
       _meta,
     }
+  }
+}
+
+/**
+ * Compute forfeit amounts by chaining dispatch + getAccumulatedFeesAndPositionsData
+ * in a single PanopticPool.multicall.
+ */
+async function computeForfeitAmounts(params: {
+  client: PublicClient
+  poolAddress: Address
+  account: Address
+  positionIdList: bigint[]
+  tokenId: bigint
+  dispatchCallData: Hex
+  blockNumber: bigint
+}): Promise<[bigint, bigint]> {
+  const { client, poolAddress, account, tokenId, dispatchCallData, blockNumber } = params
+
+  // Encode getAccumulatedFeesAndPositionsData calls (available = false, total = true)
+  const feesCallAvailable = encodeFunctionData({
+    abi: panopticPoolAbi,
+    functionName: 'getAccumulatedFeesAndPositionsData',
+    args: [account, false, [tokenId]],
+  })
+  const feesCallTotal = encodeFunctionData({
+    abi: panopticPoolAbi,
+    functionName: 'getAccumulatedFeesAndPositionsData',
+    args: [account, true, [tokenId]],
+  })
+
+  try {
+    // Chain: dispatch (settle) + fees(available) + fees(total) in one multicall
+    const { result } = await client.simulateContract({
+      address: poolAddress,
+      abi: multicallAbi,
+      functionName: 'multicall',
+      args: [[dispatchCallData, feesCallAvailable, feesCallTotal]],
+      account,
+      blockNumber,
+    })
+
+    // Decode the two fee reads (result[0] is dispatch, result[1] and result[2] are fees)
+    const decodeFeesResult = (data: Hex): bigint => {
+      return decodeFunctionResult({
+        abi: panopticPoolAbi,
+        functionName: 'getAccumulatedFeesAndPositionsData',
+        data,
+      })[0]
+    }
+
+    const availablePremium = decodeFeesResult(result[1])
+    const totalPremium = decodeFeesResult(result[2])
+
+    const available0 = availablePremium & BIT_MASK_128
+    const available1 = availablePremium >> 128n
+    const total0 = totalPremium & BIT_MASK_128
+    const total1 = totalPremium >> 128n
+
+    return [total0 - available0, total1 - available1]
+  } catch (error) {
+    throw new PanopticError(
+      'Forfeit amount computation failed',
+      error instanceof Error ? error : undefined,
+    )
   }
 }

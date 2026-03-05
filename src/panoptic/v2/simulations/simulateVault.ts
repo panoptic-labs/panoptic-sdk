@@ -22,6 +22,8 @@ export interface SimulateDepositParams {
   account: Address
   /** Assets to deposit */
   assets: bigint
+  /** Whether the collateral tracker wraps native ETH (requires sending msg.value) */
+  isNativeETH?: boolean
   /** Optional block number for simulation */
   blockNumber?: bigint
 }
@@ -35,7 +37,7 @@ export interface SimulateDepositParams {
 export async function simulateDeposit(
   params: SimulateDepositParams,
 ): Promise<SimulationResult<DepositSimulation>> {
-  const { client, collateralTrackerAddress, account, assets, blockNumber } = params
+  const { client, collateralTrackerAddress, account, assets, isNativeETH, blockNumber } = params
 
   const targetBlockNumber = blockNumber ?? (await client.getBlockNumber())
   const metaPromise = getBlockMeta({ client, blockNumber: targetBlockNumber })
@@ -74,6 +76,7 @@ export async function simulateDeposit(
           functionName: 'deposit',
           args: [assets, account],
           account,
+          ...(isNativeETH && { value: assets }),
           blockNumber: targetBlockNumber,
         }),
         metaPromise,

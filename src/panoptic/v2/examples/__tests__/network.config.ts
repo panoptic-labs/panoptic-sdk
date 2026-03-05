@@ -105,28 +105,28 @@ const SEPOLIA_CONFIG: NetworkConfig = {
   chainId: 11155111n,
   forkUrl: process.env.SEPOLIA_RPC_URL || '',
   contracts: {
-    semifungiblePositionManager: '0x8bbCE8B1eB64118CFE6c1eAb0afe13b80EA41481',
-    builderFactory: '0x34B3a4e4F14f292575ECe3EF67886C4598af459f',
-    riskEngine: '0x5BA68a018fF149c38ec52D181Dd24aBabE9a07DB',
-    panopticPoolImpl: '0x9ac0317FCd124aFF0B5429Beb8de17020bc45F9a',
-    collateralTrackerImpl: '0xFB1c06B491305d618bb8a7a368C6e50c001C153A',
-    panopticFactory: '0xE0bcA80Dfa46c81682f085b6fBD94DEDc3DDcd7a',
-    panopticHelper: '0x687F616d68c483A7223E6922F59Aef7452E26c1D',
-    panopticQuery: '0xDdaCA435B8eA737Dc40941cC54df9c164078afC7',
+    semifungiblePositionManager: '0xad822a8a72A3e190B177AAA43147B99e40A5FB77',
+    builderFactory: '0x10a6bAba70263E68d22d0b16e520dF8E13fd9752',
+    riskEngine: '0xb084501a2aA16e07bFb93780a442F0988cB6AB8f',
+    panopticPoolImpl: '0x2638B024380681ac47Dbd528c807b6FA2E0B1D4C',
+    collateralTrackerImpl: '0x0E3E818092B529b229a6836AbcC2B0903622cB43',
+    panopticFactory: '0x7aA44F10019ed23c9C2178eC4D1A4bfF7Cda773A',
+    panopticHelper: '0x4F87E4f90EA94Cd26E15dc5928bA9a7BA02C7588',
+    panopticQuery: '0x7e119d73d572F22f1F4cbDaEFe6170BAD4c3Ed30',
     pool: {
-      address: '0x09bc7ceab54607a35939e22ce935fD465191A532',
-      token0: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14', // WETH
+      address: '0x5D44F6574B8dE88ffa2CCAEba0B07aD3C204571E',
+      token0: '0x0000000000000000000000000000000000000000', // Native ETH
       token1: '0xFFFeD8254566B7F800f6D8CDb843ec75AE49B07A', // USDC
       fee: 500,
       tickSpacing: 10,
-      collateralTracker0: '0x517056fc166fF3BEC361e532415CECba45061Ad6',
-      collateralTracker1: '0x3618DD38a07E9f9ff1dD2E99F7d27e7082EE8AA5',
+      collateralTracker0: '0x4d2579A5F9BC32641D6AdbFC47C6dAceF30027F1',
+      collateralTracker1: '0xe2BD879109f84313AC986B2390110F5A240a9fa9',
     },
   },
   tokens: {
     token0: {
-      address: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
-      symbol: 'WETH',
+      address: '0x0000000000000000000000000000000000000000',
+      symbol: 'ETH',
       decimals: 18,
     },
     token1: {

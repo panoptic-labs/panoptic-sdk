@@ -25,6 +25,10 @@ export interface TokenFlow {
   balanceAfter0: bigint
   /** Collateral assets in token 1 after the call */
   balanceAfter1: bigint
+  /** Pool tick before the operation */
+  tickBefore: bigint | null
+  /** Pool tick after the operation */
+  tickAfter: bigint | null
 }
 
 /**
@@ -130,6 +134,8 @@ export interface SettleSimulation {
   postCollateral0: bigint
   /** Post-settle collateral for token 1 */
   postCollateral1: bigint
+  /** Forfeit amounts [token0, token1] — present when tokenId was provided */
+  forfeitAmounts?: [bigint, bigint]
 }
 
 /**

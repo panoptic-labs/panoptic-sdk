@@ -1,4 +1,6 @@
 export { type HypoVaultManagerConfig, HypoVaultManagerConfigSchema } from './schema'
+export { UsdcGammaVaultSepoliaDevConfig } from './usdcGammaVaultSepoliaDevConfig'
+export { UsdcGammaVaultSepoliaProdConfig } from './usdcGammaVaultSepoliaProdConfig'
 export { UsdcPlpVaultSepoliaDevConfig } from './usdcPlpVaultSepoliaDevConfig'
 export { UsdcPlpVaultSepoliaProdConfig } from './usdcPlpVaultSepoliaProdConfig'
 export { WethPlpVaultSepoliaDevConfig } from './wethPlpVaultSepoliaDevConfig'

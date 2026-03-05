@@ -17,3 +17,9 @@ export {
   ZERO_COLLATERAL,
   ZERO_VALUATION,
 } from './constants'
+
+// Factory utilities
+export { type PanopticNFTMetadata, decodePanopticTokenURI } from './factory'
+
+// Block interpolation
+export { interpolateBlocks } from './interpolateBlocks'

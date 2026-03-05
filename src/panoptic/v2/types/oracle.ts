@@ -80,13 +80,13 @@ export interface RiskParameters {
  * Current interest rates from the CollateralTrackers.
  */
 export interface CurrentRates {
-  /** Token 0 borrow rate (annualized, in WAD) */
+  /** Token 0 borrow rate (per-second, WAD-scaled) */
   borrowRate0: bigint
-  /** Token 0 supply rate (annualized, in WAD) */
+  /** Token 0 supply rate (per-second, WAD-scaled) */
   supplyRate0: bigint
-  /** Token 1 borrow rate (annualized, in WAD) */
+  /** Token 1 borrow rate (per-second, WAD-scaled) */
   borrowRate1: bigint
-  /** Token 1 supply rate (annualized, in WAD) */
+  /** Token 1 supply rate (per-second, WAD-scaled) */
   supplyRate1: bigint
   /** Block metadata */
   _meta: BlockMeta

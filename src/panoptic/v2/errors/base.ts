@@ -22,6 +22,9 @@
 export class PanopticError extends Error {
   override readonly name: string = 'PanopticError'
 
+  /** The Solidity error name (e.g. 'PriceBoundFail', 'InputListFail'). Set by the parser. */
+  errorName?: string
+
   /**
    * Creates a new PanopticError.
    *

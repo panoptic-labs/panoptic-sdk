@@ -93,6 +93,9 @@ export type {
 // Chunk types
 export type { ChunkData, ChunkKey, ChunkMetadata, ChunkSpread, ChunkStats } from './chunks'
 
+// Pool config types (V3/V4)
+export type { PoolVersionConfig, V3PoolConfig, V4PoolConfig } from './poolConfig'
+
 // Sync types
 export type {
   ReorgDetection,

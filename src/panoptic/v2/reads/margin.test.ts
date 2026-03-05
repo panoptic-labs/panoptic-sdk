@@ -6,7 +6,6 @@
 import type { PublicClient } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
-import { PanopticHelperNotDeployedError } from '../errors'
 import { getMarginBuffer } from './margin'
 
 // Common mock addresses
@@ -25,14 +24,6 @@ const MOCK_BLOCK = {
 const MIN_TICK = -887272
 const MAX_TICK = 887272
 
-/**
- * Pack two unsigned 128-bit values into LeftRightUnsigned format.
- * right (token0) = lower 128 bits, left (token1) = upper 128 bits
- */
-function packLeftRightUnsigned(right: bigint, left: bigint): bigint {
-  return right + (left << 128n)
-}
-
 // Mock PublicClient factory
 function createMockClient(): PublicClient {
   return {
@@ -43,31 +34,13 @@ function createMockClient(): PublicClient {
 }
 
 describe('getMarginBuffer', () => {
-  it('should throw PanopticHelperNotDeployedError without queryAddress', async () => {
-    const client = createMockClient()
-
-    await expect(
-      getMarginBuffer({
-        client,
-        poolAddress: POOL_ADDRESS,
-        account: ACCOUNT_ADDRESS,
-        tokenIds: [123n],
-        queryAddress: undefined as unknown as `0x${string}`,
-      }),
-    ).rejects.toThrow(PanopticHelperNotDeployedError)
-  })
-
   it('should return positive buffers for a safe account', async () => {
     const client = createMockClient()
 
-    // Mock collateral balance: 200 token0, 300 token1
-    const collateralBalance = packLeftRightUnsigned(200n, 300n)
-    // Mock required collateral: 100 token0, 150 token1
-    const requiredCollateral = packLeftRightUnsigned(100n, 150n)
-
+    // checkCollateral returns [bal0, req0, bal1, req1]
     vi.mocked(client.readContract)
       .mockResolvedValueOnce(100) // getCurrentTick → 100
-      .mockResolvedValueOnce([collateralBalance, requiredCollateral]) // checkCollateral
+      .mockResolvedValueOnce([200n, 100n, 300n, 150n]) // checkCollateral
       .mockResolvedValueOnce([MIN_TICK, MAX_TICK]) // getLiquidationPrices (no liq boundaries)
 
     const result = await getMarginBuffer({
@@ -96,14 +69,9 @@ describe('getMarginBuffer', () => {
   it('should return negative buffer when token0 has shortfall', async () => {
     const client = createMockClient()
 
-    // Mock collateral balance: 50 token0, 300 token1
-    const collateralBalance = packLeftRightUnsigned(50n, 300n)
-    // Mock required collateral: 200 token0, 100 token1
-    const requiredCollateral = packLeftRightUnsigned(200n, 100n)
-
     vi.mocked(client.readContract)
       .mockResolvedValueOnce(0) // getCurrentTick
-      .mockResolvedValueOnce([collateralBalance, requiredCollateral]) // checkCollateral
+      .mockResolvedValueOnce([50n, 200n, 300n, 100n]) // checkCollateral: [bal0, req0, bal1, req1]
       .mockResolvedValueOnce([-500, 500]) // getLiquidationPrices
 
     const result = await getMarginBuffer({
@@ -123,13 +91,9 @@ describe('getMarginBuffer', () => {
   it('should return null bufferPercent when no margin required (no positions)', async () => {
     const client = createMockClient()
 
-    // Some collateral, zero required
-    const collateralBalance = packLeftRightUnsigned(1000n, 2000n)
-    const requiredCollateral = packLeftRightUnsigned(0n, 0n)
-
     vi.mocked(client.readContract)
       .mockResolvedValueOnce(0) // getCurrentTick
-      .mockResolvedValueOnce([collateralBalance, requiredCollateral]) // checkCollateral
+      .mockResolvedValueOnce([1000n, 0n, 2000n, 0n]) // checkCollateral: bal but no req
       .mockResolvedValueOnce([MIN_TICK, MAX_TICK]) // getLiquidationPrices (no boundaries)
 
     const result = await getMarginBuffer({
@@ -150,13 +114,10 @@ describe('getMarginBuffer', () => {
   it('should pick lower distance when only lower liquidation boundary exists', async () => {
     const client = createMockClient()
 
-    const collateralBalance = packLeftRightUnsigned(100n, 100n)
-    const requiredCollateral = packLeftRightUnsigned(50n, 50n)
-
     // Current tick = 1000, lower liq tick = 800, upper = MAX_TICK (no upper boundary)
     vi.mocked(client.readContract)
       .mockResolvedValueOnce(1000) // getCurrentTick
-      .mockResolvedValueOnce([collateralBalance, requiredCollateral]) // checkCollateral
+      .mockResolvedValueOnce([100n, 50n, 100n, 50n]) // checkCollateral
       .mockResolvedValueOnce([800, MAX_TICK]) // getLiquidationPrices
 
     const result = await getMarginBuffer({
@@ -176,13 +137,10 @@ describe('getMarginBuffer', () => {
   it('should pick upper distance when only upper liquidation boundary exists', async () => {
     const client = createMockClient()
 
-    const collateralBalance = packLeftRightUnsigned(100n, 100n)
-    const requiredCollateral = packLeftRightUnsigned(50n, 50n)
-
     // Current tick = 1000, lower = MIN_TICK (no lower boundary), upper liq tick = 1500
     vi.mocked(client.readContract)
       .mockResolvedValueOnce(1000) // getCurrentTick
-      .mockResolvedValueOnce([collateralBalance, requiredCollateral]) // checkCollateral
+      .mockResolvedValueOnce([100n, 50n, 100n, 50n]) // checkCollateral
       .mockResolvedValueOnce([MIN_TICK, 1500]) // getLiquidationPrices
 
     const result = await getMarginBuffer({
@@ -201,14 +159,11 @@ describe('getMarginBuffer', () => {
   it('should pick nearest boundary when both liquidation boundaries exist', async () => {
     const client = createMockClient()
 
-    const collateralBalance = packLeftRightUnsigned(100n, 100n)
-    const requiredCollateral = packLeftRightUnsigned(80n, 80n)
-
     // Current tick = 1000, lower = 700, upper = 1200
     // Distance to lower = 300, distance to upper = 200 → nearest = 200
     vi.mocked(client.readContract)
       .mockResolvedValueOnce(1000) // getCurrentTick
-      .mockResolvedValueOnce([collateralBalance, requiredCollateral]) // checkCollateral
+      .mockResolvedValueOnce([100n, 80n, 100n, 80n]) // checkCollateral
       .mockResolvedValueOnce([700, 1200]) // getLiquidationPrices
 
     const result = await getMarginBuffer({
@@ -229,12 +184,9 @@ describe('getMarginBuffer', () => {
     const client = createMockClient()
     const customBlock = 99999n
 
-    const collateralBalance = packLeftRightUnsigned(100n, 100n)
-    const requiredCollateral = packLeftRightUnsigned(50n, 50n)
-
     vi.mocked(client.readContract)
       .mockResolvedValueOnce(0) // getCurrentTick
-      .mockResolvedValueOnce([collateralBalance, requiredCollateral]) // checkCollateral
+      .mockResolvedValueOnce([100n, 50n, 100n, 50n]) // checkCollateral
       .mockResolvedValueOnce([MIN_TICK, MAX_TICK]) // getLiquidationPrices
 
     await getMarginBuffer({

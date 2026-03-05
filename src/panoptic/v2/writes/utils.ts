@@ -342,6 +342,8 @@ export interface SubmitWriteParams {
   functionName: string
   /** Function arguments */
   args: readonly unknown[]
+  /** ETH value to send with the transaction (for native ETH deposits) */
+  value?: bigint
   /** Optional gas and transaction overrides */
   txOverrides?: TxOverrides
 }
@@ -357,7 +359,8 @@ export interface SubmitWriteParams {
  * @returns TxResult
  */
 export async function submitWrite(params: SubmitWriteParams): Promise<TxResult> {
-  const { client, walletClient, account, address, abi, functionName, args, txOverrides } = params
+  const { client, walletClient, account, address, abi, functionName, args, value, txOverrides } =
+    params
 
   const broadcaster = txOverrides?.broadcaster
 
@@ -367,11 +370,13 @@ export async function submitWrite(params: SubmitWriteParams): Promise<TxResult> 
     const data = encodeFunctionData({ abi, functionName, args })
 
     // Broadcaster path: prepare → sign → broadcast
+    const broadcastAccount = walletClient.account ?? account
     const request = await walletClient.prepareTransactionRequest({
-      account,
+      account: broadcastAccount,
       to: address,
       chain: walletClient.chain,
       data,
+      ...(value !== undefined && { value }),
       ...(txOverrides?.maxFeePerGas !== undefined && { maxFeePerGas: txOverrides.maxFeePerGas }),
       ...(txOverrides?.maxPriorityFeePerGas !== undefined && {
         maxPriorityFeePerGas: txOverrides.maxPriorityFeePerGas,
@@ -382,7 +387,7 @@ export async function submitWrite(params: SubmitWriteParams): Promise<TxResult> 
 
     const signedTx = await walletClient.signTransaction({
       ...request,
-      account,
+      account: broadcastAccount,
     } as unknown as Parameters<WalletClient['signTransaction']>[0])
 
     const hash = await broadcaster.broadcast(signedTx)
@@ -397,11 +402,29 @@ export async function submitWrite(params: SubmitWriteParams): Promise<TxResult> 
   if (txOverrides?.maxPriorityFeePerGas !== undefined) {
     gasOverrides.maxPriorityFeePerGas = txOverrides.maxPriorityFeePerGas
   }
-  if (txOverrides?.gas !== undefined) {
-    gasOverrides.gas = txOverrides.gas
-  }
   if (txOverrides?.nonce !== undefined) {
     gasOverrides.nonce = Number(txOverrides.nonce)
+  }
+
+  // Use the walletClient's local account (if available) for local signing.
+  // Passing a string address triggers eth_sendTransaction (remote signing),
+  // which fails with hosted RPC providers like Alchemy/Infura.
+  const resolvedAccount = walletClient.account ?? account
+
+  // If no explicit gas override, estimate with a 20% buffer.
+  // Panoptic dispatch calls are gas-heavy and viem's default estimate can be tight.
+  if (txOverrides?.gas !== undefined) {
+    gasOverrides.gas = txOverrides.gas
+  } else {
+    const estimated = await client.estimateContractGas({
+      address,
+      abi,
+      functionName,
+      args,
+      account: resolvedAccount,
+      ...(value !== undefined && { value }),
+    } as Parameters<typeof client.estimateContractGas>[0])
+    gasOverrides.gas = (estimated * 120n) / 100n
   }
 
   const hash = await walletClient.writeContract({
@@ -409,8 +432,9 @@ export async function submitWrite(params: SubmitWriteParams): Promise<TxResult> 
     abi,
     functionName,
     args,
-    account,
+    account: resolvedAccount,
     chain: walletClient.chain,
+    ...(value !== undefined && { value }),
     ...gasOverrides,
   })
 

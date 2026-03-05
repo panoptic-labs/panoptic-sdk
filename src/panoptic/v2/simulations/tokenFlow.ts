@@ -15,6 +15,9 @@ import {
   encodeFunctionData,
 } from 'viem'
 
+import { panopticPoolAbi } from '../../../generated'
+import { panopticErrorsAbi } from '../errors/errorsAbi'
+
 /**
  * PanopticPool getAssetsOf ABI.
  * Returns collateral assets (shares converted to underlying) for an account.
@@ -44,6 +47,8 @@ const multicallAbi = [
     outputs: [{ name: 'results', type: 'bytes[]' }],
     stateMutability: 'nonpayable',
   },
+  // Include error definitions so viem can decode revert data with full args
+  ...panopticErrorsAbi,
 ] as const
 
 /**
@@ -63,6 +68,10 @@ export interface TokenFlow {
   balanceAfter0: bigint
   /** Collateral assets in token 1 after the call */
   balanceAfter1: bigint
+  /** Pool tick before the operation */
+  tickBefore: bigint | null
+  /** Pool tick after the operation */
+  tickAfter: bigint | null
 }
 
 /**
@@ -91,6 +100,8 @@ export interface SimulateWithTokenFlowResult {
   tokenFlow?: TokenFlow
   /** Error message (only if failed) */
   error?: string
+  /** Raw error object preserving viem cause chain and revert data */
+  rawError?: Error
   /** Gas estimate for the inner call */
   gasEstimate: bigint
 }
@@ -100,8 +111,10 @@ export interface SimulateWithTokenFlowResult {
  *
  * This function uses PanopticPool's inherited multicall (delegatecall-based) to chain:
  * 1. getAssetsOf(user) - read collateral assets before
- * 2. Execute the target call (e.g., dispatch)
- * 3. getAssetsOf(user) - read collateral assets after
+ * 2. getCurrentTick() - read pool tick before
+ * 3. Execute the target call (e.g., dispatch)
+ * 4. getCurrentTick() - read pool tick after
+ * 5. getAssetsOf(user) - read collateral assets after
  *
  * ## Why PanopticPool.multicall instead of Multicall3?
  * - Measures **collateral assets** (shares → underlying), not raw wallet balances
@@ -148,8 +161,20 @@ export async function simulateWithTokenFlow(
     args: [user],
   })
 
-  // Build multicall data array: [getAssetsOf, targetCall, getAssetsOf]
-  const multicallData = [getAssetsOfCallData, callData, getAssetsOfCallData]
+  // Encode getCurrentTick call
+  const getCurrentTickCallData = encodeFunctionData({
+    abi: panopticPoolAbi,
+    functionName: 'getCurrentTick',
+  })
+
+  // Build multicall data array: [getAssetsOf, getCurrentTick, targetCall, getCurrentTick, getAssetsOf]
+  const multicallData = [
+    getAssetsOfCallData,
+    getCurrentTickCallData,
+    callData,
+    getCurrentTickCallData,
+    getAssetsOfCallData,
+  ]
 
   try {
     // Execute via simulateContract on PanopticPool's multicall
@@ -172,9 +197,22 @@ export async function simulateWithTokenFlow(
       return { assets0: decoded[0], assets1: decoded[1] }
     }
 
+    // Decode getCurrentTick result (int24 decodes as number, convert to bigint)
+    const decodeTick = (data: Hex): bigint => {
+      return BigInt(
+        decodeFunctionResult({
+          abi: panopticPoolAbi,
+          functionName: 'getCurrentTick',
+          data,
+        }),
+      )
+    }
+
     const assetsBefore = decodeAssets(result[0])
-    // result[1] is the target call result (we can decode if needed)
-    const assetsAfter = decodeAssets(result[2])
+    const tickBefore = decodeTick(result[1])
+    // result[2] is the target call result (dispatch)
+    const tickAfter = decodeTick(result[3])
+    const assetsAfter = decodeAssets(result[4])
 
     const delta0 = assetsAfter.assets0 - assetsBefore.assets0
     const delta1 = assetsAfter.assets1 - assetsBefore.assets1
@@ -201,6 +239,8 @@ export async function simulateWithTokenFlow(
         balanceBefore1: assetsBefore.assets1,
         balanceAfter0: assetsAfter.assets0,
         balanceAfter1: assetsAfter.assets1,
+        tickBefore,
+        tickAfter,
       },
       gasEstimate,
     }
@@ -208,6 +248,7 @@ export async function simulateWithTokenFlow(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Simulation failed',
+      rawError: error instanceof Error ? error : undefined,
       gasEstimate: 0n,
     }
   }

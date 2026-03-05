@@ -9,6 +9,7 @@ import type {
 export type BaseContractWriteHookOutput = {
   actionLabel: string
   act: () => void
+  canSubmit?: boolean
   isLoading: boolean
   error: Error | undefined
   simulate: UseSimulateContractReturnType<

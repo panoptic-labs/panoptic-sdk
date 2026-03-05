@@ -26,19 +26,26 @@ export const useRequestDeposit = ({
   onWaitSuccess?: () => void
 }) => {
   const { address: account } = useAccount()
+  const canReadAllowance =
+    account != null &&
+    account !== zeroAddress &&
+    tokenAddress !== zeroAddress &&
+    vaultAddress !== zeroAddress
 
   const allowanceRead = useReadContract({
-    address: tokenAddress,
+    address: canReadAllowance ? tokenAddress : undefined,
     abi: Erc20Abi,
     functionName: 'allowance',
-    args: [account ?? zeroAddress, vaultAddress],
+    args: canReadAllowance ? [account, vaultAddress] : undefined,
     query: {
-      enabled: account != null && account !== zeroAddress,
+      enabled: canReadAllowance,
     },
   })
 
   const tokenNeedsApproval =
-    !allowanceRead.isFetching && (allowanceRead.data === undefined || allowanceRead.data < assets)
+    canReadAllowance &&
+    !allowanceRead.isFetching &&
+    (allowanceRead.data === undefined || allowanceRead.data < assets)
 
   const refetchAllowance = allowanceRead.refetch
 

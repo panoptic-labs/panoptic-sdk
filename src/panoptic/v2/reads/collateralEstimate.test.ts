@@ -4,9 +4,10 @@
  */
 
 import type { PublicClient } from 'viem'
+import { encodeFunctionResult } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
-import { PanopticError, PanopticHelperNotDeployedError } from '../errors'
+import { PanopticError } from '../errors'
 import { createMemoryStorage, getPositionsKey, jsonSerializer } from '../storage'
 import {
   estimateCollateralRequired,
@@ -26,6 +27,25 @@ const MOCK_BLOCK = {
   timestamp: 1700000000n,
 }
 
+// getCurrentTick ABI for encoding mock results
+const getCurrentTickAbi = [
+  {
+    type: 'function' as const,
+    name: 'getCurrentTick' as const,
+    inputs: [] as const,
+    outputs: [{ name: 'currentTick' as const, type: 'int24' as const }] as const,
+    stateMutability: 'view' as const,
+  },
+]
+
+function encodeCurrentTick(tick: number): `0x${string}` {
+  return encodeFunctionResult({
+    abi: getCurrentTickAbi,
+    functionName: 'getCurrentTick',
+    result: tick,
+  })
+}
+
 // Mock PublicClient factory
 function createMockClient(): PublicClient {
   return {
@@ -37,20 +57,6 @@ function createMockClient(): PublicClient {
 
 describe('Collateral Estimation with PanopticQuery', () => {
   describe('estimateCollateralRequired', () => {
-    it('should throw PanopticHelperNotDeployedError without queryAddress', async () => {
-      const client = createMockClient()
-
-      await expect(
-        estimateCollateralRequired({
-          client,
-          poolAddress: POOL_ADDRESS,
-          account: ACCOUNT_ADDRESS,
-          tokenId: 123n,
-          positionSize: 1n * 10n ** 18n,
-        }),
-      ).rejects.toThrow(PanopticHelperNotDeployedError)
-    })
-
     it('should return collateral estimate at current tick', async () => {
       const client = createMockClient()
 
@@ -119,20 +125,6 @@ describe('Collateral Estimation with PanopticQuery', () => {
   })
 
   describe('getMaxPositionSize', () => {
-    it('should throw PanopticHelperNotDeployedError without queryAddress', async () => {
-      const client = createMockClient()
-
-      await expect(
-        getMaxPositionSize({
-          client,
-          poolAddress: POOL_ADDRESS,
-          account: ACCOUNT_ADDRESS,
-          tokenId: 123n,
-          queryAddress: undefined as unknown as `0x${string}`,
-        }),
-      ).rejects.toThrow(PanopticHelperNotDeployedError)
-    })
-
     it('should return bounds from contract with refine=false', async () => {
       const client = createMockClient()
 
@@ -330,7 +322,7 @@ describe('Collateral Estimation with PanopticQuery', () => {
       const client = createMockClient()
 
       // Mock simulateContract for multicall (used by simulateWithTokenFlow)
-      // Returns encoded results for: [getAssetsOf_before, dispatch, getAssetsOf_after]
+      // Returns encoded results for: [getAssetsOf_before, getCurrentTick_before, dispatch, getCurrentTick_after, getAssetsOf_after]
       // Assets before: 1000n token0, 2000n token1
       // Assets after: 900n token0, 2100n token1 (delta0 = -100n, delta1 = +100n)
       const mockSimulateContract = vi.fn().mockResolvedValue({
@@ -338,8 +330,12 @@ describe('Collateral Estimation with PanopticQuery', () => {
           // getAssetsOf before: (assets0, assets1) ABI-encoded
           '0x00000000000000000000000000000000000000000000000000000000000003e80000000000000000000000000000000000000000000000000000000000000' +
             '7d0',
+          // getCurrentTick before
+          encodeCurrentTick(0),
           // dispatch result (ignored)
           '0x',
+          // getCurrentTick after
+          encodeCurrentTick(0),
           // getAssetsOf after: (assets0, assets1) ABI-encoded
           '0x0000000000000000000000000000000000000000000000000000000000000384' +
             '0000000000000000000000000000000000000000000000000000000000000834',
@@ -398,7 +394,9 @@ describe('Collateral Estimation with PanopticQuery', () => {
       const mockSimulateContract = vi.fn().mockResolvedValue({
         result: [
           '0x00000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000007d0',
+          encodeCurrentTick(0),
           '0x',
+          encodeCurrentTick(0),
           '0x00000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000007d0',
         ],
       })
@@ -430,7 +428,9 @@ describe('Collateral Estimation with PanopticQuery', () => {
       const mockSimulateContract = vi.fn().mockResolvedValue({
         result: [
           '0x00000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000007d0',
+          encodeCurrentTick(0),
           '0x',
+          encodeCurrentTick(0),
           '0x00000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000007d0',
         ],
       })
@@ -460,7 +460,9 @@ describe('Collateral Estimation with PanopticQuery', () => {
       const mockSimulateContract = vi.fn().mockResolvedValue({
         result: [
           '0x00000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000007d0',
+          encodeCurrentTick(0),
           '0x',
+          encodeCurrentTick(0),
           '0x00000000000000000000000000000000000000000000000000000000000003840000000000000000000000000000000000000000000000000000000000000834',
         ],
       })

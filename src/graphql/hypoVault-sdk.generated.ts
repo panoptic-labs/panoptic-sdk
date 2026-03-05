@@ -152,6 +152,129 @@ export const GetLatestEpochDocument = gql`
 }
     ${DepositEpochStateFragmentDoc}
 ${WithdrawalEpochStateFragmentDoc}`;
+export const GetVaultHistoryDocument = gql`
+    query GetVaultHistory($hypoVault: String!, $first: Int = 200, $skip: Int = 0) {
+  depositRequesteds(
+    where: {hypoVault: $hypoVault}
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    assets
+    blockTimestamp
+    transactionHash
+    user {
+      id
+    }
+  }
+  depositsFulfilleds(
+    where: {hypoVault: $hypoVault}
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    assetsFulfilled
+    sharesReceived
+    blockTimestamp
+    transactionHash
+  }
+  withdrawalRequesteds(
+    where: {hypoVault: $hypoVault}
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    shares
+    blockTimestamp
+    transactionHash
+    user {
+      id
+    }
+  }
+  withdrawalsFulfilleds(
+    where: {hypoVault: $hypoVault}
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    assetsReceived
+    sharesFulfilled
+    blockTimestamp
+    transactionHash
+  }
+  depositCancelleds(
+    where: {hypoVault: $hypoVault}
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    assets
+    blockTimestamp
+    transactionHash
+    user {
+      id
+    }
+  }
+  withdrawalCancelleds(
+    where: {hypoVault: $hypoVault}
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    shares
+    blockTimestamp
+    transactionHash
+    user {
+      id
+    }
+  }
+  depositExecuteds(
+    where: {hypoVault: $hypoVault}
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    assets
+    shares
+    blockTimestamp
+    transactionHash
+    user {
+      id
+    }
+  }
+  withdrawalExecuteds(
+    where: {hypoVault: $hypoVault}
+    orderBy: blockTimestamp
+    orderDirection: desc
+    first: $first
+    skip: $skip
+  ) {
+    id
+    assets
+    shares
+    performanceFee
+    blockTimestamp
+    transactionHash
+    user {
+      id
+    }
+  }
+}
+    `;
 export const GetFilteredHypoVaultsDocument = gql`
     query GetFilteredHypoVaults($hypoVaultWhitelist: [Bytes!]!) {
   bundle(id: "1") {
@@ -231,6 +354,9 @@ export function getSdk(client: GraphQLClient, withWrapper: SdkFunctionWrapper = 
     },
     GetLatestEpoch(variables: Types.GetLatestEpochQueryVariables, requestHeaders?: GraphQLClientRequestHeaders): Promise<Types.GetLatestEpochQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<Types.GetLatestEpochQuery>(GetLatestEpochDocument, variables, {...requestHeaders, ...wrappedRequestHeaders}), 'GetLatestEpoch', 'query', variables);
+    },
+    GetVaultHistory(variables: Types.GetVaultHistoryQueryVariables, requestHeaders?: GraphQLClientRequestHeaders): Promise<Types.GetVaultHistoryQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<Types.GetVaultHistoryQuery>(GetVaultHistoryDocument, variables, {...requestHeaders, ...wrappedRequestHeaders}), 'GetVaultHistory', 'query', variables);
     },
     GetFilteredHypoVaults(variables: Types.GetFilteredHypoVaultsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders): Promise<Types.GetFilteredHypoVaultsQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<Types.GetFilteredHypoVaultsQuery>(GetFilteredHypoVaultsDocument, variables, {...requestHeaders, ...wrappedRequestHeaders}), 'GetFilteredHypoVaults', 'query', variables);

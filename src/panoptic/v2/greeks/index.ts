@@ -28,15 +28,15 @@ const Q192 = 1n << 192n
  * Convert tick to quote-denominated tick based on asset direction.
  *
  * When isAssetToken0 = true (asset is token0, numeraire is token1):
- * - We want price in token0/token1 terms (inverted from tick's token1/token0)
- * - Invert by negating: 1/price = 1.0001^(-tick)
+ * - Tick already encodes price as token1/token0 (numeraire per asset)
+ * - Return tick unchanged
  *
  * When isAssetToken0 = false (asset is token1, numeraire is token0):
- * - We want price in token1/token0 terms (same as tick)
- * - Use tick as-is
+ * - Tick encodes price as token1/token0, but we need token0/token1 (numeraire per asset)
+ * - Invert by negating: 1/price = 1.0001^(-tick)
  */
 function quoteTick(tick: bigint, isAssetToken0: boolean): bigint {
-  return isAssetToken0 ? -tick : tick
+  return isAssetToken0 ? tick : -tick
 }
 
 /**
@@ -377,7 +377,14 @@ export function getLegDelta(
 
   const m = leg.isLong ? -(positionSize * leg.optionRatio) : positionSize * leg.optionRatio
 
-  // Width=0: single-tick position, skip in-range branch that divides by (r-1)=0
+  // True loan/credit: leg.width === 0n (not just halfWidth rounding to 0).
+  // Debt-side exposure only — no option-like piecewise formula.
+  if (leg.width === 0n) {
+    const borrowsAsset = isAssetToken0 ? leg.tokenType === 0n : leg.tokenType === 1n
+    return borrowsAsset ? -m : 0n
+  }
+
+  // Narrow option whose halfWidth rounds to 0: use option-like width=0 branch
   if (halfWidthTick === 0n) {
     const vDelta = qCurrentTick <= qStrikeTick ? m : 0n
     const isPut = !isCall(leg.tokenType, isAssetToken0)
@@ -510,7 +517,10 @@ export function getLegGamma(
   const qStrikeTick = quoteTick(leg.strike, isAssetToken0)
   const halfWidthTick = (leg.width * poolTickSpacing) / 2n
 
-  // Width=0: no curvature for a point position (denominator 2*(r-1)=0)
+  // True loan: no gamma
+  if (leg.width === 0n) return 0n
+
+  // Narrow option whose halfWidth rounds to 0: no curvature (denominator 2*(r-1)=0)
   if (halfWidthTick === 0n) return 0n
 
   // Range check: gamma is zero outside [strike - halfWidth, strike + halfWidth]
@@ -638,4 +648,78 @@ export function calculatePositionGreeks(input: PositionGreeksInput): PositionGre
     delta: calculatePositionDelta(input),
     gamma: calculatePositionGamma(input),
   }
+}
+
+// --- Loan/Credit Swap-Aware Delta ---
+
+/**
+ * Calculate the effective delta of a loan leg accounting for swapAtMint.
+ *
+ * A loan borrows one token and (optionally) swaps it for the other at mint.
+ * The net delta depends on whether the swap occurred:
+ *
+ * | Scenario              | Result                                          |
+ * |-----------------------|-------------------------------------------------|
+ * | No swap               | 0n (hold what you owe, net zero)                |
+ * | Swap + borrows asset  | -m (hold numeraire, owe asset → short exposure) |
+ * | Swap + borrows numer. | +m (hold asset, owe numeraire → long exposure)  |
+ *
+ * Only meaningful for legs with `width === 0n`. For options, use `getLegDelta`.
+ *
+ * @param leg - The loan leg
+ * @param positionSize - Position size in asset token smallest units
+ * @param swapAtMint - Whether the borrowed tokens were swapped at mint
+ * @param assetIndex - Optional override for leg.asset (0n = token0 is asset)
+ * @returns Effective delta in asset token smallest units
+ */
+export function getLoanEffectiveDelta(
+  leg: TokenIdLeg,
+  positionSize: bigint,
+  swapAtMint: boolean,
+  assetIndex?: bigint,
+): bigint {
+  if (!swapAtMint) return 0n
+
+  const isAssetToken0 = resolveAssetDirection(leg, assetIndex)
+  const m = leg.isLong ? -(positionSize * leg.optionRatio) : positionSize * leg.optionRatio
+  const borrowsAsset = isAssetToken0 ? leg.tokenType === 0n : leg.tokenType === 1n
+
+  return borrowsAsset ? -m : m
+}
+
+/**
+ * Calculate total delta for a position, using swap-aware delta for loan legs.
+ *
+ * For legs with `width === 0n` (loans/credits), uses `getLoanEffectiveDelta`
+ * which accounts for the swapAtMint flag. For option legs (`width > 0n`),
+ * uses the standard `getLegDelta`.
+ *
+ * @param input - Position greeks input plus swapAtMint flag
+ * @returns Total delta in asset token smallest units
+ */
+export function calculatePositionDeltaWithSwap(
+  input: PositionGreeksInput & { swapAtMint: boolean },
+): bigint {
+  const { legs, currentTick, mintTick, positionSize, poolTickSpacing, assetIndex, swapAtMint } =
+    input
+  const optionLegs = legs.filter((l) => l.width !== 0n)
+  const definedRisk = isDefinedRisk(optionLegs)
+
+  return legs.reduce((sum, leg) => {
+    if (leg.width === 0n) {
+      return sum + getLoanEffectiveDelta(leg, positionSize, swapAtMint, assetIndex)
+    }
+    return (
+      sum +
+      getLegDelta(
+        leg,
+        currentTick,
+        positionSize,
+        poolTickSpacing,
+        mintTick,
+        definedRisk,
+        assetIndex,
+      )
+    )
+  }, 0n)
 }

@@ -607,7 +607,7 @@ describe('Collateral Read Functions', () => {
       expect(result.totalAssets).toBe(1000000n)
       expect(result.totalShares).toBe(900000n)
       expect(result.utilization).toBe(1000n)
-      expect(result.borrowRate).toBe(5000n)
+      expect(result.borrowRate).toBe(5000n * 31_536_000n)
       expect(result._meta.blockNumber).toBe(12345678n)
     })
 
@@ -655,11 +655,12 @@ describe('Collateral Read Functions', () => {
         poolAddress: POOL_ADDRESS,
       })
 
-      expect(result.borrowRate0).toBe(5000n)
-      expect(result.borrowRate1).toBe(6000n)
+      const SPY = 31_536_000n
+      expect(result.borrowRate0).toBe(5000n * SPY)
+      expect(result.borrowRate1).toBe(6000n * SPY)
       // supplyRate = borrowRate * utilization / 10000
-      expect(result.supplyRate0).toBe((5000n * 1000n) / 10000n)
-      expect(result.supplyRate1).toBe((6000n * 2000n) / 10000n)
+      expect(result.supplyRate0).toBe((5000n * SPY * 1000n) / 10000n)
+      expect(result.supplyRate1).toBe((6000n * SPY * 2000n) / 10000n)
       expect(result._meta.blockNumber).toBe(12345678n)
     })
   })
@@ -986,12 +987,14 @@ describe('Delta Hedge Functions', () => {
       ])
       // 2. getPoolMetadata: asset addresses from collateral trackers
       .mockResolvedValueOnce([TOKEN_0_ASSET, TOKEN_1_ASSET])
-      // 3. getPoolMetadata: token symbols/decimals
+      // 3. getPoolMetadata: token symbols/decimals/names
       .mockResolvedValueOnce([
         'WETH', // token0Symbol
         18, // token0Decimals
+        'Wrapped Ether', // token0Name
         'USDC', // token1Symbol
         6, // token1Decimals
+        'USD Coin', // token1Name
       ])
       // 4. getPool: dynamic data (11 values)
       .mockResolvedValueOnce([

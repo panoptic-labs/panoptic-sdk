@@ -1,0 +1,43 @@
+/**
+ * Minimal Uniswap V4 StateView ABI for fee growth reads.
+ * Only includes functions needed by streamia history.
+ */
+export const stateViewAbi = [
+  {
+    inputs: [{ internalType: 'PoolId', name: 'poolId', type: 'bytes32' }],
+    name: 'getSlot0',
+    outputs: [
+      { internalType: 'uint160', name: 'sqrtPriceX96', type: 'uint160' },
+      { internalType: 'int24', name: 'tick', type: 'int24' },
+      { internalType: 'uint24', name: 'protocolFee', type: 'uint24' },
+      { internalType: 'uint24', name: 'lpFee', type: 'uint24' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'PoolId', name: 'poolId', type: 'bytes32' }],
+    name: 'getFeeGrowthGlobals',
+    outputs: [
+      { internalType: 'uint256', name: 'feeGrowthGlobal0', type: 'uint256' },
+      { internalType: 'uint256', name: 'feeGrowthGlobal1', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'PoolId', name: 'poolId', type: 'bytes32' },
+      { internalType: 'int24', name: 'tick', type: 'int24' },
+    ],
+    name: 'getTickInfo',
+    outputs: [
+      { internalType: 'uint128', name: 'liquidityGross', type: 'uint128' },
+      { internalType: 'int128', name: 'liquidityNet', type: 'int128' },
+      { internalType: 'uint256', name: 'feeGrowthOutside0X128', type: 'uint256' },
+      { internalType: 'uint256', name: 'feeGrowthOutside1X128', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const

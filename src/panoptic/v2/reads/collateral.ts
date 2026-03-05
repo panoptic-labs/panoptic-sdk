@@ -16,6 +16,8 @@ import { collateralTrackerAbi, panopticPoolAbi } from '../../../generated'
 import { getBlockMeta } from '../clients/blockMeta'
 import type { BlockMeta, CollateralTracker, CurrentRates } from '../types'
 
+const SECONDS_PER_YEAR = 31_536_000n
+
 // ERC20 minimal ABI for token metadata
 const erc20Abi = [
   {
@@ -114,7 +116,7 @@ export async function getCollateralData(
     const [poolData, totalShares, interestRate] = dynamicResults
     const [depositedAssets, insideAMM, creditedShares, utilization] = poolData
 
-    const borrowRate = BigInt(interestRate)
+    const borrowRate = BigInt(interestRate) * SECONDS_PER_YEAR
     const supplyRate = (borrowRate * utilization) / 10000n
 
     return {
@@ -194,8 +196,8 @@ export async function getCollateralData(
   // poolData returns: (depositedAssets, insideAMM, creditedShares, currentPoolUtilization)
   const [depositedAssets, insideAMM, creditedShares, utilization] = poolData
 
-  // Calculate rates
-  const borrowRate = BigInt(interestRate)
+  // Annualize rates: interestRate() returns WAD/s
+  const borrowRate = BigInt(interestRate) * SECONDS_PER_YEAR
   const supplyRate = (borrowRate * utilization) / 10000n
 
   return {
@@ -321,11 +323,11 @@ export async function getCurrentRates(params: GetCurrentRatesParams): Promise<Cu
   const utilization0 = poolData0[3]
   const utilization1 = poolData1[3]
 
-  // Calculate rates
-  const borrowRate0 = BigInt(interestRate0)
-  const borrowRate1 = BigInt(interestRate1)
+  // Annualize rates: interestRate() returns WAD/s
+  const borrowRate0 = BigInt(interestRate0) * SECONDS_PER_YEAR
+  const borrowRate1 = BigInt(interestRate1) * SECONDS_PER_YEAR
 
-  // Supply rate = borrow rate * utilization (simplified)
+  // Supply rate = borrow rate * utilization (utilization is in bps, so /10000)
   const supplyRate0 = (borrowRate0 * utilization0) / 10000n
   const supplyRate1 = (borrowRate1 * utilization1) / 10000n
 

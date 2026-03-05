@@ -25,6 +25,15 @@ export {
   ZERO_VALUATION,
 } from './utils'
 
+// Factory utilities
+export { type PanopticNFTMetadata, decodePanopticTokenURI } from './utils'
+
+// Block interpolation
+export { interpolateBlocks } from './utils'
+
+// LeftRight decoding utilities
+export { decodeLeftRightSigned, decodeLeftRightUnsigned } from './writes/utils'
+
 // ============================================================================
 // Errors
 // ============================================================================
@@ -45,6 +54,7 @@ export {
   InputListFailError,
   InsufficientCreditLiquidityError,
   InvalidBuilderCodeError,
+  InvalidHistoryRangeError,
   InvalidTickBoundError,
   InvalidTickError,
   InvalidTokenIdParameterError,
@@ -68,6 +78,7 @@ export {
   // Base
   PanopticError,
   PanopticHelperNotDeployedError,
+  PanopticValidationError,
   // Error parsing
   parsePanopticError,
   PoolNotInitializedError,
@@ -121,14 +132,116 @@ export {
 // ============================================================================
 // React Integration
 // ============================================================================
-export type { MutationEffectParams, MutationType } from './react'
-export { mutationEffects, queryKeys } from './react'
+export type {
+  MutationEffectParams,
+  MutationType,
+  PanopticContextValue,
+  PanopticProviderProps,
+  PriceHistoryTimeRange,
+  QueryOptions,
+} from './react'
+export {
+  mutationEffects,
+  PanopticProvider,
+  queryKeys,
+  // Hooks — reads
+  useAccountCollateral,
+  useAccountGreeks,
+  useAccountPremia,
+  useAccountSummaryBasic,
+  useAccountSummaryRisk,
+  // Hooks — sync
+  useAddPendingPosition,
+  // Hooks — writes
+  useApprove,
+  useApprovePool,
+  useChunkSpreads,
+  useClearTrackedPositions,
+  useClosedPositions,
+  useClosePosition as useClosePositionHook,
+  useCollateralData,
+  useConfirmPendingPosition,
+  useCurrentRates,
+  useDeployNewPool as useDeployNewPoolHook,
+  useDeposit as useDepositHook,
+  useDispatch as useDispatchHook,
+  useEstimateCollateralRequired,
+  // Hooks — events
+  useEventPoller,
+  useEventSubscription,
+  useFactoryConstructMetadata,
+  useFactoryOwnerOf,
+  useFactoryTokenURI,
+  useFailPendingPosition,
+  useForceExercise as useForceExerciseHook,
+  useIsLiquidatable,
+  useLiquidate as useLiquidateHook,
+  useLiquidationPrices,
+  useMarginBuffer,
+  useMaxPositionSize,
+  useMaxWithdrawable,
+  useMinePoolAddress as useMinePoolAddressHook,
+  useMintShares,
+  useNativeTokenPrice,
+  useNetLiquidationValue,
+  useOpenPosition as useOpenPositionHook,
+  useOpenPositionPreview,
+  useOptimizeRiskPartners,
+  useOracleState,
+  usePanopticContext,
+  usePanopticPoolAddress,
+  usePokeOracle as usePokeOracleHook,
+  usePool,
+  usePoolLiquidities,
+  usePosition,
+  usePositionGreeks,
+  usePositions,
+  usePositionsWithPremia,
+  usePreviewDeposit,
+  usePreviewMint,
+  usePreviewRedeem,
+  usePreviewWithdraw,
+  usePriceHistory,
+  useRealizedPnL,
+  useRedeem as useRedeemHook,
+  useRiskParameters,
+  useRollPosition as useRollPositionHook,
+  useSafeMode,
+  useSettleAccumulatedPremia as useSettleAccumulatedPremiaHook,
+  // Hooks — simulations
+  useSimulateClosePosition,
+  useSimulateDeployNewPool,
+  useSimulateDeposit,
+  useSimulateDispatch,
+  useSimulateForceExercise,
+  useSimulateLiquidate,
+  useSimulateOpenPosition,
+  useSimulateSettle,
+  useSimulateSFPMBurn,
+  useSimulateSFPMMint,
+  useSimulateWithdraw,
+  useStreamiaHistory,
+  useSyncPositions,
+  useSyncStatus,
+  useTrackedPositionIds,
+  useTradeHistory,
+  useUniswapFeeHistory,
+  useUtilization,
+  useWatchEvents,
+  useWithdraw as useWithdrawHook,
+  useWithdrawWithPositions as useWithdrawWithPositionsHook,
+} from './react'
 
 // ============================================================================
 // Client Utilities
 // ============================================================================
-export type { GetBlockMetaParams, MulticallContract, MulticallReadParams } from './clients'
-export { getBlockMeta } from './clients'
+export type {
+  GetBlockMetaParams,
+  MulticallContract,
+  MulticallReadParams,
+  ResolveBlockNumbersParams,
+} from './clients'
+export { getBlockMeta, multicallRead, resolveBlockNumbers } from './clients'
 
 // ============================================================================
 // TokenId Utilities
@@ -159,7 +272,12 @@ export {
   encodePoolId,
   encodeV4PoolId,
   getAssetIndex,
+  hasLoanOrCredit,
   hasLongLeg,
+  isCredit,
+  isCreditLeg,
+  isLoan,
+  isLoanLeg,
   isShortOnly,
   isSpread,
   LEG_BITS,
@@ -175,6 +293,18 @@ export {
 // Read Functions
 // ============================================================================
 export type {
+  GetFactoryConstructMetadataParams,
+  GetFactoryOwnerOfParams,
+  GetFactoryTokenURIParams,
+  GetPanopticPoolAddressParams,
+  GetPoolMetadataParams,
+  MinePoolAddressParams,
+  MinePoolAddressResult,
+  SimulateDeployNewPoolParams,
+} from './reads'
+export type {
+  // Account buying power params
+  AccountBuyingPower,
   AccountGreeksCurveResult,
   AccountGreeksResult,
   AccountPremia,
@@ -190,6 +320,7 @@ export type {
   // fetchPoolId params/result
   FetchPoolIdParams,
   FetchPoolIdResult,
+  GetAccountBuyingPowerParams,
   // Account read params
   GetAccountCollateralParams,
   // Account greeks params
@@ -207,7 +338,11 @@ export type {
   // Margin buffer params
   GetMarginBufferParams,
   GetMaxPositionSizeParams,
+  GetMaxWithdrawableParams,
+  GetNativeTokenPriceParams,
   GetNetLiquidationValueParams,
+  // Open position preview params
+  GetOpenPositionPreviewParams,
   GetOracleStateParams,
   // Pool liquidity params
   GetPoolLiquiditiesParams,
@@ -215,6 +350,9 @@ export type {
   GetPoolParams,
   // PanopticQuery params
   GetPortfolioValueParams,
+  // Enrichment params
+  GetPositionEnrichmentDataParams,
+  GetPositionEnrichmentDataResult,
   GetPositionGreeksParams,
   // Position read params
   GetPositionParams,
@@ -231,14 +369,30 @@ export type {
   LiquidationCheck,
   MarginBuffer,
   MaxPositionSize,
+  OpenPositionPreview,
   OptimizeTokenIdRiskPartnersParams,
   PoolLiquidities,
+  // Pool metadata
+  PoolMetadata,
   PortfolioValue,
+  PositionEnrichmentResult,
+  PositionInput,
   PositionsWithPremiaResult,
   PositionWithPremia,
   RequiredCreditForITM,
 } from './reads'
 export {
+  getFactoryConstructMetadata,
+  getFactoryOwnerOf,
+  getFactoryTokenURI,
+  getPanopticPoolAddress,
+  getPoolMetadata,
+  minePoolAddress,
+  simulateDeployNewPool,
+} from './reads'
+export {
+  // Collateral share price
+  type CollateralSharePriceData,
   calculateAccountGreeksPure,
   checkCollateralAcrossTicks,
   convertToAssets,
@@ -246,6 +400,8 @@ export {
   estimateCollateralRequired,
   // Pool ID fetch
   fetchPoolId,
+  // Account buying power
+  getAccountBuyingPower,
   // Account reads
   getAccountCollateral,
   // Account greeks
@@ -257,7 +413,11 @@ export {
   getAccountSummaryBasic,
   getAccountSummaryRisk,
   // Collateral reads
+  getCollateralAddresses,
   getCollateralData,
+  getCollateralSharePrices,
+  // Collateral total assets
+  getCollateralTotalAssetsBatch,
   getCurrentRates,
   // Delta hedging
   getDeltaHedgeParams,
@@ -265,7 +425,11 @@ export {
   // Margin buffer
   getMarginBuffer,
   getMaxPositionSize,
+  getMaxWithdrawable,
+  getNativeTokenPrice,
   getNetLiquidationValue,
+  // Open position preview
+  getOpenPositionPreview,
   getOracleState,
   // Pool reads
   getPool,
@@ -275,6 +439,8 @@ export {
   getPortfolioValue,
   // Position reads
   getPosition,
+  // Position enrichment
+  getPositionEnrichmentData,
   getPositionGreeks,
   getPositions,
   getPositionsWithPremia,
@@ -294,6 +460,28 @@ export {
   previewWithdraw,
 } from './reads'
 
+// Streamia History
+export type {
+  GetStreamiaHistoryParams,
+  SettledEvent,
+  StreamiaHistoryResult,
+  StreamiaLeg,
+  StreamiaSnapshot,
+} from './reads'
+export { getStreamiaHistory } from './reads'
+
+// Uniswap Fee History (standalone, no Panoptic pool required)
+export type {
+  GetUniswapFeeHistoryParams,
+  UniswapFeeHistoryResult,
+  UniswapFeeSnapshot,
+} from './reads'
+export { getUniswapFeeHistory } from './reads'
+
+// Price History (historical tick + sqrtPriceX96)
+export type { GetPriceHistoryParams, PriceHistoryResult, PriceSnapshot } from './reads'
+export { getPriceHistory } from './reads'
+
 // ============================================================================
 // Position Tracking & Sync
 // ============================================================================
@@ -307,6 +495,7 @@ export type {
   EventReconstructionResult,
   FailPendingPositionParams,
   GetChunkSpreadsParams,
+  GetOpenPositionIdsParams,
   GetPendingPositionsParams,
   GetPositionChunkDataParams,
   GetPositionChunkDataResult,
@@ -320,6 +509,7 @@ export type {
   LiquidityChunkSpread,
   PendingPosition,
   PositionChunkData,
+  RecoverSnapshotFromTxParams,
   RecoverSnapshotParams,
   RemoveTrackedChunksParams,
   SaveCheckpointParams,
@@ -350,6 +540,7 @@ export {
   failPendingPosition,
   getChunkSpreads,
   getClosedPositions,
+  getOpenPositionIds,
   getPendingPositions,
   getPoolDeploymentBlock,
   getPositionChunkData,
@@ -362,6 +553,7 @@ export {
   loadCheckpoint,
   reconstructFromEvents,
   recoverSnapshot,
+  recoverSnapshotFromTx,
   removeTrackedChunks,
   saveCheckpoint,
   saveClosedPosition,
@@ -380,6 +572,7 @@ export type {
   CancelParams,
   CheckApprovalParams,
   ClosePositionParams,
+  DeployNewPoolParams,
   DepositParams,
   DispatchParams,
   ForceExerciseParams,
@@ -407,6 +600,9 @@ export {
   closePosition,
   closePositionAndWait,
   createNonceManager,
+  // Factory deployment
+  deployNewPool,
+  deployNewPoolAndWait,
   // Vault operations
   deposit,
   depositAndWait,
@@ -448,6 +644,7 @@ export {
 // Simulation Functions
 // ============================================================================
 export type {
+  SFPMSimulationResult,
   SimulateClosePositionParams,
   SimulateDepositParams,
   SimulateDispatchParams,
@@ -455,9 +652,11 @@ export type {
   SimulateLiquidateParams,
   SimulateOpenPositionParams,
   SimulateSettleParams,
+  SimulateSFPMParams,
   SimulateWithdrawParams,
 } from './simulations'
 export {
+  encodePoolKeyBytes,
   simulateClosePosition,
   simulateDeposit,
   simulateDispatch,
@@ -465,6 +664,8 @@ export {
   simulateLiquidate,
   simulateOpenPosition,
   simulateSettle,
+  simulateSFPMBurn,
+  simulateSFPMMint,
   simulateWithdraw,
 } from './simulations'
 
@@ -497,6 +698,7 @@ export {
 // ============================================================================
 export type { PoolFormatterConfig, PoolFormatters, TickLimitsResult } from './formatters'
 export {
+  annualizePerSecondRateWad,
   // Pool-bound formatters
   createPoolFormatters,
   formatBlockNumber,
@@ -509,6 +711,8 @@ export {
   formatFeeTier,
   formatGas,
   formatGwei,
+  formatPerSecondRateWadAsAprPct,
+  formatPerSecondRateWadAsApyPct,
   formatPoolIdHex,
   formatPriceRange,
   formatRateWad,
@@ -559,6 +763,8 @@ export {
 export type { PositionGreeksInput, PositionGreeksResult } from './greeks'
 export {
   calculatePositionDelta,
+  // Swap-aware delta
+  calculatePositionDeltaWithSwap,
   calculatePositionGamma,
   calculatePositionGreeks,
   // Position-level greeks
@@ -567,6 +773,8 @@ export {
   getLegGamma,
   // Leg-level greeks
   getLegValue,
+  // Loan helpers
+  getLoanEffectiveDelta,
   // Helpers
   isCall,
   isDefinedRisk,
@@ -637,6 +845,8 @@ export type {
   Pool,
   PoolHealthStatus,
   PoolKey,
+  // Pool config (V3/V4)
+  PoolVersionConfig,
   // Position types
   Position,
   PositionGreeks,
@@ -668,6 +878,8 @@ export type {
   TxResult,
   TxResultWithReceipt,
   Utilization,
+  V3PoolConfig,
+  V4PoolConfig,
   WithdrawEvent,
   WithdrawSimulation,
 } from './types'

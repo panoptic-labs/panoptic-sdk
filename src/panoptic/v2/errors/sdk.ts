@@ -279,11 +279,26 @@ export class MissingPositionIdsError extends PanopticError {
 }
 
 /**
+ * History range parameters are invalid (e.g. startBlock > endBlock, points < 0).
+ */
+export class InvalidHistoryRangeError extends PanopticError {
+  override readonly name = 'InvalidHistoryRangeError'
+}
+
+/**
  * Tick limits are invalid for the given operation.
  *
  * tickLimitLow must be <= tickLimitHigh regardless of swapAtMint.
  * The SDK handles reordering internally based on the swapAtMint flag.
  */
+/**
+ * Generic validation error for public SDK functions.
+ * Thrown when input parameters fail validation checks.
+ */
+export class PanopticValidationError extends PanopticError {
+  override readonly name = 'PanopticValidationError'
+}
+
 export class InvalidTickLimitsError extends PanopticError {
   override readonly name = 'InvalidTickLimitsError'
 

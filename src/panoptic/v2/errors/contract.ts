@@ -294,7 +294,7 @@ export class PriceBoundFailError extends PanopticError {
     public readonly currentTick: bigint,
     cause?: Error,
   ) {
-    super(`Price moved outside slippage bounds: currentTick=${currentTick}`, cause)
+    super(`Price moved outside slippage bounds (currentTick=${currentTick})`, cause)
   }
 }
 
@@ -596,6 +596,21 @@ export class ReentrancyError extends PanopticError {
 
   constructor(cause?: Error) {
     super('Reentrancy detected', cause)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Factory Errors
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Pool deployment via CREATE2 failed.
+ */
+export class CreateFailError extends PanopticError {
+  override readonly name = 'CreateFailError'
+
+  constructor(cause?: Error) {
+    super('Pool deployment failed (CREATE2)', cause)
   }
 }
 

@@ -1718,6 +1718,44 @@ export const panopticQueryAbi = [
   {
     type: 'function',
     inputs: [
+      {
+        name: 'univ3pool',
+        internalType: 'contract IUniswapV3Pool',
+        type: 'address',
+      },
+      { name: 'startTick', internalType: 'int24', type: 'int24' },
+      { name: 'nTicks', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'getTickNetsFromUniswapV3',
+    outputs: [
+      { name: 'tickData', internalType: 'int256[]', type: 'int256[]' },
+      { name: 'liquidityNets', internalType: 'int256[]', type: 'int256[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'manager',
+        internalType: 'contract IPoolManager',
+        type: 'address',
+      },
+      { name: 'poolId', internalType: 'PoolId', type: 'bytes32' },
+      { name: 'tickSpacing', internalType: 'int24', type: 'int24' },
+      { name: 'startTick', internalType: 'int24', type: 'int24' },
+      { name: 'nTicks', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'getTickNetsFromUniswapV4PoolId',
+    outputs: [
+      { name: 'tickData', internalType: 'int256[]', type: 'int256[]' },
+      { name: 'liquidityNets', internalType: 'int256[]', type: 'int256[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
       { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
       { name: 'account', internalType: 'address', type: 'address' },
       { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
@@ -1860,6 +1898,13 @@ export const riskEngineAbi = [
     inputs: [],
     name: 'FORCE_EXERCISE_COST',
     outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'GUARDIAN',
+    outputs: [{ name: '', internalType: 'address', type: 'address' }],
     stateMutability: 'view',
   },
   {
@@ -2110,12 +2155,12 @@ export const riskEngineAbi = [
       },
       {
         name: 'ct0',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
       },
       {
         name: 'ct1',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
       },
     ],
@@ -2162,12 +2207,12 @@ export const riskEngineAbi = [
       { name: 'atTick', internalType: 'int24', type: 'int24' },
       {
         name: 'ct0',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
       },
       {
         name: 'ct1',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
       },
     ],
@@ -2276,12 +2321,12 @@ export const riskEngineAbi = [
       },
       {
         name: 'ct0',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
       },
       {
         name: 'ct1',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
       },
       { name: 'buffer', internalType: 'uint256', type: 'uint256' },
@@ -2302,7 +2347,13 @@ export const riskEngineAbi = [
   },
   {
     type: 'function',
-    inputs: [{ name: 'pool', internalType: 'contract PanopticPool', type: 'address' }],
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
+    ],
     name: 'lockPool',
     outputs: [],
     stateMutability: 'nonpayable',
@@ -2316,7 +2367,13 @@ export const riskEngineAbi = [
   },
   {
     type: 'function',
-    inputs: [{ name: 'pool', internalType: 'contract PanopticPool', type: 'address' }],
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
+    ],
     name: 'unlockPool',
     outputs: [],
     stateMutability: 'nonpayable',

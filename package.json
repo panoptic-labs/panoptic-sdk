@@ -1,6 +1,6 @@
 {
   "name": "@panoptic-eng/sdk",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "repository": {
     "type": "git",
     "url": "https://github.com/panoptic-labs/panoptic-sdk.git"
@@ -15,6 +15,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./v2": {
+      "types": "./dist/panoptic/v2/index.d.ts",
+      "import": "./dist/panoptic/v2/index.js"
+    },
     "./test": {
       "types": "./dist/test/index.d.ts",
       "import": "./dist/test/index.js"
@@ -24,11 +28,11 @@
     "dist"
   ],
   "scripts": {
-    "build": "(pnpm run codegen || echo 'codegen skipped (foundry projects not available)') && pnpm tsdown",
-    "build:ci": "pnpm tsdown",
-    "dev": "pnpm concurrently \"pnpm run codegen --watch\" \"pnpm tsdown --watch\"",
+    "build": "pnpm run codegen:graphql && pnpm tsdown",
+    "build:ci": "pnpm run codegen && pnpm tsdown",
+    "dev": "pnpm concurrently \"pnpm run codegen:graphql --watch\" \"pnpm tsdown --watch\"",
     "typecheck": "tsc --noEmit -p tsconfig.build.json",
-    "lint": "eslint . --ext .ts,.tsx --ignore-pattern 'dist/**' --ignore-pattern 'graphql/**' --ignore-pattern 'src/graphql/**' --max-warnings=0",
+    "lint": "eslint . --ext .ts,.tsx --ignore-pattern 'dist/**' --ignore-pattern 'graphql/**' --ignore-pattern 'src/graphql/**' --ignore-pattern 'lib/**' --max-warnings=0",
     "lint:fix": "pnpm lint --fix",
     "test": "vitest run",
     "test:fork": "vitest run --config src/panoptic/v2/examples/__tests__/vitest.config.fork.ts",
@@ -71,6 +75,7 @@
     "react-dom": "18.3.0-canary-c3048aab4-20240326",
     "tiny-invariant": "^1.3.1",
     "tsdown": "^0.9.0",
+    "tsx": "^4.21.0",
     "typescript": "5.1.6",
     "viem": "^2.41.2",
     "viem-deal": "^2.0.4",
