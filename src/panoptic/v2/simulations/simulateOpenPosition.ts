@@ -4,15 +4,16 @@
  */
 
 import type { Address, PublicClient } from 'viem'
-import { encodeFunctionData } from 'viem'
+import { decodeFunctionResult, encodeFunctionData } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients'
 import { PanopticError } from '../errors'
 import { calculatePositionGreeks } from '../greeks'
 import { getPool } from '../reads/pool'
 import { decodeTokenId } from '../tokenId/decode'
 import type { OpenPositionSimulation, SimulationResult } from '../types'
+import { decodeLeftRightUnsigned } from '../writes/utils'
 import { simulateWithTokenFlow } from './tokenFlow'
 
 /**
@@ -135,7 +136,7 @@ export async function simulateOpenPosition(
 
     // Encode dispatch call data
     const callData = encodeFunctionData({
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       functionName: 'dispatch',
       args: [
         positionIdList,
@@ -148,6 +149,13 @@ export async function simulateOpenPosition(
       ],
     })
 
+    // Encode getFullPositionsData to run post-dispatch in the same multicall
+    const getFullPositionsDataCallData = encodeFunctionData({
+      abi: panopticPoolV2Abi,
+      functionName: 'getFullPositionsData',
+      args: [account, false, finalPositionIdList],
+    })
+
     // Simulate with token flow measurement using PanopticPool.multicall + getAssetsOf
     const flowResult = await simulateWithTokenFlow({
       client,
@@ -155,6 +163,7 @@ export async function simulateOpenPosition(
       user: account,
       callData,
       blockNumber: targetBlockNumber,
+      postCallData: [getFullPositionsDataCallData],
     })
 
     if (!flowResult.success || !flowResult.tokenFlow) {
@@ -164,6 +173,34 @@ export async function simulateOpenPosition(
     }
 
     const tokenFlow = flowResult.tokenFlow
+
+    // Decode post-mint collateral requirements from getFullPositionsData result
+    let postMintCollateralReqToken0 = 0n
+    let postMintCollateralReqToken1 = 0n
+    const perPositionCollateralReqs: { token0: bigint; token1: bigint }[] = []
+    if (flowResult.postCallResults?.[0]) {
+      try {
+        const decoded = decodeFunctionResult({
+          abi: panopticPoolV2Abi,
+          functionName: 'getFullPositionsData',
+          data: flowResult.postCallResults[0],
+        })
+        // Result: [shortPremium, longPremium, balances[], collateralReqs[], netPremia[]]
+        const collateralReqs = decoded[3]
+        if (collateralReqs.length > 0) {
+          // Each entry is a LeftRightUnsigned: right=token0, left=token1
+          // Sum across all positions in finalPositionIdList
+          for (const packed of collateralReqs) {
+            const req = decodeLeftRightUnsigned(packed)
+            postMintCollateralReqToken0 += req.right
+            postMintCollateralReqToken1 += req.left
+            perPositionCollateralReqs.push({ token0: req.right, token1: req.left })
+          }
+        }
+      } catch {
+        // Decode failure — leave at 0n
+      }
+    }
 
     // Decode tokenId to get legs and tick spacing
     const decoded = decodeTokenId(tokenId)
@@ -178,7 +215,7 @@ export async function simulateOpenPosition(
       try {
         const pool = await getPool({ client, poolAddress, chainId, blockNumber: targetBlockNumber })
         currentTick = pool.currentTick
-        poolTickSpacing = pool.poolKey.tickSpacing
+        poolTickSpacing = pool.tickSpacing
         utilization0 = pool.collateralTracker0.utilization
         utilization1 = pool.collateralTracker1.utilization
       } catch {
@@ -228,8 +265,9 @@ export async function simulateOpenPosition(
       amount1Required,
       postCollateral0: tokenFlow.balanceAfter0,
       postCollateral1: tokenFlow.balanceAfter1,
-      postMarginExcess0: null, // Requires PanopticQuery.checkCollateral
-      postMarginExcess1: null,
+      postMintCollateralReqToken0,
+      postMintCollateralReqToken1,
+      perPositionCollateralReqs,
       commission0: null, // Embedded in contract logic, not extractable from token flow
       commission1: null,
     }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Address } from 'viem'
 import { maxUint256, zeroAddress } from 'viem'
 import {
@@ -14,12 +14,17 @@ import { isErrorUserRejection, parseCustomError } from '../../../errors/ethereum
 import type { BaseContractWriteHookOutput } from '../../../types/baseContractWriteHookOutput'
 import { getRequestDepositContractConfig } from '../requestDeposit'
 
+const APPROVAL_SYNC_POLL_INTERVAL_MS = 1200
+const APPROVAL_SYNC_MAX_ATTEMPTS = 20
+
 export const useRequestDeposit = ({
+  chainId,
   vaultAddress,
   assets,
   tokenAddress,
   onWaitSuccess,
 }: {
+  chainId?: number
   vaultAddress: Address
   assets: bigint
   tokenAddress: Address
@@ -33,6 +38,7 @@ export const useRequestDeposit = ({
     vaultAddress !== zeroAddress
 
   const allowanceRead = useReadContract({
+    chainId,
     address: canReadAllowance ? tokenAddress : undefined,
     abi: Erc20Abi,
     functionName: 'allowance',
@@ -42,21 +48,21 @@ export const useRequestDeposit = ({
     },
   })
 
-  const tokenNeedsApproval =
-    canReadAllowance &&
-    !allowanceRead.isFetching &&
-    (allowanceRead.data === undefined || allowanceRead.data < assets)
+  const allowanceKnown = allowanceRead.data !== undefined
+
+  const tokenNeedsApproval = canReadAllowance && allowanceKnown && allowanceRead.data < assets
 
   const refetchAllowance = allowanceRead.refetch
 
   const approveSimulate = useSimulateContract({
+    chainId,
     address: tokenAddress,
     abi: Erc20Abi,
     functionName: 'approve',
     args: [vaultAddress, maxUint256],
     account,
     query: {
-      enabled: tokenNeedsApproval && assets > 0n && account != null,
+      enabled: allowanceKnown && tokenNeedsApproval && assets > 0n && account != null,
       retry: false,
     },
   })
@@ -64,6 +70,7 @@ export const useRequestDeposit = ({
   const approveWrite = useWriteContract()
 
   const approveWait = useWaitForTransactionReceipt({
+    chainId,
     hash: approveWrite.data,
     query: {
       refetchOnWindowFocus: false,
@@ -72,10 +79,12 @@ export const useRequestDeposit = ({
   })
 
   const simulate = useSimulateContract({
+    chainId,
     ...getRequestDepositContractConfig({ vaultAddress, assets }),
     account,
     query: {
       enabled:
+        allowanceKnown &&
         !tokenNeedsApproval &&
         assets > 0n &&
         vaultAddress !== zeroAddress &&
@@ -88,6 +97,7 @@ export const useRequestDeposit = ({
   const write = useWriteContract()
 
   const wait = useWaitForTransactionReceipt({
+    chainId,
     hash: write.data,
     query: {
       refetchOnWindowFocus: false,
@@ -97,6 +107,8 @@ export const useRequestDeposit = ({
 
   const handledApproveHashRef = useRef<`0x${string}` | undefined>(undefined)
   const handledRequestHashRef = useRef<`0x${string}` | undefined>(undefined)
+  const approvalSyncAttemptCountRef = useRef(0)
+  const [isApprovalSyncing, setIsApprovalSyncing] = useState(false)
 
   useEffect(() => {
     const approveHash = approveWrite.data
@@ -108,8 +120,33 @@ export const useRequestDeposit = ({
     }
 
     handledApproveHashRef.current = approveHash
+    approvalSyncAttemptCountRef.current = 0
+    setIsApprovalSyncing(true)
     void refetchAllowance()
   }, [approveWait.isSuccess, approveWrite.data, refetchAllowance])
+
+  useEffect(() => {
+    if (!isApprovalSyncing) {
+      return
+    }
+    if (!tokenNeedsApproval) {
+      setIsApprovalSyncing(false)
+      return
+    }
+    if (approvalSyncAttemptCountRef.current >= APPROVAL_SYNC_MAX_ATTEMPTS) {
+      setIsApprovalSyncing(false)
+      return
+    }
+
+    const timeoutId = setTimeout(() => {
+      approvalSyncAttemptCountRef.current += 1
+      void refetchAllowance()
+    }, APPROVAL_SYNC_POLL_INTERVAL_MS)
+
+    return () => {
+      clearTimeout(timeoutId)
+    }
+  }, [isApprovalSyncing, tokenNeedsApproval, refetchAllowance])
 
   useEffect(() => {
     const requestHash = write.data
@@ -125,6 +162,9 @@ export const useRequestDeposit = ({
   }, [onWaitSuccess, wait.isSuccess, write.data])
 
   const act = useCallback(() => {
+    if (isApprovalSyncing) {
+      return undefined
+    }
     if (tokenNeedsApproval) {
       const request = approveSimulate.data?.request
       return request != null ? approveWrite.writeContract(request) : undefined
@@ -135,11 +175,15 @@ export const useRequestDeposit = ({
     tokenNeedsApproval,
     approveSimulate.data?.request,
     approveWrite,
+    isApprovalSyncing,
     simulate.data?.request,
     write,
   ])
 
   const actionLabel = useMemo(() => {
+    if (isApprovalSyncing) {
+      return 'Approval confirmed. Syncing allowance...'
+    }
     if (tokenNeedsApproval) {
       if (approveSimulate.isLoading) {
         return 'Simulating approval...'
@@ -157,6 +201,7 @@ export const useRequestDeposit = ({
     }
     return 'Request Deposit'
   }, [
+    isApprovalSyncing,
     tokenNeedsApproval,
     approveSimulate.isLoading,
     approveWrite.isPending,
@@ -167,6 +212,7 @@ export const useRequestDeposit = ({
   ])
 
   const isLoading =
+    isApprovalSyncing ||
     (tokenNeedsApproval &&
       (approveSimulate.isLoading || approveWrite.isPending || approveWait.isLoading)) ||
     (!tokenNeedsApproval && (simulate.isLoading || write.isPending || wait.isLoading))

@@ -41,7 +41,7 @@ describe('buildManagerInputAtBlock', () => {
       }),
     )
 
-    const [managerPrices, poolInfos, tokenIds] = decodeAbiParameters(
+    const [managerPrices, poolInfos, tokenIds, erc4626Vaults] = decodeAbiParameters(
       PanopticVaultAccountantManagerInputAbi,
       managerInput,
     )
@@ -53,5 +53,26 @@ describe('buildManagerInputAtBlock', () => {
     })
     expect(poolInfos[0].pool.toLowerCase()).toBe('0x2aafc1d2af4deb9fd8b02cde5a8c0922ca4d6c78')
     expect(tokenIds).toEqual([[]])
+    expect(erc4626Vaults).toEqual([])
+  })
+
+  it('throws when tokenIds length does not align with poolInfos length', async () => {
+    await expect(
+      buildManagerInputAtBlock({
+        viemClient: {} as Client,
+        poolInfos: [
+          {
+            maxPriceDeviation: 100,
+            pool: '0x2aafC1D2Af4dEB9FD8b02cDE5a8C0922cA4D6c78',
+            token0: '0x0000000000000000000000000000000000000000',
+            token1: '0xFFFeD8254566B7F800f6D8CDb843ec75AE49B07A',
+          },
+        ],
+        tokenIds: [],
+        underlyingToken: '0x4200000000000000000000000000000000000006',
+        wethAddress: '0x4200000000000000000000000000000000000006',
+        blockNumber: 42n,
+      }),
+    ).rejects.toThrow('Invalid managerInput tokenIds length')
   })
 })

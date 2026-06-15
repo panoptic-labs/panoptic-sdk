@@ -12,7 +12,7 @@
 
 import type { Address, PublicClient } from 'viem'
 
-import { collateralTrackerAbi, panopticPoolAbi } from '../../../generated'
+import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import { panopticQueryAbi } from '../abis/panopticQuery'
 import { getBlockMeta } from '../clients/blockMeta'
 import type {
@@ -22,6 +22,7 @@ import type {
   BlockMeta,
   LiquidationPrices,
   NetLiquidationValue,
+  NetLiquidationValues,
   TokenCollateral,
 } from '../types'
 import { isLiquidatable } from './checks'
@@ -106,12 +107,12 @@ export async function getAccountCollateral(
       contracts: [
         {
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           functionName: 'collateralToken0',
         },
         {
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           functionName: 'collateralToken1',
         },
       ],
@@ -128,45 +129,45 @@ export async function getAccountCollateral(
         // Token 0 collateral data
         {
           address: collateralToken0,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'balanceOf',
           args: [account],
         },
         {
           address: collateralToken0,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'assetsOf',
           args: [account],
         },
         {
           address: collateralToken0,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'maxWithdraw',
           args: [account],
         },
         // Token 1 collateral data
         {
           address: collateralToken1,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'balanceOf',
           args: [account],
         },
         {
           address: collateralToken1,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'assetsOf',
           args: [account],
         },
         {
           address: collateralToken1,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'maxWithdraw',
           args: [account],
         },
         // Leg count from pool
         {
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           functionName: 'numberOfLegs',
           args: [account],
         },
@@ -487,7 +488,7 @@ export async function getNetLiquidationValue(
       : client
           .readContract({
             address: poolAddress,
-            abi: panopticPoolAbi,
+            abi: panopticPoolV2Abi,
             functionName: 'getCurrentTick',
             blockNumber: targetBlockNumber,
           })
@@ -512,6 +513,96 @@ export async function getNetLiquidationValue(
     value1,
     atTick: effectiveTick,
     includedPendingPremium: includePendingPremium,
+    _meta,
+  }
+}
+
+/**
+ * Parameters for getNetLiquidationValues (batch/multi-tick).
+ */
+export interface GetNetLiquidationValuesParams {
+  /** viem PublicClient */
+  client: PublicClient
+  /** PanopticPool address */
+  poolAddress: Address
+  /** Account address */
+  account: Address
+  /** TokenIds of open positions */
+  tokenIds: bigint[]
+  /** Ticks to calculate NLV at */
+  atTicks: bigint[]
+  /** Optional: Whether to include pending premium */
+  includePendingPremium?: boolean
+  /** PanopticQuery address (required) */
+  queryAddress: Address
+  /** Optional block number for historical queries */
+  blockNumber?: bigint
+  /** Optional pre-fetched block metadata (skips getBlockMeta RPC call) */
+  _meta?: BlockMeta
+}
+
+/**
+ * Get net liquidation values at multiple ticks in a single contract call.
+ *
+ * Uses the `int24[]` overload of `getNetLiquidationValue` on PanopticQuery.
+ *
+ * @param params - The parameters
+ * @returns Net liquidation values with block metadata
+ */
+export async function getNetLiquidationValues(
+  params: GetNetLiquidationValuesParams,
+): Promise<NetLiquidationValues> {
+  const {
+    client,
+    poolAddress,
+    account,
+    tokenIds,
+    atTicks,
+    includePendingPremium = true,
+    queryAddress,
+    blockNumber,
+  } = params
+
+  const targetBlockNumber =
+    blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
+
+  // Use an isolated ABI with only the int24[] overload to avoid viem overload ambiguity
+  const batchNlvAbi = [
+    {
+      type: 'function' as const,
+      name: 'getNetLiquidationValue' as const,
+      inputs: [
+        { name: 'pool', type: 'address' as const },
+        { name: 'account', type: 'address' as const },
+        { name: 'includePendingPremium', type: 'bool' as const },
+        { name: 'positionIdList', type: 'uint256[]' as const },
+        { name: 'atTicks', type: 'int24[]' as const },
+      ],
+      outputs: [
+        { name: 'value0', type: 'int256[]' as const },
+        { name: 'value1', type: 'int256[]' as const },
+      ],
+      stateMutability: 'view' as const,
+    },
+  ] as const
+
+  const [result, _meta] = await Promise.all([
+    client.readContract({
+      address: queryAddress,
+      abi: batchNlvAbi,
+      functionName: 'getNetLiquidationValue',
+      args: [poolAddress, account, includePendingPremium, tokenIds, atTicks.map((t) => Number(t))],
+      blockNumber: targetBlockNumber,
+    }),
+    params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
+  ])
+
+  const [values0, values1] = result
+
+  return {
+    values0: [...values0],
+    values1: [...values1],
+    atTicks,
     _meta,
   }
 }

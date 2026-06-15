@@ -1,6 +1,8 @@
 import type { Address, Hex } from 'viem'
 
-export const vegoid = 4
+import { DEFAULT_VEGOID } from '../tokenId/constants'
+
+export const vegoid = Number(DEFAULT_VEGOID)
 
 export interface LegParams {
   index: number

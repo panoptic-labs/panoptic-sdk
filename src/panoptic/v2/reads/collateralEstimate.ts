@@ -10,7 +10,7 @@
 import type { Address, PublicClient } from 'viem'
 import { encodeFunctionData } from 'viem'
 
-import { collateralTrackerAbi, panopticPoolAbi } from '../../../generated'
+import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import { panopticQueryAbi } from '../abis/panopticQuery'
 import { getBlockMeta } from '../clients/blockMeta'
 import { PanopticError } from '../errors'
@@ -80,11 +80,11 @@ export async function estimateCollateralRequired(
   } else {
     const currentTickResult = await client.readContract({
       address: poolAddress,
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       functionName: 'getCurrentTick',
       blockNumber: targetBlockNumber,
     })
-    // Bridge type from panopticPoolAbi (number | bigint) to bigint
+    // Bridge type from panopticPoolV2Abi (number | bigint) to bigint
     effectiveTick = BigInt(currentTickResult)
   }
 
@@ -360,7 +360,7 @@ async function tryDispatchSimulation(params: {
 
     // Encode dispatch call
     const callData = encodeFunctionData({
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       functionName: 'dispatch',
       args: [
         [tokenId],
@@ -375,7 +375,7 @@ async function tryDispatchSimulation(params: {
     // Use PanopticPool.multicall to simulate
     await client.simulateContract({
       address: poolAddress,
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       functionName: 'multicall',
       args: [[callData]],
       account,
@@ -479,7 +479,7 @@ export async function getRequiredCreditForITM(
   // Encode dispatch call with swapAtMint=true (descending tickLimits)
   // Descending order (MAX_TICK > MIN_TICK) triggers SFPM swap, giving single-sided token flow
   const callData = encodeFunctionData({
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: 'dispatch',
     args: [
       [tokenId], // positionIdList: positions being minted
@@ -569,7 +569,7 @@ export async function getMaxWithdrawable(
     // No positions: use the standard maxWithdraw
     const maxWithdraw = await client.readContract({
       address: collateralTrackerAddress,
-      abi: collateralTrackerAbi,
+      abi: collateralTrackerV2Abi,
       functionName: 'maxWithdraw',
       args: [account],
     })
@@ -625,7 +625,7 @@ async function tryWithdrawSimulation(params: {
   try {
     await client.estimateContractGas({
       address: collateralTrackerAddress,
-      abi: collateralTrackerAbi,
+      abi: collateralTrackerV2Abi,
       functionName: 'withdraw',
       args: [assets, account, account, positionIdList, usePremiaAsCollateral],
       account,

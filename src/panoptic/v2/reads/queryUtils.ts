@@ -9,7 +9,7 @@
 
 import type { Address, PublicClient } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { panopticQueryAbi } from '../abis/panopticQuery'
 import { getBlockMeta } from '../clients/blockMeta'
 import type { BlockMeta } from '../types'
@@ -76,7 +76,7 @@ export async function getPortfolioValue(params: GetPortfolioValueParams): Promis
       : client
           .readContract({
             address: poolAddress,
-            abi: panopticPoolAbi,
+            abi: panopticPoolV2Abi,
             functionName: 'getCurrentTick',
             blockNumber: targetBlockNumber,
           })
@@ -255,11 +255,11 @@ export async function optimizeTokenIdRiskPartners(
   } else {
     const currentTickResult = await client.readContract({
       address: poolAddress,
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       functionName: 'getCurrentTick',
       blockNumber: targetBlockNumber,
     })
-    // Bridge type from panopticPoolAbi (number | bigint) to bigint
+    // Bridge type from panopticPoolV2Abi (number | bigint) to bigint
     effectiveTick = BigInt(currentTickResult)
   }
 

@@ -82,71 +82,41 @@ function getLegValueWidth0(
   qStrikeTick: bigint,
   qMintTick: bigint,
   isAssetToken0: boolean,
-  definedRisk: boolean,
+  _definedRisk: boolean,
 ): bigint {
-  // Base value: below or above strike
-  let v: bigint
-  if (qCurrentTick <= qStrikeTick) {
-    // At or below strike: v = m * P
-    const sqrtP = tickToSqrtPriceX96(qCurrentTick)
-    const PX192 = sqrtP * sqrtP
-    v = divTrunc(m * PX192, Q192)
-  } else {
-    // Above strike: v = m * K
-    const sqrtK = tickToSqrtPriceX96(qStrikeTick)
-    const KX192 = sqrtK * sqrtK
-    v = divTrunc(m * KX192, Q192)
+  // For loan/credit legs (width=0), value depends on the borrowed token.
+  // m > 0 for loans (isLong=false), m < 0 for credits (isLong=true).
+  const borrowsAsset = isCall(leg.tokenType, isAssetToken0)
+
+  // When leg.asset !== leg.tokenType, positionSize is in leg.asset units and
+  // the borrowed notional is encoded via leg.strike: notional_tokenType_raw =
+  // positionSize_raw × 1.0001^strike (a raw-to-raw ratio, unquoted by pool direction).
+  // When leg.asset === leg.tokenType, m is already the notional (old convention).
+  const scaleByStrike = leg.asset !== leg.tokenType
+  let notional = m
+  if (scaleByStrike) {
+    // The UI stores strike with a sign that depends on leg.asset:
+    //   priceTokenTypePerAsset = 1.0001^(leg.asset === 0 ? strike : -strike)
+    // Mirror that here so K_raw matches the intended notional scaling.
+    const signedStrike = leg.asset === 0n ? leg.strike : -leg.strike
+    const sqrtKraw = tickToSqrtPriceX96(signedStrike)
+    const KrawX192 = sqrtKraw * sqrtKraw
+    notional = divTrunc(m * KrawX192, Q192)
   }
 
-  const debt = -m
-  const isPut = !isCall(leg.tokenType, isAssetToken0)
-
-  // ITM adjustment: width=0 means range is a point, so mint tick is either below or above
-  let itm: bigint
-  if (isPut) {
-    if (qMintTick <= qStrikeTick) {
-      // Below or at strike: itm = (K - Pm) * m
-      const sqrtK = tickToSqrtPriceX96(qStrikeTick)
-      const sqrtPm = tickToSqrtPriceX96(qMintTick)
-      const KX192 = sqrtK * sqrtK
-      const PmX192 = sqrtPm * sqrtPm
-      itm = divTrunc(m * (KX192 - PmX192), Q192)
-    } else {
-      itm = 0n
-    }
+  if (borrowsAsset) {
+    // Asset loan/credit: debt PnL = -notional*(P - Pm); crosses y=0 at mint price, delta=-notional.
+    const sqrtP = tickToSqrtPriceX96(qCurrentTick)
+    const sqrtPm = tickToSqrtPriceX96(qMintTick)
+    const PX192 = sqrtP * sqrtP
+    const PmX192 = sqrtPm * sqrtPm
+    return divTrunc(-notional * (PX192 - PmX192), Q192)
   } else {
-    if (qMintTick <= qStrikeTick) {
-      itm = 0n
-    } else {
-      // Above strike: itm = (1 - K/Pm) * m
-      const sqrtK = tickToSqrtPriceX96(qStrikeTick)
-      const sqrtPm = tickToSqrtPriceX96(qMintTick)
-      const KX192 = sqrtK * sqrtK
-      const PmX192 = sqrtPm * sqrtPm
-      itm = divTrunc(m * (PmX192 - KX192), PmX192)
-    }
-  }
-
-  // Final result
-  if (isPut) {
+    // Numeraire loan/credit: debt is flat in price (constant numeraire obligation).
+    if (scaleByStrike) return -notional
     const sqrtK = tickToSqrtPriceX96(qStrikeTick)
     const KX192 = sqrtK * sqrtK
-    const debtK = divTrunc(debt * KX192, Q192)
-    return debtK + v + itm
-  } else {
-    const sqrtP = tickToSqrtPriceX96(qCurrentTick)
-    const PX192 = sqrtP * sqrtP
-    const debtP = divTrunc(debt * PX192, Q192)
-
-    if (definedRisk) {
-      const sqrtPm = tickToSqrtPriceX96(qMintTick)
-      const PmX192 = sqrtPm * sqrtPm
-      const itmPm = divTrunc(itm * PmX192, Q192)
-      return debtP + v + itmPm
-    } else {
-      const itmP = divTrunc(itm * PX192, Q192)
-      return debtP + v + itmP
-    }
+    return divTrunc(-m * KX192, Q192)
   }
 }
 
@@ -218,7 +188,6 @@ export function getLegValue(
   const m = leg.isLong ? -(positionSize * leg.optionRatio) : positionSize * leg.optionRatio
 
   // Width=0 (loans/credits): single-tick position, no range to integrate over.
-  // Use below/above-range formulas directly to avoid divide-by-zero in the in-range branch.
   if (halfWidthTick === 0n) {
     return getLegValueWidth0(
       leg,
@@ -381,7 +350,14 @@ export function getLegDelta(
   // Debt-side exposure only — no option-like piecewise formula.
   if (leg.width === 0n) {
     const borrowsAsset = isAssetToken0 ? leg.tokenType === 0n : leg.tokenType === 1n
-    return borrowsAsset ? -m : 0n
+    if (!borrowsAsset) return 0n
+    // See getLegValueWidth0 for the notional-scaling rationale.
+    if (leg.asset === leg.tokenType) return -m
+    const signedStrike = leg.asset === 0n ? leg.strike : -leg.strike
+    const sqrtKraw = tickToSqrtPriceX96(signedStrike)
+    const KrawX192 = sqrtKraw * sqrtKraw
+    const notional = divTrunc(m * KrawX192, Q192)
+    return -notional
   }
 
   // Narrow option whose halfWidth rounds to 0: use option-like width=0 branch

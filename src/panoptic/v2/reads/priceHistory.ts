@@ -77,7 +77,8 @@ export async function getPriceHistory(params: GetPriceHistoryParams): Promise<Pr
     return { snapshots: [], _meta }
   }
 
-  // Fire one slot0 read per block — viem auto-batches into multicall
+  // Fire one slot0 read per block. Calls at different historical blocks cannot
+  // be coalesced into one multicall, so callers should not poll this path.
   const slot0Requests = blockNumbers.map((bn) => fetchSlot0(client, bn, poolConfig))
 
   const [slot0Results, _meta] = await Promise.all([

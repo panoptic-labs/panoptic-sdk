@@ -18,6 +18,12 @@ import type { Address, Chain, Hex, PublicClient, WalletClient } from 'viem'
 import { parseAbi } from 'viem'
 import { mainnet, sepolia } from 'viem/chains'
 
+import {
+  getEthUsdcMarket,
+  requireChainDeployment,
+  SEPOLIA_CHAIN_ID,
+} from '../../../../hypoVault/chainDeployments'
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -99,28 +105,31 @@ export interface NetworkConfig {
 // Network Configurations
 // ============================================================================
 
+const sepoliaDeployment = requireChainDeployment(SEPOLIA_CHAIN_ID)
+const sepoliaMarket = getEthUsdcMarket(sepoliaDeployment)
+
 const SEPOLIA_CONFIG: NetworkConfig = {
   network: 'sepolia',
   chain: sepolia,
   chainId: 11155111n,
   forkUrl: process.env.SEPOLIA_RPC_URL || '',
   contracts: {
-    semifungiblePositionManager: '0xad822a8a72A3e190B177AAA43147B99e40A5FB77',
-    builderFactory: '0x10a6bAba70263E68d22d0b16e520dF8E13fd9752',
-    riskEngine: '0xb084501a2aA16e07bFb93780a442F0988cB6AB8f',
-    panopticPoolImpl: '0x2638B024380681ac47Dbd528c807b6FA2E0B1D4C',
-    collateralTrackerImpl: '0x0E3E818092B529b229a6836AbcC2B0903622cB43',
-    panopticFactory: '0x7aA44F10019ed23c9C2178eC4D1A4bfF7Cda773A',
-    panopticHelper: '0x4F87E4f90EA94Cd26E15dc5928bA9a7BA02C7588',
-    panopticQuery: '0x7e119d73d572F22f1F4cbDaEFe6170BAD4c3Ed30',
+    semifungiblePositionManager: sepoliaDeployment.panoptic.v2.semiFungiblePositionManagerV4,
+    builderFactory: sepoliaDeployment.panoptic.v2.builderFactory,
+    riskEngine: sepoliaDeployment.panoptic.v2.riskEngine,
+    panopticPoolImpl: sepoliaDeployment.panoptic.v2.panopticPoolImplementation,
+    collateralTrackerImpl: sepoliaDeployment.panoptic.v2.collateralTrackerImplementation,
+    panopticFactory: sepoliaDeployment.panoptic.v2.panopticFactoryV4,
+    panopticHelper: sepoliaDeployment.panoptic.v2.panopticHelper,
+    panopticQuery: sepoliaDeployment.panoptic.v2.panopticQuery,
     pool: {
-      address: '0x5D44F6574B8dE88ffa2CCAEba0B07aD3C204571E',
-      token0: '0x0000000000000000000000000000000000000000', // Native ETH
-      token1: '0xFFFeD8254566B7F800f6D8CDb843ec75AE49B07A', // USDC
-      fee: 500,
-      tickSpacing: 10,
-      collateralTracker0: '0x4d2579A5F9BC32641D6AdbFC47C6dAceF30027F1',
-      collateralTracker1: '0xe2BD879109f84313AC986B2390110F5A240a9fa9',
+      address: sepoliaDeployment.panoptic.pool.panopticPool,
+      token0: sepoliaMarket.currency0, // Native ETH
+      token1: sepoliaMarket.currency1, // USDC
+      fee: sepoliaMarket.fee,
+      tickSpacing: sepoliaMarket.tickSpacing,
+      collateralTracker0: sepoliaDeployment.panoptic.pool.collateralTracker0,
+      collateralTracker1: sepoliaDeployment.panoptic.pool.collateralTracker1,
     },
   },
   tokens: {

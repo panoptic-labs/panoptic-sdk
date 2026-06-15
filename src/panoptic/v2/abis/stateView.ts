@@ -40,4 +40,11 @@ export const stateViewAbi = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [{ internalType: 'PoolId', name: 'poolId', type: 'bytes32' }],
+    name: 'getLiquidity',
+    outputs: [{ internalType: 'uint128', name: 'liquidity', type: 'uint128' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const

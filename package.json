@@ -1,6 +1,6 @@
 {
   "name": "@panoptic-eng/sdk",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "repository": {
     "type": "git",
     "url": "https://github.com/panoptic-labs/panoptic-sdk.git"
@@ -19,6 +19,14 @@
       "types": "./dist/panoptic/v2/index.d.ts",
       "import": "./dist/panoptic/v2/index.js"
     },
+    "./uniswap": {
+      "types": "./dist/uniswap/index.d.ts",
+      "import": "./dist/uniswap/index.js"
+    },
+    "./cow": {
+      "types": "./dist/cow/index.d.ts",
+      "import": "./dist/cow/index.js"
+    },
     "./test": {
       "types": "./dist/test/index.d.ts",
       "import": "./dist/test/index.js"
@@ -28,8 +36,10 @@
     "dist"
   ],
   "scripts": {
-    "build": "pnpm run codegen:graphql && pnpm tsdown",
-    "build:ci": "pnpm run codegen && pnpm tsdown",
+    "check:no-src-dts": "node ./scripts/check-no-src-dts.mjs",
+    "clean:tsbuildinfo": "node -e \"require('fs').rmSync('tsconfig.tsbuildinfo',{force:true})\"",
+    "build": "pnpm run check:no-src-dts && pnpm run clean:tsbuildinfo && pnpm run codegen:graphql && node ./scripts/tsdown-with-retry.mjs",
+    "build:ci": "pnpm run check:no-src-dts && pnpm run clean:tsbuildinfo && pnpm run codegen && pnpm tsdown",
     "dev": "pnpm concurrently \"pnpm run codegen:graphql --watch\" \"pnpm tsdown --watch\"",
     "typecheck": "tsc --noEmit -p tsconfig.build.json",
     "lint": "eslint . --ext .ts,.tsx --ignore-pattern 'dist/**' --ignore-pattern 'graphql/**' --ignore-pattern 'src/graphql/**' --ignore-pattern 'lib/**' --max-warnings=0",
@@ -39,13 +49,15 @@
     "test:fork:watch": "vitest watch --config src/panoptic/v2/examples/__tests__/vitest.config.fork.ts",
     "test:examples": "pnpm test && pnpm test:fork",
     "codegen": "pnpm run codegen:graphql && pnpm run codegen:wagmi",
-    "codegen:graphql": "graphql-codegen-esm --config ./codegen.ts",
-    "codegen:wagmi": "wagmi generate",
+    "codegen:graphql": "node ./scripts/run-graphql-codegen.mjs",
+    "codegen:wagmi": "wagmi generate && eslint src/generated.ts --fix",
     "sync-contracts": "./scripts/sync-contracts.sh",
+    "gen:xstock-wrappers": "tsx scripts/gen-xstock-wrappers.ts",
     "prepack": "pnpm build",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
+    "@panoptic-eng/deployments": "workspace:*",
     "graphql": "^16.12.0",
     "graphql-request": "^7.3.1",
     "graphql-tag": "^2.12.6",

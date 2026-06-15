@@ -6,7 +6,13 @@
 /**
  * Default vegoid value used in pool ID encoding.
  */
-export const DEFAULT_VEGOID = 4n
+export const DEFAULT_VEGOID = 8n
+
+/**
+ * Default MAX_SPREAD value (90_000 = 9 * 10_000).
+ * On-chain: removed/net ratio cap, in units of 1/10_000.
+ */
+export const DEFAULT_MAX_SPREAD = 90_000n
 
 /**
  * Standard tick widths matching DTE gamma profiles.

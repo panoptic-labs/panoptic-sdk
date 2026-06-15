@@ -866,6 +866,11 @@ export const CollateralTrackerAbi = [
         type: 'uint256[]',
         internalType: 'TokenId[]',
       },
+      {
+        name: 'usePremiaAsCollateral',
+        type: 'bool',
+        internalType: 'bool',
+      },
     ],
     outputs: [
       {

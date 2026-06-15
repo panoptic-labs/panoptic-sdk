@@ -6,7 +6,7 @@
 
 import type { Address, PublicClient } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { tickToPriceDecimalScaled } from '../formatters/tick'
 
 export interface GetNativeTokenPriceParams {
@@ -32,7 +32,7 @@ export async function getNativeTokenPrice(params: GetNativeTokenPriceParams): Pr
 
   const currentTick = await client.readContract({
     address: panopticPoolAddress,
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: 'getCurrentTick',
   })
 

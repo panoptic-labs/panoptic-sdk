@@ -12,7 +12,7 @@
 
 import type { Address, PublicClient } from 'viem'
 
-import { collateralTrackerAbi, panopticPoolAbi } from '../../../generated'
+import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients/blockMeta'
 import type { BlockMeta, CollateralTracker, CurrentRates } from '../types'
 
@@ -93,17 +93,17 @@ export async function getCollateralData(
         contracts: [
           {
             address: trackerMetadata.address,
-            abi: collateralTrackerAbi,
+            abi: collateralTrackerV2Abi,
             functionName: 'getPoolData',
           },
           {
             address: trackerMetadata.address,
-            abi: collateralTrackerAbi,
+            abi: collateralTrackerV2Abi,
             functionName: 'totalSupply',
           },
           {
             address: trackerMetadata.address,
-            abi: collateralTrackerAbi,
+            abi: collateralTrackerV2Abi,
             functionName: 'interestRate',
           },
         ],
@@ -115,6 +115,7 @@ export async function getCollateralData(
 
     const [poolData, totalShares, interestRate] = dynamicResults
     const [depositedAssets, insideAMM, creditedShares, utilization] = poolData
+    const totalAssets = depositedAssets + insideAMM
 
     const borrowRate = BigInt(interestRate) * SECONDS_PER_YEAR
     const supplyRate = (borrowRate * utilization) / 10000n
@@ -124,7 +125,7 @@ export async function getCollateralData(
       token: trackerMetadata.assetAddress,
       symbol: trackerMetadata.symbol,
       decimals: trackerMetadata.decimals,
-      totalAssets: depositedAssets,
+      totalAssets,
       insideAMM,
       creditedShares,
       totalShares,
@@ -139,7 +140,7 @@ export async function getCollateralData(
   // 1. Get tracker address (static)
   const collateralTrackerAddress = await client.readContract({
     address: poolAddress,
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: tokenIndex === 0 ? 'collateralToken0' : 'collateralToken1',
   })
 
@@ -149,22 +150,22 @@ export async function getCollateralData(
       contracts: [
         {
           address: collateralTrackerAddress,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'asset',
         },
         {
           address: collateralTrackerAddress,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'getPoolData',
         },
         {
           address: collateralTrackerAddress,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'totalSupply',
         },
         {
           address: collateralTrackerAddress,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'interestRate',
         },
       ],
@@ -195,6 +196,7 @@ export async function getCollateralData(
 
   // poolData returns: (depositedAssets, insideAMM, creditedShares, currentPoolUtilization)
   const [depositedAssets, insideAMM, creditedShares, utilization] = poolData
+  const totalAssets = depositedAssets + insideAMM
 
   // Annualize rates: interestRate() returns WAD/s
   const borrowRate = BigInt(interestRate) * SECONDS_PER_YEAR
@@ -205,7 +207,7 @@ export async function getCollateralData(
     token: assetAddress,
     symbol,
     decimals: BigInt(decimals),
-    totalAssets: depositedAssets,
+    totalAssets,
     insideAMM,
     creditedShares,
     totalShares,
@@ -271,12 +273,12 @@ export async function getCurrentRates(params: GetCurrentRatesParams): Promise<Cu
       contracts: [
         {
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           functionName: 'collateralToken0',
         },
         {
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           functionName: 'collateralToken1',
         },
       ],
@@ -292,22 +294,22 @@ export async function getCurrentRates(params: GetCurrentRatesParams): Promise<Cu
       contracts: [
         {
           address: collateralToken0,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'interestRate',
         },
         {
           address: collateralToken0,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'getPoolData',
         },
         {
           address: collateralToken1,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'interestRate',
         },
         {
           address: collateralToken1,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'getPoolData',
         },
       ],
@@ -336,6 +338,119 @@ export async function getCurrentRates(params: GetCurrentRatesParams): Promise<Cu
     supplyRate0,
     borrowRate1,
     supplyRate1,
+    _meta,
+  }
+}
+
+// ─── Interest State (per-user borrows) ───────────────────────────────────────
+
+/**
+ * Per-user interest state for a single collateral tracker.
+ */
+export interface TokenInterestState {
+  /** User's borrow index snapshot (int128) */
+  userBorrowIndex: bigint
+  /** User's net borrows: positive = borrowing, negative = net supplying (int128) */
+  netBorrows: bigint
+}
+
+/**
+ * Interest state for both tokens in a Panoptic pool.
+ */
+export interface InterestState {
+  /** Token 0 interest state */
+  token0: TokenInterestState
+  /** Token 1 interest state */
+  token1: TokenInterestState
+  /** Block metadata */
+  _meta: BlockMeta
+}
+
+/**
+ * Parameters for getInterestState.
+ */
+export interface GetInterestStateParams {
+  /** viem PublicClient */
+  client: PublicClient
+  /** PanopticPool address */
+  poolAddress: Address
+  /** Account address to query */
+  account: Address
+  /** Optional block number for historical queries */
+  blockNumber?: bigint
+  /** Optional pre-fetched collateral tracker addresses */
+  collateralAddresses?: CollateralAddresses
+  /** Optional pre-fetched block metadata */
+  _meta?: BlockMeta
+}
+
+/**
+ * Get per-user interest state (borrow index + net borrows) for both tokens.
+ *
+ * Calls `collateralTracker.interestState(user)` on both trackers in a single multicall.
+ *
+ * @param params - The parameters
+ * @returns Interest state for both tokens with block metadata
+ */
+export async function getInterestState(params: GetInterestStateParams): Promise<InterestState> {
+  const { client, poolAddress, account, blockNumber, collateralAddresses } = params
+
+  const targetBlockNumber =
+    blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
+
+  let collateralToken0: Address
+  let collateralToken1: Address
+
+  if (collateralAddresses) {
+    collateralToken0 = collateralAddresses.collateralToken0
+    collateralToken1 = collateralAddresses.collateralToken1
+  } else {
+    const addressResults = await client.multicall({
+      contracts: [
+        {
+          address: poolAddress,
+          abi: panopticPoolV2Abi,
+          functionName: 'collateralToken0',
+        },
+        {
+          address: poolAddress,
+          abi: panopticPoolV2Abi,
+          functionName: 'collateralToken1',
+        },
+      ],
+      allowFailure: false,
+    })
+    collateralToken0 = addressResults[0]
+    collateralToken1 = addressResults[1]
+  }
+
+  const [results, _meta] = await Promise.all([
+    client.multicall({
+      contracts: [
+        {
+          address: collateralToken0,
+          abi: collateralTrackerV2Abi,
+          functionName: 'interestState',
+          args: [account],
+        },
+        {
+          address: collateralToken1,
+          abi: collateralTrackerV2Abi,
+          functionName: 'interestState',
+          args: [account],
+        },
+      ],
+      blockNumber: targetBlockNumber,
+      allowFailure: false,
+    }),
+    params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
+  ])
+
+  const [state0, state1] = results
+
+  return {
+    token0: { userBorrowIndex: state0[0], netBorrows: state0[1] },
+    token1: { userBorrowIndex: state1[0], netBorrows: state1[1] },
     _meta,
   }
 }

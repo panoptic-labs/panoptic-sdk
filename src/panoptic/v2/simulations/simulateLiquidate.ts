@@ -6,7 +6,7 @@
 import type { Address, PublicClient } from 'viem'
 import { encodeFunctionData } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients'
 import { PanopticError } from '../errors'
 import type { LiquidateSimulation, SimulationResult, TokenFlow } from '../types'
@@ -72,7 +72,7 @@ export async function simulateLiquidate(
   try {
     // Encode dispatchFrom call data
     const callData = encodeFunctionData({
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       functionName: 'dispatchFrom',
       args: [positionIdListFrom, liquidatee, positionIdListTo, positionIdListToFinal, 0n],
     })

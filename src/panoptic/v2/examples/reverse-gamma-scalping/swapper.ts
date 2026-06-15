@@ -4,8 +4,9 @@
  * Periodically moves the pool price by ~1% to simulate natural price movement,
  * triggering the bot's delta hedging.
  *
- * Mechanism: Opens a loan with swapAtMint=true then closes it with swapAtMint=false
- * in a single dispatch() call. Net effect: pool price moves, no open position remains.
+ * Uses the SDK's swapExactOutAndWait() to open+close a loan atomically
+ * and wait for on-chain confirmation, moving the pool price without
+ * leaving any open position.
  *
  * Usage:
  *   pnpm --filter @panoptic-eng/sdk exec tsx src/panoptic/v2/examples/reverse-gamma-scalping/swapper.ts
@@ -14,14 +15,11 @@
  */
 
 import {
-  createTokenIdBuilder,
-  dispatchAndWait,
   formatTokenAmount,
   getOpenPositionIds,
   getPool,
   parsePanopticError,
-  roundToTickSpacing,
-  tickLimits,
+  swapExactOutAndWait,
   tickToPriceDecimalScaled,
 } from '@panoptic-eng/sdk/v2'
 import { type Address, type PublicClient, type WalletClient } from 'viem'
@@ -33,10 +31,12 @@ import { CHAIN_ID, createClients, loadEnv, USDC_DECIMALS, WETH_DECIMALS } from '
 // ---------------------------------------------------------------------------
 
 /** How many blocks between each swap */
-const SWAP_INTERVAL_BLOCKS = 50n
+const SWAP_INTERVAL_BLOCKS = 1n
 
-/** Position size for the loan — tune for ~1% price impact on target pool */
-const SWAP_SIZE = 5n * 10n ** 16n
+/** Position size for the loan — tune for ~1% price impact on target pool.
+ * Amounts are in each token's native units (WETH: 18 decimals, USDC: 6 decimals). */
+const SWAP_SIZE_WETH = 5n * 10n ** 16n // 0.05 WETH
+const SWAP_SIZE_USDC = 100n * 10n ** 6n // 100 USDC (~equivalent at ~$2000/ETH)
 
 /** Direction strategy: 'random' | 'alternate' | 'up' | 'down' */
 const DIRECTION: 'random' | 'alternate' | 'up' | 'down' = 'random'
@@ -87,41 +87,8 @@ function pickDirection(strategy: typeof DIRECTION, lastDirection: 'up' | 'down')
 }
 
 // ---------------------------------------------------------------------------
-// Unique loan helper
-// ---------------------------------------------------------------------------
-
-/**
- * Build a unique loan tokenId that doesn't collide with existing open positions.
- * Bumps optionRatio (1-127) and adjusts position size to maintain equivalent exposure.
- */
-function buildUniqueLoan(
-  poolId: bigint,
-  leg: { asset: bigint; tokenType: bigint; strike: bigint },
-  existingIds: bigint[],
-  positionSize: bigint,
-): { tokenId: bigint; adjustedSize: bigint } {
-  for (let ratio = 1n; ratio <= 127n; ratio++) {
-    const tokenId = createTokenIdBuilder(poolId)
-      .addLoan({
-        asset: leg.asset,
-        tokenType: leg.tokenType,
-        strike: leg.strike,
-        optionRatio: ratio,
-      })
-      .build()
-    if (!existingIds.includes(tokenId)) {
-      return { tokenId, adjustedSize: positionSize / ratio }
-    }
-  }
-  throw new Error('Could not build a unique loan tokenId — all optionRatios 1-127 are in use')
-}
-
-// ---------------------------------------------------------------------------
 // Core swap function
 // ---------------------------------------------------------------------------
-
-/** Max retries when InputListFail occurs (position list changed between fetch and tx) */
-const INPUT_LIST_FAIL_RETRIES = 3
 
 async function executeSwap(
   client: PublicClient,
@@ -131,58 +98,28 @@ async function executeSwap(
   chainId: bigint,
   direction: 'up' | 'down',
 ): Promise<void> {
-  for (let attempt = 0; attempt < INPUT_LIST_FAIL_RETRIES; attempt++) {
-    // Fetch fresh position list + pool state together to minimize staleness window
-    const [existingIds, pool] = await Promise.all([
-      getOpenPositionIds({ client, chainId, poolAddress, account }),
-      getPool({ client, poolAddress, chainId }),
-    ])
+  // Fetch pool to resolve token addresses
+  const pool = await getPool({ client, poolAddress, chainId })
 
-    const tickSpacing = pool.poolKey.tickSpacing
-    const strike = roundToTickSpacing(pool.currentTick, tickSpacing)
+  // Price UP (ETH more expensive): buy ETH → tokenOut = token0 (WETH)
+  // Price DOWN (ETH cheaper): buy USDC → tokenOut = token1 (USDC)
+  const tokenOut =
+    direction === 'up' ? pool.collateralTracker0.token : pool.collateralTracker1.token
+  const amountOut = direction === 'up' ? SWAP_SIZE_WETH : SWAP_SIZE_USDC
 
-    // Price UP (ETH more expensive): tokenType=1 (borrow USDC → swap to ETH)
-    // Price DOWN (ETH cheaper): tokenType=0 (borrow ETH → swap to USDC)
-    const tokenType = direction === 'up' ? 1n : 0n
+  const existingIds = (await getOpenPositionIds({ client, chainId, poolAddress, account })) ?? []
 
-    const { tokenId: loanTokenId, adjustedSize } = buildUniqueLoan(
-      pool.poolId,
-      { asset: 0n, tokenType, strike },
-      existingIds,
-      SWAP_SIZE,
-    )
-
-    const limits = tickLimits(pool.currentTick, SLIPPAGE_TOLERANCE_BPS)
-
-    try {
-      // Single dispatch: open loan (swap) + close loan (no swap)
-      // Operation 1 (mint): descending tick limits = swapAtMint=true
-      // Operation 2 (burn): ascending tick limits = swapAtMint=false
-      await dispatchAndWait({
-        client,
-        walletClient,
-        account,
-        poolAddress,
-        positionIdList: [loanTokenId, loanTokenId],
-        finalPositionIdList: existingIds,
-        positionSizes: [adjustedSize, 0n],
-        tickAndSpreadLimits: [
-          [limits.high, limits.low, 0n],
-          [limits.low, limits.high, 0n],
-        ],
-      })
-      return
-    } catch (error) {
-      const parsed = parsePanopticError(error as Error)
-      if (parsed?.errorName === 'InputListFail' && attempt < INPUT_LIST_FAIL_RETRIES - 1) {
-        console.warn(
-          `[${timestamp()}] InputListFail — position list changed, retrying (${attempt + 1}/${INPUT_LIST_FAIL_RETRIES})`,
-        )
-        continue
-      }
-      throw error
-    }
-  }
+  await swapExactOutAndWait({
+    client,
+    walletClient,
+    account,
+    poolAddress,
+    chainId,
+    tokenOut,
+    amountOut,
+    slippageBps: SLIPPAGE_TOLERANCE_BPS,
+    existingPositionIds: existingIds,
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -219,7 +156,9 @@ async function main(): Promise<void> {
   console.log(`[${timestamp()}] Starting swapper`)
   console.log(`  Pool: ${poolAddress}`)
   console.log(`  Account: ${account.address}`)
-  console.log(`  Swap size: ${formatTokenAmount(SWAP_SIZE, WETH_DECIMALS, 6n)}`)
+  console.log(
+    `  Swap size: ${formatTokenAmount(SWAP_SIZE_WETH, WETH_DECIMALS, 6n)} WETH / ${formatTokenAmount(SWAP_SIZE_USDC, USDC_DECIMALS, 2n)} USDC`,
+  )
   console.log(`  Direction: ${DIRECTION}`)
   console.log(`  Interval: every ${SWAP_INTERVAL_BLOCKS} blocks`)
 

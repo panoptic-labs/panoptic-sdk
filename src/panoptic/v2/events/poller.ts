@@ -6,10 +6,10 @@
 import type { Address, PublicClient } from 'viem'
 
 import {
-  collateralTrackerAbi,
-  panopticPoolAbi,
+  collateralTrackerV2Abi,
+  panopticPoolV2Abi,
   riskEngineAbi,
-  semiFungiblePositionManagerAbi,
+  semiFungiblePositionManagerV4Abi,
 } from '../../../generated'
 import { poolManagerAbi } from '../abis/poolManager'
 import type { PanopticEvent, PanopticEventType } from '../types'
@@ -179,7 +179,7 @@ export function createEventPoller(params: CreateEventPollerParams): EventPoller 
       try {
         const logs = await client.getContractEvents({
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           eventName: eventType as
             | 'OptionMinted'
             | 'OptionBurnt'
@@ -207,7 +207,7 @@ export function createEventPoller(params: CreateEventPollerParams): EventPoller 
         try {
           const logs = await client.getContractEvents({
             address: trackerAddress,
-            abi: collateralTrackerAbi,
+            abi: collateralTrackerV2Abi,
             eventName: eventType as 'Deposit' | 'Withdraw' | 'ProtocolLossRealized',
             fromBlock: from,
             toBlock: to,
@@ -257,7 +257,7 @@ export function createEventPoller(params: CreateEventPollerParams): EventPoller 
         try {
           const logs = await client.getContractEvents({
             address: sfpmAddress,
-            abi: semiFungiblePositionManagerAbi,
+            abi: semiFungiblePositionManagerV4Abi,
             eventName: eventType as 'LiquidityChunkUpdated',
             fromBlock: from,
             toBlock: to,

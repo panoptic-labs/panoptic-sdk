@@ -70,7 +70,7 @@ describe('Sepolia Fork: Write Simulations', () => {
         chainId: SEPOLIA_ANVIL_CONFIG.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
 
       console.log(`Current tick: ${currentTick}`)
@@ -110,7 +110,7 @@ describe('Sepolia Fork: Write Simulations', () => {
         chainId: SEPOLIA_ANVIL_CONFIG.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
 
       // Call strike above current price
@@ -195,7 +195,7 @@ describe('Sepolia Fork: Write Simulations', () => {
       })
 
       // Use tickSpacing from pool
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
       const strike = (currentTick / tickSpacing) * tickSpacing
 
@@ -436,7 +436,7 @@ describe('Sepolia Fork: Write Simulations', () => {
         chainId: SEPOLIA_ANVIL_CONFIG.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
       const strike = (currentTick / tickSpacing) * tickSpacing
 
@@ -495,7 +495,7 @@ describe('Sepolia Fork: Write Simulations', () => {
         chainId: SEPOLIA_ANVIL_CONFIG.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
       const strike = (currentTick / tickSpacing) * tickSpacing
 

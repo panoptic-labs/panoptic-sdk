@@ -7,18 +7,44 @@
  */
 
 import type { Address, PublicClient } from 'viem'
+import { decodeFunctionResult, encodeFunctionData } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
-import { panopticQueryAbi } from '../abis/panopticQuery'
-import { getBlockMeta } from '../clients/blockMeta'
+import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
+import { tickToSqrtPriceX96 } from '../formatters/tick'
 import type { BlockMeta } from '../types'
 import { decodeLeftRightUnsigned } from '../writes/utils'
+import { type MulticallBlockCall, readBlockAndAggregate, requireReturnData } from './multicallBlock'
+
+const FP96 = 1n << 96n
+const Q128 = 1n << 128n
+
+function convert0to1(amount: bigint, sqrtPriceX96: bigint): bigint {
+  if (sqrtPriceX96 < Q128) {
+    return (amount * sqrtPriceX96 * sqrtPriceX96) >> 192n
+  }
+  const sp2Hi = (sqrtPriceX96 * sqrtPriceX96) >> 64n
+  return (amount * sp2Hi) >> 128n
+}
+
+function convert1to0(amount: bigint, sqrtPriceX96: bigint): bigint {
+  if (sqrtPriceX96 < Q128) {
+    const denom = sqrtPriceX96 * sqrtPriceX96
+    return (amount * (1n << 192n)) / denom
+  }
+  const sp2Hi = (sqrtPriceX96 * sqrtPriceX96) >> 64n
+  return (amount * (1n << 128n)) / sp2Hi
+}
 
 /**
  * Liquidation check result with detailed margin breakdown.
  *
- * **Denomination**: all margin values are cross-converted into a single
- * token by `checkCollateral`. See {@link MarginBuffer.denominatedInToken}.
+ * **Denomination**: both per-token pairs hold the gross account total
+ * cross-converted to that single token denomination at `atTick`.
+ *   - `currentMargin0` / `requiredMargin0` are in token0 units
+ *   - `currentMargin1` / `requiredMargin1` are in token1 units
+ *
+ * `denominatedInToken` indicates which pair is "preferred": 0n when
+ * `atTick < 0` (token0), 1n otherwise.
  */
 export interface LiquidationCheck {
   /** Whether the account is liquidatable */
@@ -27,16 +53,16 @@ export interface LiquidationCheck {
   marginShortfall0: bigint
   /** Margin shortfall for slot 1 (positive = shortfall, negative = excess) */
   marginShortfall1: bigint
-  /** Current margin (collateral balance) for slot 0 */
+  /** Current (gross) margin (collateral balance), denominated in token0 */
   currentMargin0: bigint
-  /** Current margin (collateral balance) for slot 1 */
+  /** Current (gross) margin, denominated in token1 */
   currentMargin1: bigint
-  /** Required margin for slot 0 */
+  /** Required margin (sum of per-position requirements), denominated in token0 */
   requiredMargin0: bigint
-  /** Required margin for slot 1 */
+  /** Required margin, denominated in token1 */
   requiredMargin1: bigint
   /**
-   * Which token all margin values are denominated in.
+   * Which token the "preferred" margin pair is denominated in.
    * 0n = token0 (when atTick < 0), 1n = token1 (when atTick >= 0).
    */
   denominatedInToken: bigint
@@ -58,10 +84,20 @@ export interface IsLiquidatableParams {
   account: Address
   /** TokenIds of open positions */
   tokenIds: bigint[]
-  /** Optional: Tick to check liquidation at (defaults to current tick) */
+  /**
+   * Optional: Tick to check liquidation at (defaults to current tick).
+   * Note: collateral requirements are evaluated by the contract at the
+   * pool's current tick — `atTick` here governs only the cross-token
+   * sqrtPrice used to express the totals in a single denomination.
+   */
   atTick?: bigint
-  /** PanopticQuery address (required for margin calculations) */
-  queryAddress: Address
+  /** PanopticQuery address (kept for backwards compatibility; unused). */
+  queryAddress?: Address
+  /**
+   * Optional pre-fetched collateral tracker addresses (saves an RPC).
+   * If omitted, they are fetched from the pool.
+   */
+  collateralAddresses?: { collateralToken0: Address; collateralToken1: Address }
   /** Optional block number for historical queries */
   blockNumber?: bigint
   /** Optional pre-fetched block metadata (skips getBlockMeta RPC call) */
@@ -71,15 +107,13 @@ export interface IsLiquidatableParams {
 /**
  * Check if an account is liquidatable with detailed margin breakdown.
  *
- * An account is liquidatable when its collateral falls below the
- * maintenance margin requirement for its open positions.
- *
- * Note: This function requires PanopticQuery for accurate margin calculations.
- * Without queryAddress, throws PanopticHelperNotDeployedError.
+ * Sources gross collateral from `CollateralTracker.assetsOf` and per-position
+ * required margin from `PanopticPool.getFullPositionsData.collateralRequirements[]`,
+ * cross-converted to each token denomination at `atTick`. Loan tokenIds
+ * (width=0 shorts) contribute correctly to required margin.
  *
  * @param params - The parameters
  * @returns Liquidation check result with detailed margin breakdown
- * @throws PanopticHelperNotDeployedError - PanopticQuery contract is required
  *
  * @example
  * ```typescript
@@ -88,67 +122,142 @@ export interface IsLiquidatableParams {
  *   poolAddress,
  *   account,
  *   tokenIds: [position1, position2],
- *   queryAddress,
  * })
  *
  * if (result.isLiquidatable) {
  *   console.log('Account is liquidatable!')
- *   console.log('Shortfall token0:', result.marginShortfall0)
- *   console.log('Shortfall token1:', result.marginShortfall1)
- * } else {
- *   console.log('Margin buffer token0:', -result.marginShortfall0)
- *   console.log('Margin buffer token1:', -result.marginShortfall1)
  * }
  * ```
  */
 export async function isLiquidatable(params: IsLiquidatableParams): Promise<LiquidationCheck> {
-  const { client, poolAddress, account, tokenIds, atTick, queryAddress, blockNumber } = params
+  const { client, poolAddress, account, tokenIds, atTick, blockNumber } = params
 
   const targetBlockNumber =
     blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
 
-  // Get current tick if not provided
-  let effectiveTick: bigint
-  if (atTick !== undefined) {
-    effectiveTick = atTick
+  // Resolve collateral tracker addresses (immutable; cache-friendly).
+  let collateralToken0: Address
+  let collateralToken1: Address
+  if (params.collateralAddresses) {
+    collateralToken0 = params.collateralAddresses.collateralToken0
+    collateralToken1 = params.collateralAddresses.collateralToken1
   } else {
-    const currentTickResult = await client.readContract({
-      address: poolAddress,
-      abi: panopticPoolAbi,
-      functionName: 'getCurrentTick',
+    const addrs = await client.multicall({
+      contracts: [
+        { address: poolAddress, abi: panopticPoolV2Abi, functionName: 'collateralToken0' },
+        { address: poolAddress, abi: panopticPoolV2Abi, functionName: 'collateralToken1' },
+      ],
       blockNumber: targetBlockNumber,
+      allowFailure: false,
     })
-    effectiveTick = BigInt(currentTickResult)
+    collateralToken0 = addrs[0]
+    collateralToken1 = addrs[1]
   }
 
-  // Use checkCollateral for detailed margin info
-  // Returns: [collateralBalance, requiredCollateral] as LeftRightUnsigned packed values
-  const [[collateralBalance, requiredCollateral], _meta] = await Promise.all([
-    client.readContract({
-      address: queryAddress,
-      abi: panopticQueryAbi,
-      functionName: 'checkCollateral',
-      args: [poolAddress, account, tokenIds, Number(effectiveTick)],
-      blockNumber: targetBlockNumber,
+  const calls: MulticallBlockCall[] = []
+  const currentTickIndex = atTick === undefined ? calls.length : null
+  if (currentTickIndex !== null) {
+    calls.push({
+      target: poolAddress,
+      callData: encodeFunctionData({
+        abi: panopticPoolV2Abi,
+        functionName: 'getCurrentTick',
+      }),
+    })
+  }
+
+  const assets0Index = calls.length
+  calls.push({
+    target: collateralToken0,
+    callData: encodeFunctionData({
+      abi: collateralTrackerV2Abi,
+      functionName: 'assetsOf',
+      args: [account],
     }),
-    params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
-  ])
+  })
 
-  // Decode LeftRightUnsigned packed values (right=token0, left=token1)
-  const balances = decodeLeftRightUnsigned(collateralBalance)
-  const required = decodeLeftRightUnsigned(requiredCollateral)
+  const assets1Index = calls.length
+  calls.push({
+    target: collateralToken1,
+    callData: encodeFunctionData({
+      abi: collateralTrackerV2Abi,
+      functionName: 'assetsOf',
+      args: [account],
+    }),
+  })
 
-  const currentMargin0 = balances.right
-  const currentMargin1 = balances.left
-  const requiredMargin0 = required.right
-  const requiredMargin1 = required.left
+  const positionDataIndex = tokenIds.length > 0 ? calls.length : null
+  if (positionDataIndex !== null) {
+    calls.push({
+      target: poolAddress,
+      callData: encodeFunctionData({
+        abi: panopticPoolV2Abi,
+        functionName: 'getFullPositionsData',
+        args: [account, true, tokenIds],
+      }),
+    })
+  }
 
-  // Calculate shortfall (positive = shortfall, negative = excess margin)
+  const { _meta, results } = await readBlockAndAggregate({
+    client,
+    calls,
+    blockNumber: targetBlockNumber,
+  })
+
+  let effectiveTick = atTick
+  if (effectiveTick === undefined) {
+    if (currentTickIndex === null) {
+      throw new Error('Missing current tick Multicall3 result index')
+    }
+    effectiveTick = BigInt(
+      decodeFunctionResult({
+        abi: panopticPoolV2Abi,
+        functionName: 'getCurrentTick',
+        data: requireReturnData(results, currentTickIndex, 'PanopticPool.getCurrentTick'),
+      }),
+    )
+  }
+  const assets0 = decodeFunctionResult({
+    abi: collateralTrackerV2Abi,
+    functionName: 'assetsOf',
+    data: requireReturnData(results, assets0Index, 'CollateralTracker.assetsOf token0'),
+  })
+  const assets1 = decodeFunctionResult({
+    abi: collateralTrackerV2Abi,
+    functionName: 'assetsOf',
+    data: requireReturnData(results, assets1Index, 'CollateralTracker.assetsOf token1'),
+  })
+  const positionDataResult =
+    positionDataIndex === null
+      ? null
+      : (decodeFunctionResult({
+          abi: panopticPoolV2Abi,
+          functionName: 'getFullPositionsData',
+          data: requireReturnData(results, positionDataIndex, 'PanopticPool.getFullPositionsData'),
+        }) as readonly [bigint, bigint, readonly bigint[], readonly bigint[], readonly bigint[]])
+
+  let required0Native = 0n
+  let required1Native = 0n
+  if (positionDataResult) {
+    const collateralRequirements = positionDataResult[3]
+    for (const packed of collateralRequirements) {
+      const decoded = decodeLeftRightUnsigned(packed)
+      required0Native += decoded.right
+      required1Native += decoded.left
+    }
+  }
+
+  const sqrtPriceX96 = tickToSqrtPriceX96(effectiveTick)
+  const currentMargin0 = assets0 + convert1to0(assets1, sqrtPriceX96)
+  const requiredMargin0 = required0Native + convert1to0(required1Native, sqrtPriceX96)
+  const currentMargin1 = assets1 + convert0to1(assets0, sqrtPriceX96)
+  const requiredMargin1 = required1Native + convert0to1(required0Native, sqrtPriceX96)
+
   const marginShortfall0 = requiredMargin0 - currentMargin0
   const marginShortfall1 = requiredMargin1 - currentMargin1
-
-  // Account is liquidatable if either token has positive shortfall
-  const isLiquidatableResult = marginShortfall0 > 0n || marginShortfall1 > 0n
+  const denominatedInToken: bigint = sqrtPriceX96 < FP96 ? 0n : 1n
+  const isLiquidatableResult =
+    denominatedInToken === 0n ? marginShortfall0 > 0n : marginShortfall1 > 0n
 
   return {
     isLiquidatable: isLiquidatableResult,
@@ -158,7 +267,7 @@ export async function isLiquidatable(params: IsLiquidatableParams): Promise<Liqu
     currentMargin1,
     requiredMargin0,
     requiredMargin1,
-    denominatedInToken: effectiveTick < 0n ? 0n : 1n,
+    denominatedInToken,
     atTick: effectiveTick,
     _meta,
   }

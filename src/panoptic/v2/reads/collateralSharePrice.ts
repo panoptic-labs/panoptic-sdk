@@ -11,7 +11,7 @@ import type { Address, Client } from 'viem'
 import { ContractFunctionExecutionError } from 'viem'
 import { multicall } from 'viem/actions'
 
-import { collateralTrackerAbi } from '../../../generated'
+import { collateralTrackerV2Abi } from '../../../generated'
 
 /**
  * Raw share price data for a single collateral tracker.
@@ -44,22 +44,22 @@ export async function getCollateralSharePrices(
       contracts: [
         {
           address: collateralAddresses[0],
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'totalAssets',
         },
         {
           address: collateralAddresses[0],
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'totalSupply',
         },
         {
           address: collateralAddresses[1],
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'totalAssets',
         },
         {
           address: collateralAddresses[1],
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'totalSupply',
         },
       ],

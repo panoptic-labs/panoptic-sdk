@@ -7,14 +7,14 @@ export type MakeEmpty<T extends { [key: string]: unknown }, K extends keyof T> =
 export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
 /** All built-in and custom scalars, mapped to their actual values */
 export interface Scalars {
-  ID: { input: string | number; output: string; }
+  ID: { input: string; output: string; }
   String: { input: string; output: string; }
   Boolean: { input: boolean; output: boolean; }
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
   BigDecimal: { input: string; output: string; }
   BigInt: { input: string; output: string; }
-  Bytes: { input: any; output: any; }
+  Bytes: { input: string; output: string; }
   Int8: { input: any; output: any; }
   Timestamp: { input: any; output: any; }
 }
@@ -321,6 +321,14 @@ export enum AccountantUpdated_OrderBy {
   NewAccountant = 'newAccountant',
   OldAccountant = 'oldAccountant',
   TransactionHash = 'transactionHash'
+}
+
+/** Indicates whether the current, partially filled bucket should be included in the response. Defaults to `exclude` */
+export enum Aggregation_Current {
+  /** Exclude the current, partially filled bucket from the response */
+  Exclude = 'exclude',
+  /** Include the current, partially filled bucket in the response */
+  Include = 'include'
 }
 
 export enum Aggregation_Interval {
@@ -3067,10 +3075,8 @@ export interface Token_Filter {
   whitelistPools?: InputMaybe<Array<Scalars['String']['input']>>;
   whitelistPools_?: InputMaybe<Pool_Filter>;
   whitelistPools_contains?: InputMaybe<Array<Scalars['String']['input']>>;
-  whitelistPools_contains_nocase?: InputMaybe<Array<Scalars['String']['input']>>;
   whitelistPools_not?: InputMaybe<Array<Scalars['String']['input']>>;
   whitelistPools_not_contains?: InputMaybe<Array<Scalars['String']['input']>>;
-  whitelistPools_not_contains_nocase?: InputMaybe<Array<Scalars['String']['input']>>;
 }
 
 export enum Token_OrderBy {
@@ -4187,11 +4193,11 @@ export enum _SubgraphErrorPolicy_ {
   Deny = 'deny'
 }
 
-export type DepositEpochStateFragment = { __typename?: 'DepositEpochState', id: any, epoch: string, assetsDeposited: string, assetsFulfilled: string, sharesReceived: string, hypoVault: { __typename?: 'HypoVault', id: any } };
+export type DepositEpochStateFragment = { __typename?: 'DepositEpochState', id: string, epoch: string, assetsDeposited: string, assetsFulfilled: string, sharesReceived: string, hypoVault: { __typename?: 'HypoVault', id: string } };
 
-export type HypoVaultFragment = { __typename?: 'HypoVault', id: any, symbol: string, name: string, performanceFeeBps: string, owner: any, feeWallet: any, manager: any, accountant: any, withdrawalEpoch: string, depositEpoch: string, reservedWithdrawalAssets: string, totalAssetsDeposited: string, totalAssetsWithdrawn: string, totalPerformanceFeesCollected: string, createdAt: string, updatedAt: string, createdAtBlock: string, updatedAtBlock: string, underlyingToken: { __typename?: 'Token', id: any, symbol: string, decimals: string, name: string, derivedETH: string }, depositEpochStates: Array<{ __typename?: 'DepositEpochState', id: any }>, withdrawalEpochStates: Array<{ __typename?: 'WithdrawalEpochState', id: any }>, userBalances: Array<{ __typename?: 'UserBalance', id: any }> };
+export type HypoVaultFragment = { __typename?: 'HypoVault', id: string, symbol: string, name: string, performanceFeeBps: string, owner: string, feeWallet: string, manager: string, accountant: string, withdrawalEpoch: string, depositEpoch: string, reservedWithdrawalAssets: string, totalAssetsDeposited: string, totalAssetsWithdrawn: string, totalPerformanceFeesCollected: string, createdAt: string, updatedAt: string, createdAtBlock: string, updatedAtBlock: string, underlyingToken: { __typename?: 'Token', id: string, symbol: string, decimals: string, name: string }, depositEpochStates: Array<{ __typename?: 'DepositEpochState', id: string }>, withdrawalEpochStates: Array<{ __typename?: 'WithdrawalEpochState', id: string }>, userBalances: Array<{ __typename?: 'UserBalance', id: string }> };
 
-export type WithdrawalEpochStateFragment = { __typename?: 'WithdrawalEpochState', id: any, epoch: string, sharesWithdrawn: string, assetsReceived: string, sharesFulfilled: string, hypoVault: { __typename?: 'HypoVault', id: any } };
+export type WithdrawalEpochStateFragment = { __typename?: 'WithdrawalEpochState', id: string, epoch: string, sharesWithdrawn: string, assetsReceived: string, sharesFulfilled: string, hypoVault: { __typename?: 'HypoVault', id: string } };
 
 export type GetDepositOverviewQueryVariables = Exact<{
   account: Scalars['String']['input'];
@@ -4201,21 +4207,21 @@ export type GetDepositOverviewQueryVariables = Exact<{
 }>;
 
 
-export type GetDepositOverviewQuery = { __typename?: 'Query', hypoVault?: { __typename?: 'HypoVault', id: any, underlyingToken: { __typename?: 'Token', symbol: string, decimals: string } } | null, queuedDeposits: Array<{ __typename?: 'QueuedDeposit', amount: string, epoch: string }>, queuedWithdrawals: Array<{ __typename?: 'QueuedWithdrawal', amount: string, epoch: string }>, depositExecuteds: Array<{ __typename?: 'DepositExecuted', assets: string, blockTimestamp: string }>, withdrawalExecuteds: Array<{ __typename?: 'WithdrawalExecuted', assets: string, blockTimestamp: string }> };
+export type GetDepositOverviewQuery = { __typename?: 'Query', hypoVault?: { __typename?: 'HypoVault', id: string, underlyingToken: { __typename?: 'Token', symbol: string, decimals: string } } | null, queuedDeposits: Array<{ __typename?: 'QueuedDeposit', amount: string, epoch: string }>, queuedWithdrawals: Array<{ __typename?: 'QueuedWithdrawal', amount: string, epoch: string }>, depositExecuteds: Array<{ __typename?: 'DepositExecuted', assets: string, blockTimestamp: string }>, withdrawalExecuteds: Array<{ __typename?: 'WithdrawalExecuted', assets: string, blockTimestamp: string }> };
 
 export type GetLatestDepositAndWithdrawEpochQueryVariables = Exact<{
   hypoVault: Scalars['String']['input'];
 }>;
 
 
-export type GetLatestDepositAndWithdrawEpochQuery = { __typename?: 'Query', depositEpochStates: Array<{ __typename?: 'DepositEpochState', id: any, epoch: string, assetsDeposited: string, assetsFulfilled: string, sharesReceived: string, hypoVault: { __typename?: 'HypoVault', id: any } }>, withdrawalEpochStates: Array<{ __typename?: 'WithdrawalEpochState', id: any, epoch: string, sharesWithdrawn: string, assetsReceived: string, sharesFulfilled: string, hypoVault: { __typename?: 'HypoVault', id: any } }> };
+export type GetLatestDepositAndWithdrawEpochQuery = { __typename?: 'Query', depositEpochStates: Array<{ __typename?: 'DepositEpochState', id: string, epoch: string, assetsDeposited: string, assetsFulfilled: string, sharesReceived: string, hypoVault: { __typename?: 'HypoVault', id: string } }>, withdrawalEpochStates: Array<{ __typename?: 'WithdrawalEpochState', id: string, epoch: string, sharesWithdrawn: string, assetsReceived: string, sharesFulfilled: string, hypoVault: { __typename?: 'HypoVault', id: string } }> };
 
 export type GetLatestEpochQueryVariables = Exact<{
   hypoVault: Scalars['String']['input'];
 }>;
 
 
-export type GetLatestEpochQuery = { __typename?: 'Query', depositEpochStates: Array<{ __typename?: 'DepositEpochState', id: any, epoch: string, assetsDeposited: string, assetsFulfilled: string, sharesReceived: string, hypoVault: { __typename?: 'HypoVault', id: any } }>, withdrawalEpochStates: Array<{ __typename?: 'WithdrawalEpochState', id: any, epoch: string, sharesWithdrawn: string, assetsReceived: string, sharesFulfilled: string, hypoVault: { __typename?: 'HypoVault', id: any } }> };
+export type GetLatestEpochQuery = { __typename?: 'Query', depositEpochStates: Array<{ __typename?: 'DepositEpochState', id: string, epoch: string, assetsDeposited: string, assetsFulfilled: string, sharesReceived: string, hypoVault: { __typename?: 'HypoVault', id: string } }>, withdrawalEpochStates: Array<{ __typename?: 'WithdrawalEpochState', id: string, epoch: string, sharesWithdrawn: string, assetsReceived: string, sharesFulfilled: string, hypoVault: { __typename?: 'HypoVault', id: string } }> };
 
 export type GetVaultHistoryQueryVariables = Exact<{
   hypoVault: Scalars['String']['input'];
@@ -4224,14 +4230,14 @@ export type GetVaultHistoryQueryVariables = Exact<{
 }>;
 
 
-export type GetVaultHistoryQuery = { __typename?: 'Query', depositRequesteds: Array<{ __typename?: 'DepositRequested', id: any, assets: string, blockTimestamp: string, transactionHash: any, user: { __typename?: 'Account', id: any } }>, depositsFulfilleds: Array<{ __typename?: 'DepositsFulfilled', id: any, assetsFulfilled: string, sharesReceived: string, blockTimestamp: string, transactionHash: any }>, withdrawalRequesteds: Array<{ __typename?: 'WithdrawalRequested', id: any, shares: string, blockTimestamp: string, transactionHash: any, user: { __typename?: 'Account', id: any } }>, withdrawalsFulfilleds: Array<{ __typename?: 'WithdrawalsFulfilled', id: any, assetsReceived: string, sharesFulfilled: string, blockTimestamp: string, transactionHash: any }>, depositCancelleds: Array<{ __typename?: 'DepositCancelled', id: any, assets: string, blockTimestamp: string, transactionHash: any, user: { __typename?: 'Account', id: any } }>, withdrawalCancelleds: Array<{ __typename?: 'WithdrawalCancelled', id: any, shares: string, blockTimestamp: string, transactionHash: any, user: { __typename?: 'Account', id: any } }>, depositExecuteds: Array<{ __typename?: 'DepositExecuted', id: any, assets: string, shares: string, blockTimestamp: string, transactionHash: any, user: { __typename?: 'Account', id: any } }>, withdrawalExecuteds: Array<{ __typename?: 'WithdrawalExecuted', id: any, assets: string, shares: string, performanceFee: string, blockTimestamp: string, transactionHash: any, user: { __typename?: 'Account', id: any } }> };
+export type GetVaultHistoryQuery = { __typename?: 'Query', depositRequesteds: Array<{ __typename?: 'DepositRequested', id: string, assets: string, blockTimestamp: string, transactionHash: string, user: { __typename?: 'Account', id: string } }>, depositsFulfilleds: Array<{ __typename?: 'DepositsFulfilled', id: string, assetsFulfilled: string, sharesReceived: string, blockTimestamp: string, transactionHash: string }>, withdrawalRequesteds: Array<{ __typename?: 'WithdrawalRequested', id: string, shares: string, blockTimestamp: string, transactionHash: string, user: { __typename?: 'Account', id: string } }>, withdrawalsFulfilleds: Array<{ __typename?: 'WithdrawalsFulfilled', id: string, assetsReceived: string, sharesFulfilled: string, blockTimestamp: string, transactionHash: string }>, depositCancelleds: Array<{ __typename?: 'DepositCancelled', id: string, assets: string, blockTimestamp: string, transactionHash: string, user: { __typename?: 'Account', id: string } }>, withdrawalCancelleds: Array<{ __typename?: 'WithdrawalCancelled', id: string, shares: string, blockTimestamp: string, transactionHash: string, user: { __typename?: 'Account', id: string } }>, depositExecuteds: Array<{ __typename?: 'DepositExecuted', id: string, assets: string, shares: string, blockTimestamp: string, transactionHash: string, user: { __typename?: 'Account', id: string } }>, withdrawalExecuteds: Array<{ __typename?: 'WithdrawalExecuted', id: string, assets: string, shares: string, performanceFee: string, blockTimestamp: string, transactionHash: string, user: { __typename?: 'Account', id: string } }> };
 
 export type GetFilteredHypoVaultsQueryVariables = Exact<{
   hypoVaultWhitelist: Array<Scalars['Bytes']['input']> | Scalars['Bytes']['input'];
 }>;
 
 
-export type GetFilteredHypoVaultsQuery = { __typename?: 'Query', bundle?: { __typename?: 'Bundle', ethPriceUSD: string } | null, hypoVaults: Array<{ __typename?: 'HypoVault', id: any, symbol: string, name: string, performanceFeeBps: string, owner: any, feeWallet: any, manager: any, accountant: any, withdrawalEpoch: string, depositEpoch: string, reservedWithdrawalAssets: string, totalAssetsDeposited: string, totalAssetsWithdrawn: string, totalPerformanceFeesCollected: string, createdAt: string, updatedAt: string, createdAtBlock: string, updatedAtBlock: string, underlyingToken: { __typename?: 'Token', id: any, symbol: string, decimals: string, name: string, derivedETH: string }, depositEpochStates: Array<{ __typename?: 'DepositEpochState', id: any }>, withdrawalEpochStates: Array<{ __typename?: 'WithdrawalEpochState', id: any }>, userBalances: Array<{ __typename?: 'UserBalance', id: any }> }> };
+export type GetFilteredHypoVaultsQuery = { __typename?: 'Query', hypoVaults: Array<{ __typename?: 'HypoVault', id: string, symbol: string, name: string, performanceFeeBps: string, owner: string, feeWallet: string, manager: string, accountant: string, withdrawalEpoch: string, depositEpoch: string, reservedWithdrawalAssets: string, totalAssetsDeposited: string, totalAssetsWithdrawn: string, totalPerformanceFeesCollected: string, createdAt: string, updatedAt: string, createdAtBlock: string, updatedAtBlock: string, underlyingToken: { __typename?: 'Token', id: string, symbol: string, decimals: string, name: string }, depositEpochStates: Array<{ __typename?: 'DepositEpochState', id: string }>, withdrawalEpochStates: Array<{ __typename?: 'WithdrawalEpochState', id: string }>, userBalances: Array<{ __typename?: 'UserBalance', id: string }> }> };
 
 export type GetQueuedWithdrawalsForExecutionQueryVariables = Exact<{
   account: Scalars['String']['input'];
@@ -4240,7 +4246,7 @@ export type GetQueuedWithdrawalsForExecutionQueryVariables = Exact<{
 }>;
 
 
-export type GetQueuedWithdrawalsForExecutionQuery = { __typename?: 'Query', hypoVault?: { __typename?: 'HypoVault', id: any, withdrawalEpoch: string } | null, queuedWithdrawals: Array<{ __typename?: 'QueuedWithdrawal', amount: string, epoch: string }> };
+export type GetQueuedWithdrawalsForExecutionQuery = { __typename?: 'Query', hypoVault?: { __typename?: 'HypoVault', id: string, withdrawalEpoch: string } | null, queuedWithdrawals: Array<{ __typename?: 'QueuedWithdrawal', amount: string, epoch: string }> };
 
 export type GetWithdrawalEpochStatesForExecutionQueryVariables = Exact<{
   hypoVault: Scalars['String']['input'];
@@ -4248,7 +4254,7 @@ export type GetWithdrawalEpochStatesForExecutionQueryVariables = Exact<{
 }>;
 
 
-export type GetWithdrawalEpochStatesForExecutionQuery = { __typename?: 'Query', withdrawalEpochStates: Array<{ __typename?: 'WithdrawalEpochState', id: any, epoch: string, sharesWithdrawn: string, assetsReceived: string, sharesFulfilled: string, hypoVault: { __typename?: 'HypoVault', id: any } }> };
+export type GetWithdrawalEpochStatesForExecutionQuery = { __typename?: 'Query', withdrawalEpochStates: Array<{ __typename?: 'WithdrawalEpochState', id: string, epoch: string, sharesWithdrawn: string, assetsReceived: string, sharesFulfilled: string, hypoVault: { __typename?: 'HypoVault', id: string } }> };
 
 export type GetQueuedDepositsForWithdrawalQueryVariables = Exact<{
   account: Scalars['String']['input'];
@@ -4257,7 +4263,7 @@ export type GetQueuedDepositsForWithdrawalQueryVariables = Exact<{
 }>;
 
 
-export type GetQueuedDepositsForWithdrawalQuery = { __typename?: 'Query', hypoVault?: { __typename?: 'HypoVault', id: any, depositEpoch: string } | null, userBalances: Array<{ __typename?: 'UserBalance', shares: string }>, queuedDeposits: Array<{ __typename?: 'QueuedDeposit', amount: string, epoch: string }> };
+export type GetQueuedDepositsForWithdrawalQuery = { __typename?: 'Query', hypoVault?: { __typename?: 'HypoVault', id: string, depositEpoch: string } | null, userBalances: Array<{ __typename?: 'UserBalance', shares: string }>, queuedDeposits: Array<{ __typename?: 'QueuedDeposit', amount: string, epoch: string }> };
 
 export type GetDepositEpochStatesForWithdrawalQueryVariables = Exact<{
   hypoVault: Scalars['String']['input'];
@@ -4266,4 +4272,4 @@ export type GetDepositEpochStatesForWithdrawalQueryVariables = Exact<{
 }>;
 
 
-export type GetDepositEpochStatesForWithdrawalQuery = { __typename?: 'Query', depositEpochStates: Array<{ __typename?: 'DepositEpochState', id: any, epoch: string, assetsDeposited: string, assetsFulfilled: string, sharesReceived: string, hypoVault: { __typename?: 'HypoVault', id: any } }> };
+export type GetDepositEpochStatesForWithdrawalQuery = { __typename?: 'Query', depositEpochStates: Array<{ __typename?: 'DepositEpochState', id: string, epoch: string, assetsDeposited: string, assetsFulfilled: string, sharesReceived: string, hypoVault: { __typename?: 'HypoVault', id: string } }> };

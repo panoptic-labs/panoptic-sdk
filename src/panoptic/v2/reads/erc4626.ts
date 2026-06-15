@@ -9,7 +9,7 @@
 
 import type { Address, PublicClient } from 'viem'
 
-import { collateralTrackerAbi, panopticPoolAbi } from '../../../generated'
+import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients/blockMeta'
 import type { BlockMeta } from '../types'
 
@@ -56,7 +56,7 @@ async function getCollateralTrackerAddress(
 
   return client.readContract({
     address: poolAddress,
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: tokenIndex === 0 ? 'collateralToken0' : 'collateralToken1',
   })
 }
@@ -82,7 +82,7 @@ export async function previewDeposit(params: ERC4626PreviewParams): Promise<ERC4
   const [result, _meta] = await Promise.all([
     client.readContract({
       address: trackerAddress,
-      abi: collateralTrackerAbi,
+      abi: collateralTrackerV2Abi,
       functionName: 'previewDeposit',
       args: [amount],
       blockNumber: targetBlockNumber,
@@ -114,7 +114,7 @@ export async function previewWithdraw(params: ERC4626PreviewParams): Promise<ERC
   const [result, _meta] = await Promise.all([
     client.readContract({
       address: trackerAddress,
-      abi: collateralTrackerAbi,
+      abi: collateralTrackerV2Abi,
       functionName: 'previewWithdraw',
       args: [amount],
       blockNumber: targetBlockNumber,
@@ -146,7 +146,7 @@ export async function previewMint(params: ERC4626PreviewParams): Promise<ERC4626
   const [result, _meta] = await Promise.all([
     client.readContract({
       address: trackerAddress,
-      abi: collateralTrackerAbi,
+      abi: collateralTrackerV2Abi,
       functionName: 'previewMint',
       args: [amount],
       blockNumber: targetBlockNumber,
@@ -178,7 +178,7 @@ export async function previewRedeem(params: ERC4626PreviewParams): Promise<ERC46
   const [result, _meta] = await Promise.all([
     client.readContract({
       address: trackerAddress,
-      abi: collateralTrackerAbi,
+      abi: collateralTrackerV2Abi,
       functionName: 'previewRedeem',
       args: [amount],
       blockNumber: targetBlockNumber,
@@ -210,7 +210,7 @@ export async function convertToShares(params: ERC4626PreviewParams): Promise<ERC
   const [result, _meta] = await Promise.all([
     client.readContract({
       address: trackerAddress,
-      abi: collateralTrackerAbi,
+      abi: collateralTrackerV2Abi,
       functionName: 'convertToShares',
       args: [amount],
       blockNumber: targetBlockNumber,
@@ -242,7 +242,7 @@ export async function convertToAssets(params: ERC4626PreviewParams): Promise<ERC
   const [result, _meta] = await Promise.all([
     client.readContract({
       address: trackerAddress,
-      abi: collateralTrackerAbi,
+      abi: collateralTrackerV2Abi,
       functionName: 'convertToAssets',
       args: [amount],
       blockNumber: targetBlockNumber,

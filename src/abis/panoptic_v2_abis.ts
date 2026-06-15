@@ -150,15 +150,11 @@ export const builderWalletAbi = [
 ] as const
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// CollateralTracker
+// CollateralTrackerV2
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-export const collateralTrackerAbi = [
-  {
-    type: 'constructor',
-    inputs: [{ name: '_commissionFee', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'nonpayable',
-  },
+export const collateralTrackerV2Abi = [
+  { type: 'constructor', inputs: [], stateMutability: 'nonpayable' },
   {
     type: 'function',
     inputs: [],
@@ -372,7 +368,7 @@ export const collateralTrackerAbi = [
     type: 'function',
     inputs: [],
     name: 'panopticPool',
-    outputs: [{ name: '', internalType: 'contract PanopticPool', type: 'address' }],
+    outputs: [{ name: '', internalType: 'contract PanopticPoolV2', type: 'address' }],
     stateMutability: 'pure',
   },
   {
@@ -863,16 +859,276 @@ export const collateralTrackerAbi = [
 ] as const
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// PanopticFactory
+// PanopticFactoryV3
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-export const panopticFactoryAbi = [
+export const panopticFactoryV3Abi = [
+  {
+    type: 'constructor',
+    inputs: [
+      { name: '_SFPM', internalType: 'contract SemiFungiblePositionManagerV3', type: 'address' },
+      { name: '_univ3Factory', internalType: 'contract IUniswapV3Factory', type: 'address' },
+      { name: '_poolReference', internalType: 'address', type: 'address' },
+      { name: '_collateralReference', internalType: 'address', type: 'address' },
+      { name: 'properties', internalType: 'bytes32[]', type: 'bytes32[]' },
+      { name: 'indices', internalType: 'uint256[][]', type: 'uint256[][]' },
+      { name: 'pointers', internalType: 'Pointer[][]', type: 'uint256[][]' },
+    ],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'spender', internalType: 'address', type: 'address' },
+      { name: 'id', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'approve',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'owner', internalType: 'address', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'panopticPool', internalType: 'address', type: 'address' },
+      { name: 'symbol0', internalType: 'string', type: 'string' },
+      { name: 'symbol1', internalType: 'string', type: 'string' },
+      { name: 'fee', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'constructMetadata',
+    outputs: [{ name: '', internalType: 'string', type: 'string' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'token0', internalType: 'address', type: 'address' },
+      { name: 'token1', internalType: 'address', type: 'address' },
+      { name: 'fee', internalType: 'uint24', type: 'uint24' },
+      { name: 'riskEngine', internalType: 'contract IRiskEngine', type: 'address' },
+      { name: 'salt', internalType: 'uint96', type: 'uint96' },
+    ],
+    name: 'deployNewPool',
+    outputs: [
+      { name: 'newPoolContract', internalType: 'contract PanopticPoolV2', type: 'address' },
+    ],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    name: 'getApproved',
+    outputs: [{ name: '', internalType: 'address', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'univ3pool', internalType: 'contract IUniswapV3Pool', type: 'address' },
+      { name: 'riskEngine', internalType: 'contract IRiskEngine', type: 'address' },
+    ],
+    name: 'getPanopticPool',
+    outputs: [{ name: '', internalType: 'contract PanopticPoolV2', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: '', internalType: 'address', type: 'address' },
+      { name: '', internalType: 'address', type: 'address' },
+    ],
+    name: 'isApprovedForAll',
+    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'deployerAddress', internalType: 'address', type: 'address' },
+      { name: 'v3Pool', internalType: 'address', type: 'address' },
+      { name: 'riskEngine', internalType: 'address', type: 'address' },
+      { name: 'salt', internalType: 'uint96', type: 'uint96' },
+      { name: 'loops', internalType: 'uint256', type: 'uint256' },
+      { name: 'minTargetRarity', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'minePoolAddress',
+    outputs: [
+      { name: 'bestSalt', internalType: 'uint96', type: 'uint96' },
+      { name: 'highestRarity', internalType: 'uint256', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'data', internalType: 'bytes[]', type: 'bytes[]' }],
+    name: 'multicall',
+    outputs: [{ name: 'results', internalType: 'bytes[]', type: 'bytes[]' }],
+    stateMutability: 'payable',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'name',
+    outputs: [{ name: '', internalType: 'string', type: 'string' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'id', internalType: 'uint256', type: 'uint256' }],
+    name: 'ownerOf',
+    outputs: [{ name: 'owner', internalType: 'address', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'from', internalType: 'address', type: 'address' },
+      { name: 'to', internalType: 'address', type: 'address' },
+      { name: 'id', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'safeTransferFrom',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'from', internalType: 'address', type: 'address' },
+      { name: 'to', internalType: 'address', type: 'address' },
+      { name: 'id', internalType: 'uint256', type: 'uint256' },
+      { name: 'data', internalType: 'bytes', type: 'bytes' },
+    ],
+    name: 'safeTransferFrom',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'operator', internalType: 'address', type: 'address' },
+      { name: 'approved', internalType: 'bool', type: 'bool' },
+    ],
+    name: 'setApprovalForAll',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'interfaceId', internalType: 'bytes4', type: 'bytes4' }],
+    name: 'supportsInterface',
+    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'symbol',
+    outputs: [{ name: '', internalType: 'string', type: 'string' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'tokenId', internalType: 'uint256', type: 'uint256' }],
+    name: 'tokenURI',
+    outputs: [{ name: '', internalType: 'string', type: 'string' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'from', internalType: 'address', type: 'address' },
+      { name: 'to', internalType: 'address', type: 'address' },
+      { name: 'id', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'transferFrom',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      { name: 'owner', internalType: 'address', type: 'address', indexed: true },
+      { name: 'spender', internalType: 'address', type: 'address', indexed: true },
+      { name: 'id', internalType: 'uint256', type: 'uint256', indexed: true },
+    ],
+    name: 'Approval',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      { name: 'owner', internalType: 'address', type: 'address', indexed: true },
+      { name: 'operator', internalType: 'address', type: 'address', indexed: true },
+      { name: 'approved', internalType: 'bool', type: 'bool', indexed: false },
+    ],
+    name: 'ApprovalForAll',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'poolAddress',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'uniswapPool',
+        internalType: 'contract IUniswapV3Pool',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'collateralTracker0',
+        internalType: 'contract CollateralTrackerV2',
+        type: 'address',
+        indexed: false,
+      },
+      {
+        name: 'collateralTracker1',
+        internalType: 'contract CollateralTrackerV2',
+        type: 'address',
+        indexed: false,
+      },
+      { name: 'riskEngine', internalType: 'contract IRiskEngine', type: 'address', indexed: false },
+    ],
+    name: 'PoolDeployed',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      { name: 'from', internalType: 'address', type: 'address', indexed: true },
+      { name: 'to', internalType: 'address', type: 'address', indexed: true },
+      { name: 'id', internalType: 'uint256', type: 'uint256', indexed: true },
+    ],
+    name: 'Transfer',
+  },
+  { type: 'error', inputs: [], name: 'AlreadyInitialized' },
+  { type: 'error', inputs: [], name: 'CreateFail' },
+  { type: 'error', inputs: [], name: 'PoolNotInitialized' },
+  { type: 'error', inputs: [], name: 'ZeroAddress' },
+] as const
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// PanopticFactoryV4
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+export const panopticFactoryV4Abi = [
   {
     type: 'constructor',
     inputs: [
       {
         name: '_SFPM',
-        internalType: 'contract SemiFungiblePositionManager',
+        internalType: 'contract SemiFungiblePositionManagerV4',
         type: 'address',
       },
       {
@@ -947,7 +1203,7 @@ export const panopticFactoryAbi = [
     outputs: [
       {
         name: 'newPoolContract',
-        internalType: 'contract PanopticPool',
+        internalType: 'contract PanopticPoolV2',
         type: 'address',
       },
     ],
@@ -982,7 +1238,7 @@ export const panopticFactoryAbi = [
       },
     ],
     name: 'getPanopticPool',
-    outputs: [{ name: '', internalType: 'contract PanopticPool', type: 'address' }],
+    outputs: [{ name: '', internalType: 'contract PanopticPoolV2', type: 'address' }],
     stateMutability: 'view',
   },
   {
@@ -1155,20 +1411,20 @@ export const panopticFactoryAbi = [
     inputs: [
       {
         name: 'poolAddress',
-        internalType: 'contract PanopticPool',
+        internalType: 'contract PanopticPoolV2',
         type: 'address',
         indexed: true,
       },
       { name: 'idV4', internalType: 'PoolId', type: 'bytes32', indexed: true },
       {
         name: 'collateralTracker0',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
         indexed: false,
       },
       {
         name: 'collateralTracker1',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
         indexed: false,
       },
@@ -1198,126 +1454,10 @@ export const panopticFactoryAbi = [
 ] as const
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// PanopticHelper
+// PanopticPoolV2
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-export const panopticHelperAbi = [
-  {
-    type: 'constructor',
-    inputs: [
-      {
-        name: '_SFPM',
-        internalType: 'contract ISemiFungiblePositionManager',
-        type: 'address',
-      },
-    ],
-    stateMutability: 'payable',
-  },
-  {
-    type: 'function',
-    inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
-      { name: 'account', internalType: 'address', type: 'address' },
-      { name: 'atTick', internalType: 'int24', type: 'int24' },
-      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
-    ],
-    name: 'checkCollateral',
-    outputs: [
-      { name: '', internalType: 'uint256', type: 'uint256' },
-      { name: '', internalType: 'uint256', type: 'uint256' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [
-      {
-        name: 'univ3pool',
-        internalType: 'contract IUniswapV3Pool',
-        type: 'address',
-      },
-      { name: 'cardinality', internalType: 'uint256', type: 'uint256' },
-      { name: 'period', internalType: 'uint256', type: 'uint256' },
-    ],
-    name: 'computeMedianObservedPrice',
-    outputs: [{ name: '', internalType: 'int24', type: 'int24' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [
-      { name: 'pool', internalType: 'address', type: 'address' },
-      { name: 'account', internalType: 'address', type: 'address' },
-      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
-    ],
-    name: 'findLiquidationPriceDown',
-    outputs: [{ name: 'liquidationTick', internalType: 'int24', type: 'int24' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [
-      { name: 'pool', internalType: 'address', type: 'address' },
-      { name: 'account', internalType: 'address', type: 'address' },
-      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
-    ],
-    name: 'findLiquidationPriceUp',
-    outputs: [{ name: 'liquidationTick', internalType: 'int24', type: 'int24' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
-      { name: 'account', internalType: 'address', type: 'address' },
-      { name: 'atTick', internalType: 'int24', type: 'int24' },
-      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
-    ],
-    name: 'getPortfolioValue',
-    outputs: [
-      { name: 'value0', internalType: 'int256', type: 'int256' },
-      { name: 'value1', internalType: 'int256', type: 'int256' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
-      { name: 'account', internalType: 'address', type: 'address' },
-      { name: 'tokenId', internalType: 'TokenId', type: 'uint256' },
-    ],
-    name: 'optionPositionInfo',
-    outputs: [
-      { name: '', internalType: 'uint128', type: 'uint128' },
-      { name: '', internalType: 'uint16', type: 'uint16' },
-      { name: '', internalType: 'uint16', type: 'uint16' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [
-      {
-        name: 'univ3pool',
-        internalType: 'contract IUniswapV3Pool',
-        type: 'address',
-      },
-      { name: 'twapWindow', internalType: 'uint32', type: 'uint32' },
-    ],
-    name: 'twapFilter',
-    outputs: [{ name: '', internalType: 'int24', type: 'int24' }],
-    stateMutability: 'view',
-  },
-  { type: 'error', inputs: [], name: 'InvalidTick' },
-  { type: 'error', inputs: [], name: 'LiquidityTooHigh' },
-] as const
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// PanopticPool
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-export const panopticPoolAbi = [
+export const panopticPoolV2Abi = [
   {
     type: 'constructor',
     inputs: [
@@ -1356,14 +1496,26 @@ export const panopticPoolAbi = [
     type: 'function',
     inputs: [],
     name: 'collateralToken0',
-    outputs: [{ name: '', internalType: 'contract CollateralTracker', type: 'address' }],
+    outputs: [
+      {
+        name: '',
+        internalType: 'contract CollateralTrackerV2',
+        type: 'address',
+      },
+    ],
     stateMutability: 'pure',
   },
   {
     type: 'function',
     inputs: [],
     name: 'collateralToken1',
-    outputs: [{ name: '', internalType: 'contract CollateralTracker', type: 'address' }],
+    outputs: [
+      {
+        name: '',
+        internalType: 'contract CollateralTrackerV2',
+        type: 'address',
+      },
+    ],
     stateMutability: 'pure',
   },
   {
@@ -1419,16 +1571,34 @@ export const panopticPoolAbi = [
   },
   {
     type: 'function',
-    inputs: [
-      { name: 'user', internalType: 'address', type: 'address' },
-      { name: 'includePendingPremium', internalType: 'bool', type: 'bool' },
-      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
-    ],
-    name: 'getAccumulatedFeesAndPositionsData',
+    inputs: [{ name: 'account', internalType: 'address', type: 'address' }],
+    name: 'getAssetsOf',
     outputs: [
-      { name: '', internalType: 'LeftRightUnsigned', type: 'uint256' },
-      { name: '', internalType: 'LeftRightUnsigned', type: 'uint256' },
-      { name: '', internalType: 'PositionBalance[]', type: 'uint256[]' },
+      { name: 'assets0', internalType: 'uint256', type: 'uint256' },
+      { name: 'assets1', internalType: 'uint256', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'tickLower', internalType: 'int24', type: 'int24' },
+      { name: 'tickUpper', internalType: 'int24', type: 'int24' },
+    ],
+    name: 'getChunkData',
+    outputs: [
+      {
+        name: 'liquidities0',
+        internalType: 'LeftRightUnsigned',
+        type: 'uint256',
+      },
+      {
+        name: 'liquidities1',
+        internalType: 'LeftRightUnsigned',
+        type: 'uint256',
+      },
+      { name: 'settled0', internalType: 'LeftRightUnsigned', type: 'uint256' },
+      { name: 'settled1', internalType: 'LeftRightUnsigned', type: 'uint256' },
     ],
     stateMutability: 'view',
   },
@@ -1437,6 +1607,43 @@ export const panopticPoolAbi = [
     inputs: [],
     name: 'getCurrentTick',
     outputs: [{ name: 'currentTick', internalType: 'int24', type: 'int24' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'user', internalType: 'address', type: 'address' },
+      { name: 'includePendingPremium', internalType: 'bool', type: 'bool' },
+      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
+    ],
+    name: 'getFullPositionsData',
+    outputs: [
+      {
+        name: 'shortPremium',
+        internalType: 'LeftRightUnsigned',
+        type: 'uint256',
+      },
+      {
+        name: 'longPremium',
+        internalType: 'LeftRightUnsigned',
+        type: 'uint256',
+      },
+      {
+        name: 'positionBalances',
+        internalType: 'PositionBalance[]',
+        type: 'uint256[]',
+      },
+      {
+        name: 'collateralRequirements',
+        internalType: 'LeftRightUnsigned[]',
+        type: 'uint256[]',
+      },
+      {
+        name: 'netPremiaPerPosition',
+        internalType: 'LeftRightSigned[]',
+        type: 'int256[]',
+      },
+    ],
     stateMutability: 'view',
   },
   {
@@ -1551,24 +1758,6 @@ export const panopticPoolAbi = [
   },
   {
     type: 'function',
-    inputs: [
-      { name: 'user', internalType: 'address', type: 'address' },
-      { name: 'tokenId', internalType: 'TokenId', type: 'uint256' },
-    ],
-    name: 'positionData',
-    outputs: [
-      { name: '', internalType: 'bool', type: 'bool' },
-      { name: '', internalType: 'uint256', type: 'uint256' },
-      { name: '', internalType: 'uint256', type: 'uint256' },
-      { name: '', internalType: 'int24', type: 'int24' },
-      { name: '', internalType: 'int256', type: 'int256' },
-      { name: '', internalType: 'int256', type: 'int256' },
-      { name: '', internalType: 'uint128', type: 'uint128' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
     inputs: [],
     name: 'reentrancyGuardEntered',
     outputs: [{ name: 'entered', internalType: 'bool', type: 'bool' }],
@@ -1579,6 +1768,13 @@ export const panopticPoolAbi = [
     inputs: [],
     name: 'riskEngine',
     outputs: [{ name: '', internalType: 'contract IRiskEngine', type: 'address' }],
+    stateMutability: 'pure',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'tickSpacing',
+    outputs: [{ name: '', internalType: 'int24', type: 'int24' }],
     stateMutability: 'pure',
   },
   {
@@ -1746,6 +1942,7 @@ export const panopticPoolAbi = [
   { type: 'error', inputs: [], name: 'EffectiveLiquidityAboveThreshold' },
   { type: 'error', inputs: [], name: 'InputListFail' },
   { type: 'error', inputs: [], name: 'InvalidTick' },
+  { type: 'error', inputs: [], name: 'InvalidTickBound' },
   { type: 'error', inputs: [], name: 'LiquidityTooHigh' },
   { type: 'error', inputs: [], name: 'NetLiquidityZero' },
   { type: 'error', inputs: [], name: 'NoLegsExercisable' },
@@ -1759,6 +1956,252 @@ export const panopticPoolAbi = [
   { type: 'error', inputs: [], name: 'TooManyLegsOpen' },
   { type: 'error', inputs: [], name: 'UnderOverFlow' },
   { type: 'error', inputs: [], name: 'WrongPoolId' },
+] as const
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// PanopticQuery
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+export const panopticQueryAbi = [
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      { name: 'account', internalType: 'address', type: 'address' },
+      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
+    ],
+    name: 'checkCollateral',
+    outputs: [
+      {
+        name: 'collateralBalances0',
+        internalType: 'uint256[4]',
+        type: 'uint256[4]',
+      },
+      {
+        name: 'requiredCollaterals0',
+        internalType: 'uint256[4]',
+        type: 'uint256[4]',
+      },
+      {
+        name: 'collateralBalances1',
+        internalType: 'uint256[4]',
+        type: 'uint256[4]',
+      },
+      {
+        name: 'requiredCollaterals1',
+        internalType: 'uint256[4]',
+        type: 'uint256[4]',
+      },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      { name: 'account', internalType: 'address', type: 'address' },
+      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
+      { name: 'atTick', internalType: 'int24', type: 'int24' },
+    ],
+    name: 'checkCollateral',
+    outputs: [
+      {
+        name: 'balancesAndRequired',
+        internalType: 'uint256[4]',
+        type: 'uint256[4]',
+      },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      { name: 'account', internalType: 'address', type: 'address' },
+      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
+    ],
+    name: 'checkCollateralListOutput',
+    outputs: [
+      { name: '', internalType: 'uint256[4][]', type: 'uint256[4][]' },
+      { name: '', internalType: 'int256[]', type: 'int256[]' },
+      { name: '', internalType: 'int24[]', type: 'int24[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
+    ],
+    name: 'getChunkData',
+    outputs: [{ name: '', internalType: 'uint256[2][4][]', type: 'uint256[2][4][]' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      { name: 'account', internalType: 'address', type: 'address' },
+      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
+    ],
+    name: 'getLiquidationPrices',
+    outputs: [
+      { name: 'liquidationPriceDown', internalType: 'int24', type: 'int24' },
+      { name: 'liquidationPriceUp', internalType: 'int24', type: 'int24' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      {
+        name: 'existingPositionIds',
+        internalType: 'TokenId[]',
+        type: 'uint256[]',
+      },
+      { name: 'account', internalType: 'address', type: 'address' },
+      { name: 'tokenId', internalType: 'TokenId', type: 'uint256' },
+    ],
+    name: 'getMaxPositionSizeBounds',
+    outputs: [
+      { name: 'maxSizeAtMinUtil', internalType: 'uint128', type: 'uint128' },
+      { name: 'maxSizeAtMaxUtil', internalType: 'uint128', type: 'uint128' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      { name: 'account', internalType: 'address', type: 'address' },
+      { name: 'includePendingPremium', internalType: 'bool', type: 'bool' },
+      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
+      { name: 'atTick', internalType: 'int24', type: 'int24' },
+    ],
+    name: 'getNetLiquidationValue',
+    outputs: [
+      { name: 'value0', internalType: 'int256', type: 'int256' },
+      { name: 'value1', internalType: 'int256', type: 'int256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      { name: 'account', internalType: 'address', type: 'address' },
+      { name: 'atTick', internalType: 'int24', type: 'int24' },
+      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
+    ],
+    name: 'getPortfolioValue',
+    outputs: [
+      { name: 'value0', internalType: 'int256', type: 'int256' },
+      { name: 'value1', internalType: 'int256', type: 'int256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      { name: 'account', internalType: 'address', type: 'address' },
+      { name: 'atTicks', internalType: 'int24[]', type: 'int24[]' },
+      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
+    ],
+    name: 'getPortfolioValueAtTicks',
+    outputs: [
+      { name: 'value0', internalType: 'int256[]', type: 'int256[]' },
+      { name: 'value1', internalType: 'int256[]', type: 'int256[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      { name: 'tokenId', internalType: 'TokenId', type: 'uint256' },
+      { name: 'atTick', internalType: 'int24', type: 'int24' },
+    ],
+    name: 'getRequiredBase',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      { name: 'startTick', internalType: 'int24', type: 'int24' },
+      { name: 'nTicks', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'getTickNets',
+    outputs: [
+      { name: 'tickData', internalType: 'int256[]', type: 'int256[]' },
+      { name: 'liquidityNets', internalType: 'int256[]', type: 'int256[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      { name: 'account', internalType: 'address', type: 'address' },
+      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
+      { name: 'atTick', internalType: 'int24', type: 'int24' },
+    ],
+    name: 'isAccountSolvent',
+    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      { name: 'atTick', internalType: 'int24', type: 'int24' },
+      { name: 'tokenId', internalType: 'TokenId', type: 'uint256' },
+    ],
+    name: 'optimizeRiskPartners',
+    outputs: [{ name: '', internalType: 'TokenId', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      { name: 'tickLower', internalType: 'int24', type: 'int24' },
+      { name: 'tickUpper', internalType: 'int24', type: 'int24' },
+      { name: 'width', internalType: 'int24', type: 'int24' },
+    ],
+    name: 'scanChunks',
+    outputs: [
+      { name: '', internalType: 'int24[]', type: 'int24[]' },
+      { name: '', internalType: 'uint128[2][]', type: 'uint128[2][]' },
+      { name: '', internalType: 'uint128[2][]', type: 'uint128[2][]' },
+      {
+        name: '',
+        internalType: 'LeftRightUnsigned[2][]',
+        type: 'uint256[2][]',
+      },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'self', internalType: 'TokenId', type: 'uint256' }],
+    name: 'validateTokenId',
+    outputs: [],
+    stateMutability: 'pure',
+  },
+  { type: 'error', inputs: [], name: 'CastingError' },
+  { type: 'error', inputs: [], name: 'InvalidTick' },
+  {
+    type: 'error',
+    inputs: [{ name: 'parameterType', internalType: 'uint256', type: 'uint256' }],
+    name: 'InvalidTokenIdParameter',
+  },
+  { type: 'error', inputs: [], name: 'LiquidityTooHigh' },
+  { type: 'error', inputs: [], name: 'UnderOverFlow' },
 ] as const
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1849,6 +2292,13 @@ export const riskEngineAbi = [
   {
     type: 'function',
     inputs: [],
+    name: 'GUARDIAN',
+    outputs: [{ name: '', internalType: 'address', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [],
     name: 'INITIAL_RATE_AT_TARGET',
     outputs: [{ name: '', internalType: 'int256', type: 'int256' }],
     stateMutability: 'view',
@@ -1864,6 +2314,13 @@ export const riskEngineAbi = [
     type: 'function',
     inputs: [],
     name: 'MAINT_MARGIN_RATE',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'MAX_BONUS',
     outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
     stateMutability: 'view',
   },
@@ -2017,8 +2474,8 @@ export const riskEngineAbi = [
       { name: 'crossBuffer', internalType: 'uint256', type: 'uint256' },
     ],
     name: 'crossBufferRatio',
-    outputs: [{ name: 'crossBufferRatio', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'pure',
   },
   {
     type: 'function',
@@ -2034,7 +2491,7 @@ export const riskEngineAbi = [
     ],
     name: 'exerciseCost',
     outputs: [{ name: 'exerciseFees', internalType: 'LeftRightSigned', type: 'int256' }],
-    stateMutability: 'view',
+    stateMutability: 'pure',
   },
   {
     type: 'function',
@@ -2060,6 +2517,11 @@ export const riskEngineAbi = [
       { name: 'netPaid', internalType: 'LeftRightSigned', type: 'int256' },
       {
         name: 'shortPremium',
+        internalType: 'LeftRightUnsigned',
+        type: 'uint256',
+      },
+      {
+        name: 'loanAmounts',
         internalType: 'LeftRightUnsigned',
         type: 'uint256',
       },
@@ -2094,12 +2556,12 @@ export const riskEngineAbi = [
       },
       {
         name: 'ct0',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
       },
       {
         name: 'ct1',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
       },
     ],
@@ -2141,17 +2603,38 @@ export const riskEngineAbi = [
   {
     type: 'function',
     inputs: [
+      {
+        name: 'positionBalanceArray',
+        internalType: 'PositionBalance[]',
+        type: 'uint256[]',
+      },
+      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
+      { name: 'atTick', internalType: 'int24', type: 'int24' },
+    ],
+    name: 'getPerPositionCollateralRequirements',
+    outputs: [
+      {
+        name: 'collateralRequirements',
+        internalType: 'LeftRightUnsigned[]',
+        type: 'uint256[]',
+      },
+    ],
+    stateMutability: 'pure',
+  },
+  {
+    type: 'function',
+    inputs: [
       { name: 'payor', internalType: 'address', type: 'address' },
       { name: 'fees', internalType: 'LeftRightSigned', type: 'int256' },
       { name: 'atTick', internalType: 'int24', type: 'int24' },
       {
         name: 'ct0',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
       },
       {
         name: 'ct1',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
       },
     ],
@@ -2194,7 +2677,6 @@ export const riskEngineAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'liquidatee', internalType: 'address', type: 'address' },
       { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
       {
         name: 'premiasByLeg',
@@ -2222,7 +2704,7 @@ export const riskEngineAbi = [
         type: 'int256[4][]',
       },
     ],
-    stateMutability: 'nonpayable',
+    stateMutability: 'pure',
   },
   {
     type: 'function',
@@ -2261,12 +2743,12 @@ export const riskEngineAbi = [
       },
       {
         name: 'ct0',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
       },
       {
         name: 'ct1',
-        internalType: 'contract CollateralTracker',
+        internalType: 'contract CollateralTrackerV2',
         type: 'address',
       },
       { name: 'buffer', internalType: 'uint256', type: 'uint256' },
@@ -2287,7 +2769,13 @@ export const riskEngineAbi = [
   },
   {
     type: 'function',
-    inputs: [{ name: 'pool', internalType: 'contract PanopticPool', type: 'address' }],
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
+    ],
     name: 'lockPool',
     outputs: [],
     stateMutability: 'nonpayable',
@@ -2301,7 +2789,13 @@ export const riskEngineAbi = [
   },
   {
     type: 'function',
-    inputs: [{ name: 'pool', internalType: 'contract PanopticPool', type: 'address' }],
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
+    ],
     name: 'unlockPool',
     outputs: [],
     stateMutability: 'nonpayable',
@@ -2328,7 +2822,7 @@ export const riskEngineAbi = [
     inputs: [],
     name: 'vegoid',
     outputs: [{ name: '', internalType: 'uint8', type: 'uint8' }],
-    stateMutability: 'view',
+    stateMutability: 'pure',
   },
   {
     type: 'event',
@@ -2407,10 +2901,546 @@ export const riskEngineAbi = [
 ] as const
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// SemiFungiblePositionManager
+// SemiFungiblePositionManagerV3
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-export const semiFungiblePositionManagerAbi = [
+export const semiFungiblePositionManagerV3Abi = [
+  {
+    type: 'constructor',
+    inputs: [
+      {
+        name: '_factory',
+        internalType: 'contract IUniswapV3Factory',
+        type: 'address',
+      },
+      {
+        name: '_minEnforcedTickFillCost',
+        internalType: 'uint256',
+        type: 'uint256',
+      },
+      {
+        name: '_supplyMultiplierTickFill',
+        internalType: 'uint256',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'account', internalType: 'address', type: 'address' },
+      { name: 'tokenId', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'balanceOf',
+    outputs: [{ name: 'balance', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'owners', internalType: 'address[]', type: 'address[]' },
+      { name: 'ids', internalType: 'uint256[]', type: 'uint256[]' },
+    ],
+    name: 'balanceOfBatch',
+    outputs: [{ name: 'balances', internalType: 'uint256[]', type: 'uint256[]' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'poolKey', internalType: 'bytes', type: 'bytes' },
+      { name: 'tokenId', internalType: 'TokenId', type: 'uint256' },
+      { name: 'positionSize', internalType: 'uint128', type: 'uint128' },
+      { name: 'tickLimitLow', internalType: 'int24', type: 'int24' },
+      { name: 'tickLimitHigh', internalType: 'int24', type: 'int24' },
+    ],
+    name: 'burnTokenizedPosition',
+    outputs: [
+      { name: '', internalType: 'LeftRightUnsigned[4]', type: 'uint256[4]' },
+      { name: '', internalType: 'LeftRightSigned', type: 'int256' },
+      { name: '', internalType: 'int24', type: 'int24' },
+    ],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'poolId', internalType: 'uint64', type: 'uint64' }],
+    name: 'expandEnforcedTickRange',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'poolKey', internalType: 'bytes', type: 'bytes' },
+      { name: 'owner', internalType: 'address', type: 'address' },
+      { name: 'tokenType', internalType: 'uint256', type: 'uint256' },
+      { name: 'tickLower', internalType: 'int24', type: 'int24' },
+      { name: 'tickUpper', internalType: 'int24', type: 'int24' },
+    ],
+    name: 'getAccountFeesBase',
+    outputs: [
+      { name: 'feesBase0', internalType: 'int128', type: 'int128' },
+      { name: 'feesBase1', internalType: 'int128', type: 'int128' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'poolKey', internalType: 'bytes', type: 'bytes' },
+      { name: 'owner', internalType: 'address', type: 'address' },
+      { name: 'tokenType', internalType: 'uint256', type: 'uint256' },
+      { name: 'tickLower', internalType: 'int24', type: 'int24' },
+      { name: 'tickUpper', internalType: 'int24', type: 'int24' },
+    ],
+    name: 'getAccountLiquidity',
+    outputs: [
+      {
+        name: 'accountLiquidities',
+        internalType: 'LeftRightUnsigned',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'poolKey', internalType: 'bytes', type: 'bytes' },
+      { name: 'owner', internalType: 'address', type: 'address' },
+      { name: 'tokenType', internalType: 'uint256', type: 'uint256' },
+      { name: 'tickLower', internalType: 'int24', type: 'int24' },
+      { name: 'tickUpper', internalType: 'int24', type: 'int24' },
+      { name: 'atTick', internalType: 'int24', type: 'int24' },
+      { name: 'isLong', internalType: 'uint256', type: 'uint256' },
+      { name: 'vegoid', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'getAccountPremium',
+    outputs: [
+      { name: '', internalType: 'uint128', type: 'uint128' },
+      { name: '', internalType: 'uint128', type: 'uint128' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'poolKey', internalType: 'bytes', type: 'bytes' }],
+    name: 'getCurrentTick',
+    outputs: [{ name: 'currentTick', internalType: 'int24', type: 'int24' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'poolId', internalType: 'uint64', type: 'uint64' }],
+    name: 'getEnforcedTickLimits',
+    outputs: [
+      { name: '', internalType: 'int24', type: 'int24' },
+      { name: '', internalType: 'int24', type: 'int24' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'id', internalType: 'bytes', type: 'bytes' },
+      { name: 'vegoid', internalType: 'uint8', type: 'uint8' },
+    ],
+    name: 'getPoolId',
+    outputs: [{ name: 'poolId', internalType: 'uint64', type: 'uint64' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'poolId', internalType: 'uint64', type: 'uint64' }],
+    name: 'getUniswapV3PoolFromId',
+    outputs: [
+      {
+        name: 'uniswapV3Pool',
+        internalType: 'contract IUniswapV3Pool',
+        type: 'address',
+      },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'token0', internalType: 'address', type: 'address' },
+      { name: 'token1', internalType: 'address', type: 'address' },
+      { name: 'fee', internalType: 'uint24', type: 'uint24' },
+      { name: 'vegoid', internalType: 'uint8', type: 'uint8' },
+    ],
+    name: 'initializeAMMPool',
+    outputs: [{ name: 'poolId', internalType: 'uint64', type: 'uint64' }],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'owner', internalType: 'address', type: 'address' },
+      { name: 'operator', internalType: 'address', type: 'address' },
+    ],
+    name: 'isApprovedForAll',
+    outputs: [{ name: 'approvedForAll', internalType: 'bool', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'poolKey', internalType: 'bytes', type: 'bytes' },
+      { name: 'tokenId', internalType: 'TokenId', type: 'uint256' },
+      { name: 'positionSize', internalType: 'uint128', type: 'uint128' },
+      { name: 'tickLimitLow', internalType: 'int24', type: 'int24' },
+      { name: 'tickLimitHigh', internalType: 'int24', type: 'int24' },
+    ],
+    name: 'mintTokenizedPosition',
+    outputs: [
+      { name: '', internalType: 'LeftRightUnsigned[4]', type: 'uint256[4]' },
+      { name: '', internalType: 'LeftRightSigned', type: 'int256' },
+      { name: '', internalType: 'int24', type: 'int24' },
+    ],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'data', internalType: 'bytes[]', type: 'bytes[]' }],
+    name: 'multicall',
+    outputs: [{ name: 'results', internalType: 'bytes[]', type: 'bytes[]' }],
+    stateMutability: 'payable',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'reentrancyGuardEntered',
+    outputs: [{ name: 'entered', internalType: 'bool', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: '', internalType: 'address', type: 'address' },
+      { name: '', internalType: 'address', type: 'address' },
+      { name: '', internalType: 'uint256[]', type: 'uint256[]' },
+      { name: '', internalType: 'uint256[]', type: 'uint256[]' },
+      { name: '', internalType: 'bytes', type: 'bytes' },
+    ],
+    name: 'safeBatchTransferFrom',
+    outputs: [],
+    stateMutability: 'pure',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: '', internalType: 'address', type: 'address' },
+      { name: '', internalType: 'address', type: 'address' },
+      { name: '', internalType: 'uint256', type: 'uint256' },
+      { name: '', internalType: 'uint256', type: 'uint256' },
+      { name: '', internalType: 'bytes', type: 'bytes' },
+    ],
+    name: 'safeTransferFrom',
+    outputs: [],
+    stateMutability: 'pure',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'operator', internalType: 'address', type: 'address' },
+      { name: 'approved', internalType: 'bool', type: 'bool' },
+    ],
+    name: 'setApprovalForAll',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'interfaceId', internalType: 'bytes4', type: 'bytes4' }],
+    name: 'supportsInterface',
+    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
+    stateMutability: 'pure',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'amount0Owed', internalType: 'uint256', type: 'uint256' },
+      { name: 'amount1Owed', internalType: 'uint256', type: 'uint256' },
+      { name: 'data', internalType: 'bytes', type: 'bytes' },
+    ],
+    name: 'uniswapV3MintCallback',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'amount0Delta', internalType: 'int256', type: 'int256' },
+      { name: 'amount1Delta', internalType: 'int256', type: 'int256' },
+      { name: 'data', internalType: 'bytes', type: 'bytes' },
+    ],
+    name: 'uniswapV3SwapCallback',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'owner',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'operator',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      { name: 'approved', internalType: 'bool', type: 'bool', indexed: false },
+    ],
+    name: 'ApprovalForAll',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'uniswapPool',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'minEnforcedTick',
+        internalType: 'int24',
+        type: 'int24',
+        indexed: false,
+      },
+      {
+        name: 'maxEnforcedTick',
+        internalType: 'int24',
+        type: 'int24',
+        indexed: false,
+      },
+    ],
+    name: 'EnforcedTicksUpdated',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'univ3pool',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'owner',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'tokenType',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: true,
+      },
+      {
+        name: 'tickLower',
+        internalType: 'int24',
+        type: 'int24',
+        indexed: false,
+      },
+      {
+        name: 'tickUpper',
+        internalType: 'int24',
+        type: 'int24',
+        indexed: false,
+      },
+      {
+        name: 'liquidityDelta',
+        internalType: 'int128',
+        type: 'int128',
+        indexed: false,
+      },
+    ],
+    name: 'LiquidityChunkUpdated',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'uniswapPool',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'poolId',
+        internalType: 'uint64',
+        type: 'uint64',
+        indexed: false,
+      },
+      {
+        name: 'minEnforcedTick',
+        internalType: 'int24',
+        type: 'int24',
+        indexed: false,
+      },
+      {
+        name: 'maxEnforcedTick',
+        internalType: 'int24',
+        type: 'int24',
+        indexed: false,
+      },
+    ],
+    name: 'PoolInitialized',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'recipient',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'tokenId',
+        internalType: 'TokenId',
+        type: 'uint256',
+        indexed: true,
+      },
+      {
+        name: 'positionSize',
+        internalType: 'uint128',
+        type: 'uint128',
+        indexed: false,
+      },
+    ],
+    name: 'TokenizedPositionBurnt',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'caller',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'tokenId',
+        internalType: 'TokenId',
+        type: 'uint256',
+        indexed: true,
+      },
+      {
+        name: 'positionSize',
+        internalType: 'uint128',
+        type: 'uint128',
+        indexed: false,
+      },
+    ],
+    name: 'TokenizedPositionMinted',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'operator',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      { name: 'from', internalType: 'address', type: 'address', indexed: true },
+      { name: 'to', internalType: 'address', type: 'address', indexed: true },
+      {
+        name: 'ids',
+        internalType: 'uint256[]',
+        type: 'uint256[]',
+        indexed: false,
+      },
+      {
+        name: 'amounts',
+        internalType: 'uint256[]',
+        type: 'uint256[]',
+        indexed: false,
+      },
+    ],
+    name: 'TransferBatch',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'operator',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      { name: 'from', internalType: 'address', type: 'address', indexed: true },
+      { name: 'to', internalType: 'address', type: 'address', indexed: true },
+      { name: 'id', internalType: 'uint256', type: 'uint256', indexed: false },
+      {
+        name: 'amount',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+    ],
+    name: 'TransferSingle',
+  },
+  { type: 'error', inputs: [], name: 'CastingError' },
+  { type: 'error', inputs: [], name: 'ChunkHasZeroLiquidity' },
+  { type: 'error', inputs: [], name: 'InvalidTick' },
+  { type: 'error', inputs: [], name: 'InvalidTickBound' },
+  {
+    type: 'error',
+    inputs: [{ name: 'parameterType', internalType: 'uint256', type: 'uint256' }],
+    name: 'InvalidTokenIdParameter',
+  },
+  { type: 'error', inputs: [], name: 'InvalidUniswapCallback' },
+  { type: 'error', inputs: [], name: 'LiquidityTooHigh' },
+  { type: 'error', inputs: [], name: 'NotAuthorized' },
+  { type: 'error', inputs: [], name: 'NotEnoughLiquidityInChunk' },
+  { type: 'error', inputs: [], name: 'PoolNotInitialized' },
+  { type: 'error', inputs: [], name: 'PositionTooLarge' },
+  {
+    type: 'error',
+    inputs: [{ name: 'currentTick', internalType: 'int24', type: 'int24' }],
+    name: 'PriceBoundFail',
+  },
+  { type: 'error', inputs: [], name: 'Reentrancy' },
+  {
+    type: 'error',
+    inputs: [
+      { name: 'token', internalType: 'address', type: 'address' },
+      { name: 'from', internalType: 'address', type: 'address' },
+      { name: 'amount', internalType: 'uint256', type: 'uint256' },
+      { name: 'balance', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'TransferFailed',
+  },
+  { type: 'error', inputs: [], name: 'UnderOverFlow' },
+  { type: 'error', inputs: [], name: 'UnsafeRecipient' },
+  { type: 'error', inputs: [], name: 'WrongUniswapPool' },
+] as const
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// SemiFungiblePositionManagerV4
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+export const semiFungiblePositionManagerV4Abi = [
   {
     type: 'constructor',
     inputs: [

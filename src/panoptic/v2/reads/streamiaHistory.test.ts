@@ -202,7 +202,7 @@ describe('getStreamiaHistory', () => {
 
     let multicallContracts: unknown[] = []
     const client = {
-      readContract: vi.fn().mockResolvedValue([shortPacked, longPacked, [0n]]),
+      readContract: vi.fn().mockResolvedValue([shortPacked, longPacked, [0n], [0n], [0n]]),
       multicall: vi.fn().mockImplementation(({ contracts }) => {
         multicallContracts = contracts
         // slot0 + feeGrowthGlobal0 + feeGrowthGlobal1 + 3 unique ticks (100, 200, 300)
@@ -244,7 +244,7 @@ describe('getStreamiaHistory', () => {
 
     let multicallContracts: Array<{ functionName: string }> = []
     const client = {
-      readContract: vi.fn().mockResolvedValue([shortPacked, longPacked, [0n]]),
+      readContract: vi.fn().mockResolvedValue([shortPacked, longPacked, [0n], [0n], [0n]]),
       multicall: vi.fn().mockImplementation(({ contracts }) => {
         multicallContracts = contracts
         return Promise.resolve([

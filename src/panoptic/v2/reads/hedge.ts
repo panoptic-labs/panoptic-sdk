@@ -201,7 +201,7 @@ export async function getDeltaHedgeParams(
       blockNumber,
     })
     currentTick = pool.currentTick
-    tickSpacing = pool.poolKey.tickSpacing
+    tickSpacing = pool.tickSpacing
     poolMeta = pool._meta
   }
 

@@ -17,7 +17,9 @@
 import type { Address, PublicClient } from 'viem'
 import { decodeAbiParameters, keccak256, zeroAddress } from 'viem'
 
-import { collateralTrackerAbi, panopticPoolAbi, riskEngineAbi } from '../../../generated'
+import { collateralTrackerV2Abi, panopticPoolV2Abi, riskEngineAbi } from '../../../generated'
+import { stateViewAbi } from '../abis/stateView'
+import { uniswapV3PoolAbi } from '../abis/uniswapV3Pool'
 import { getBlockMeta } from '../clients/blockMeta'
 import { tickToSqrtPriceX96 } from '../formatters/tick'
 import type {
@@ -94,6 +96,10 @@ export interface PoolMetadata {
   isV4: boolean
   /** Tick spacing */
   tickSpacing: bigint
+  /** Fee tier (V4: from poolKey, V3: from Uniswap pool fee()) */
+  fee: bigint
+  /** SemiFungiblePositionManager address */
+  sfpmAddress: Address
 }
 
 /**
@@ -123,33 +129,38 @@ export async function getPoolMetadata(params: GetPoolMetadataParams): Promise<Po
     contracts: [
       {
         address: poolAddress,
-        abi: panopticPoolAbi,
+        abi: panopticPoolV2Abi,
         functionName: 'poolKey',
       },
       {
         address: poolAddress,
-        abi: panopticPoolAbi,
+        abi: panopticPoolV2Abi,
         functionName: 'poolId',
       },
       {
         address: poolAddress,
-        abi: panopticPoolAbi,
+        abi: panopticPoolV2Abi,
         functionName: 'collateralToken0',
       },
       {
         address: poolAddress,
-        abi: panopticPoolAbi,
+        abi: panopticPoolV2Abi,
         functionName: 'collateralToken1',
       },
       {
         address: poolAddress,
-        abi: panopticPoolAbi,
+        abi: panopticPoolV2Abi,
         functionName: 'riskEngine',
       },
       {
         address: poolAddress,
-        abi: panopticPoolAbi,
+        abi: panopticPoolV2Abi,
         functionName: 'poolManager',
+      },
+      {
+        address: poolAddress,
+        abi: panopticPoolV2Abi,
+        functionName: 'SFPM',
       },
     ],
     allowFailure: false,
@@ -162,6 +173,7 @@ export async function getPoolMetadata(params: GetPoolMetadataParams): Promise<Po
     collateralToken1Address,
     riskEngineAddress,
     poolManager,
+    sfpmAddress,
   ] = basicResults
 
   // Second call: get underlying asset addresses from collateral trackers
@@ -169,12 +181,12 @@ export async function getPoolMetadata(params: GetPoolMetadataParams): Promise<Po
     contracts: [
       {
         address: collateralToken0Address,
-        abi: collateralTrackerAbi,
+        abi: collateralTrackerV2Abi,
         functionName: 'asset',
       },
       {
         address: collateralToken1Address,
-        abi: collateralTrackerAbi,
+        abi: collateralTrackerV2Abi,
         functionName: 'asset',
       },
     ],
@@ -220,12 +232,20 @@ export async function getPoolMetadata(params: GetPoolMetadataParams): Promise<Po
   const token1Decimals = isToken1Native ? 18 : (erc20Results[resultIdx++] as number)
   const token1Name = isToken1Native ? 'Ether' : (erc20Results[resultIdx++] as string)
 
-  // Derive underlyingPoolId and tickSpacing
+  // Derive underlyingPoolId, tickSpacing, and fee
   const isV4 = poolManager !== zeroAddress
   const parsedPoolKey = parsePoolKey(poolKeyBytes)
-  const underlyingPoolId = isV4
-    ? keccak256(poolKeyBytes)
-    : decodeAbiParameters([{ type: 'address' }], poolKeyBytes)[0]
+  let underlyingPoolId: string
+  let fee: bigint
+
+  if (isV4) {
+    underlyingPoolId = keccak256(poolKeyBytes)
+    fee = parsedPoolKey.fee
+  } else {
+    const v3PoolAddress = decodeAbiParameters([{ type: 'address' }], poolKeyBytes)[0]
+    underlyingPoolId = v3PoolAddress
+    fee = await getV3PoolFee(client, v3PoolAddress)
+  }
 
   return {
     poolKeyBytes,
@@ -243,7 +263,9 @@ export async function getPoolMetadata(params: GetPoolMetadataParams): Promise<Po
     token0Name,
     token1Name,
     underlyingPoolId,
-    tickSpacing: parsedPoolKey.tickSpacing,
+    tickSpacing: tickSpacingFromPoolId(poolId),
+    fee,
+    sfpmAddress,
   }
 }
 
@@ -261,6 +283,8 @@ export interface GetPoolParams {
   blockNumber?: bigint
   /** Optional pre-fetched pool metadata (for caching/optimization) */
   poolMetadata?: PoolMetadata
+  /** Optional StateView address for V4 pools (needed to read Uniswap pool liquidity) */
+  stateViewAddress?: Address
   /** Optional pre-fetched block metadata (skips getBlockMeta RPC call) */
   _meta?: BlockMeta
 }
@@ -285,6 +309,23 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
   // Get static metadata (either from cache or fetch it)
   const metadata = poolMetadata ?? (await getPoolMetadata({ client, poolAddress }))
 
+  // Build Uniswap pool liquidity read (V3 vs V4)
+  const liquidityContract =
+    metadata.isV4 && params.stateViewAddress
+      ? {
+          address: params.stateViewAddress,
+          abi: stateViewAbi,
+          functionName: 'getLiquidity' as const,
+          args: [metadata.underlyingPoolId as `0x${string}`] as const,
+        }
+      : !metadata.isV4
+        ? {
+            address: metadata.underlyingPoolId as Address,
+            abi: uniswapV3PoolAbi,
+            functionName: 'liquidity' as const,
+          }
+        : null // V4 without stateViewAddress — skip
+
   // SINGLE multicall for ALL dynamic data - ensures same-block consistency
   const [dynamicResults, _meta] = await Promise.all([
     client.multicall({
@@ -292,44 +333,44 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
         // Pool dynamic state
         {
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           functionName: 'getCurrentTick',
         },
         {
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           functionName: 'isSafeMode',
         },
         // Token 0 collateral tracker dynamic data
         {
           address: metadata.collateralToken0Address,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'getPoolData',
         },
         {
           address: metadata.collateralToken0Address,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'totalSupply',
         },
         {
           address: metadata.collateralToken0Address,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'interestRate',
         },
         // Token 1 collateral tracker dynamic data
         {
           address: metadata.collateralToken1Address,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'getPoolData',
         },
         {
           address: metadata.collateralToken1Address,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'totalSupply',
         },
         {
           address: metadata.collateralToken1Address,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'interestRate',
         },
         // Risk engine parameters (technically immutable but included for completeness)
@@ -348,13 +389,32 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
           abi: riskEngineAbi,
           functionName: 'NOTIONAL_FEE',
         },
+        {
+          address: metadata.riskEngineAddress,
+          abi: riskEngineAbi,
+          functionName: 'VEGOID',
+        },
+        {
+          address: metadata.riskEngineAddress,
+          abi: riskEngineAbi,
+          functionName: 'MAX_SPREAD',
+        },
+        // Uniswap pool in-range liquidity (V3 or V4 via StateView)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...(liquidityContract ? [liquidityContract as any] : []),
       ],
       blockNumber: targetBlockNumber,
-      allowFailure: false,
+      allowFailure: true,
     }),
     params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
   ])
 
+  // Extract results — first 13 are core (must succeed), last is liquidity (may fail)
+  const coreResults = dynamicResults.slice(0, 13)
+  if (coreResults.some((r) => r.status !== 'success')) {
+    const failed = coreResults.find((r) => r.status !== 'success')
+    throw new Error(`Core pool read failed: ${JSON.stringify(failed)}`)
+  }
   const [
     currentTick,
     safeModeRaw,
@@ -367,10 +427,30 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
     sellerCollateralRatio,
     maintMarginRate,
     notionalFee,
-  ] = dynamicResults
+    vegoid,
+    maxSpread,
+  ] = coreResults.map((r) => r.result) as [
+    bigint, // currentTick
+    number, // safeModeRaw
+    readonly [bigint, bigint, bigint, bigint], // token0PoolData (getPoolData)
+    bigint, // token0TotalSupply
+    bigint, // token0InterestRate
+    readonly [bigint, bigint, bigint, bigint], // token1PoolData (getPoolData)
+    bigint, // token1TotalSupply
+    bigint, // token1InterestRate
+    bigint, // sellerCollateralRatio
+    bigint, // maintMarginRate
+    bigint, // notionalFee
+    bigint, // vegoid
+    bigint, // maxSpread
+  ]
+  const liquidityResult = dynamicResults[13]
+  const uniswapPoolLiquidity =
+    liquidityResult?.status === 'success' ? BigInt(liquidityResult.result as bigint) : 0n
 
-  // Parse pool key
+  // Parse pool key and extract tickSpacing from poolId (works for both V3 and V4)
   const poolKey = parsePoolKey(metadata.poolKeyBytes)
+  const tickSpacing = tickSpacingFromPoolId(metadata.poolId)
 
   // Annualize rates: interestRate() returns WAD/s, multiply by seconds/year
   const SECONDS_PER_YEAR = 31_536_000n
@@ -381,6 +461,8 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
   // Supply rate = borrow rate * utilization (utilization is in bps, so /10000)
   const supplyRate0 = (borrowRate0 * utilization0) / 10000n
   const supplyRate1 = (borrowRate1 * utilization1) / 10000n
+  const totalAssets0 = token0PoolData[0] + token0PoolData[1]
+  const totalAssets1 = token1PoolData[0] + token1PoolData[1]
 
   // Build collateral trackers
   const collateralTracker0: CollateralTracker = {
@@ -388,7 +470,7 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
     token: metadata.token0Asset,
     symbol: metadata.token0Symbol,
     decimals: metadata.token0Decimals,
-    totalAssets: token0PoolData[0], // depositedAssets
+    totalAssets: totalAssets0,
     insideAMM: token0PoolData[1],
     creditedShares: token0PoolData[2],
     totalShares: token0TotalSupply,
@@ -402,7 +484,7 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
     token: metadata.token1Asset,
     symbol: metadata.token1Symbol,
     decimals: metadata.token1Decimals,
-    totalAssets: token1PoolData[0], // depositedAssets
+    totalAssets: totalAssets1,
     insideAMM: token1PoolData[1],
     creditedShares: token1PoolData[2],
     totalShares: token1TotalSupply,
@@ -417,6 +499,8 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
     collateralRequirement: sellerCollateralRatio,
     maintenanceMargin: maintMarginRate,
     commissionRate: BigInt(notionalFee),
+    vegoid: BigInt(vegoid),
+    maxSpread: BigInt(maxSpread),
   }
 
   // Determine health status based on safe mode
@@ -430,11 +514,13 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
     chainId,
     poolId: metadata.poolId,
     poolKey,
+    tickSpacing,
     collateralTracker0,
     collateralTracker1,
     riskEngine,
     currentTick: BigInt(currentTick),
     sqrtPriceX96,
+    uniswapPoolLiquidity,
     healthStatus,
     metadata,
     _meta,
@@ -489,12 +575,12 @@ export async function getUtilization(params: GetUtilizationParams): Promise<Util
       contracts: [
         {
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           functionName: 'collateralToken0',
         },
         {
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           functionName: 'collateralToken1',
         },
       ],
@@ -510,12 +596,12 @@ export async function getUtilization(params: GetUtilizationParams): Promise<Util
       contracts: [
         {
           address: collateralToken0,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'getPoolData',
         },
         {
           address: collateralToken1,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'getPoolData',
         },
       ],
@@ -567,7 +653,7 @@ export async function getOracleState(params: GetOracleStateParams): Promise<Orac
   const [oracleTicks, _meta] = await Promise.all([
     client.readContract({
       address: poolAddress,
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       functionName: 'getOracleTicks',
       blockNumber: targetBlockNumber,
     }),
@@ -642,7 +728,7 @@ export async function getRiskParameters(params: GetRiskParametersParams): Promis
     providedAddress ??
     (await client.readContract({
       address: poolAddress,
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       functionName: 'riskEngine',
     }))
 
@@ -682,7 +768,7 @@ export async function getRiskParameters(params: GetRiskParametersParams): Promis
         },
         {
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           functionName: 'getRiskParameters',
           args: [builderCode],
         },
@@ -714,18 +800,87 @@ export async function getRiskParameters(params: GetRiskParametersParams): Promis
   }
 }
 
+// ---------------------------------------------------------------------------
+// Builder code validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate whether a builder code maps to a deployed builder wallet.
+ *
+ * Calls `PanopticPool.getRiskParameters(builderCode)` — the contract reverts
+ * with `InvalidBuilderCode` when the computed CREATE2 address has no bytecode.
+ *
+ * @returns `true` when valid, `false` when the contract reverts.
+ */
+export async function validateBuilderCode(params: {
+  client: PublicClient
+  poolAddress: Address
+  builderCode: bigint
+}): Promise<boolean> {
+  const { client, poolAddress, builderCode } = params
+  if (builderCode === 0n) return true
+  try {
+    await client.readContract({
+      address: poolAddress,
+      abi: panopticPoolV2Abi,
+      functionName: 'getRiskParameters',
+      args: [builderCode],
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Read the fee tier from a Uniswap V3 pool contract.
+ */
+async function getV3PoolFee(client: PublicClient, poolAddress: Address): Promise<bigint> {
+  const fee = await client.readContract({
+    address: poolAddress,
+    abi: uniswapV3PoolAbi,
+    functionName: 'fee',
+  })
+  return BigInt(fee)
+}
+
+/**
+ * Extract tickSpacing from the encoded 64-bit poolId.
+ * Layout: poolAddress (5 bytes) + vegoid (1 byte) + tickSpacing (2 bytes).
+ * tickSpacing occupies bits 48–63.
+ */
+function tickSpacingFromPoolId(poolId: bigint): bigint {
+  return (poolId >> 48n) & 0xffffn
+}
+
 /**
  * Parse pool key from ABI-encoded bytes.
- * PoolKey struct is ABI-encoded as 5 consecutive 32-byte slots:
- *   Slot 0: currency0 (address, right-padded)
- *   Slot 1: currency1 (address, right-padded)
- *   Slot 2: fee (uint24, right-padded)
- *   Slot 3: tickSpacing (int24, right-padded)
- *   Slot 4: hooks (address, right-padded)
+ *
+ * V4 pools: PoolKey struct is ABI-encoded as 5 consecutive 32-byte slots
+ *   (currency0, currency1, fee, tickSpacing, hooks).
+ *
+ * V3 pools: poolKey() returns abi.encode(uniswapV3PoolAddress) — a single
+ *   32-byte slot. The struct fields are not available, so currency0/currency1
+ *   are zeroed and tickSpacing/fee are set to 0 (callers should use
+ *   tickSpacingFromPoolId and getV3PoolFee respectively).
  */
 function parsePoolKey(poolKeyBytes: `0x${string}`): PoolKey {
-  // Remove 0x prefix and decode
   const hex = poolKeyBytes.slice(2)
+
+  // V3: single ABI-encoded address (64 hex chars = 32 bytes)
+  if (hex.length <= 64) {
+    return {
+      currency0: zeroAddress,
+      currency1: zeroAddress,
+      fee: 0n,
+      tickSpacing: 0n,
+      hooks: zeroAddress,
+    }
+  }
+
+  if (hex.length < 320) {
+    throw new Error(`Malformed V4 pool key: expected 320 hex chars (160 bytes), got ${hex.length}`)
+  }
 
   // Each slot is 64 hex chars (32 bytes)
   // Addresses are in the last 40 hex chars (20 bytes) of their slot
@@ -782,7 +937,7 @@ export async function fetchPoolId(params: FetchPoolIdParams): Promise<FetchPoolI
 
   const poolId = await client.readContract({
     address: poolAddress,
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: 'poolId',
     blockNumber: block.number,
   })

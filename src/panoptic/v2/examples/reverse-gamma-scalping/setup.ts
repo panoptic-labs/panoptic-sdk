@@ -17,7 +17,7 @@
 
 import { parseAbi, parseUnits } from 'viem'
 
-import { collateralTrackerAbi } from '../../../../generated'
+import { collateralTrackerV2Abi } from '../../../../generated'
 import { formatTokenAmount } from '../../formatters/amount'
 import { getAccountCollateral } from '../../reads/account'
 import { getPool } from '../../reads/pool'
@@ -101,7 +101,7 @@ async function main() {
     console.log(`Depositing ${formatTokenAmount(ethDeposit, ct0Decimals, 4n)} ETH...`)
     const ethDepositHash = await walletClient.writeContract({
       address: ct0Address,
-      abi: collateralTrackerAbi,
+      abi: collateralTrackerV2Abi,
       functionName: 'deposit',
       args: [ethDeposit, account.address],
       value: ethDeposit, // native ETH sent as msg.value
@@ -119,7 +119,7 @@ async function main() {
     )
     const usdcDepositHash = await walletClient.writeContract({
       address: ct1Address,
-      abi: collateralTrackerAbi,
+      abi: collateralTrackerV2Abi,
       functionName: 'deposit',
       args: [usdcDeposit, account.address],
       account,

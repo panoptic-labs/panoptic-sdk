@@ -37,6 +37,7 @@ const mockBuyingPower: AccountBuyingPower = {
   requiredCollateral0: 200_000n,
   collateralBalance1: 500_000n,
   requiredCollateral1: 100_000n,
+  _meta: MOCK_META,
 }
 
 function createMockClient(): PublicClient {
@@ -65,8 +66,9 @@ describe('getOpenPositionPreview', () => {
         amount1Required: 10_000n,
         postCollateral0: 950_000n,
         postCollateral1: 490_000n,
-        postMarginExcess0: null,
-        postMarginExcess1: null,
+        postMintCollateralReqToken0: 0n,
+        postMintCollateralReqToken1: 0n,
+        perPositionCollateralReqs: [],
         commission0: null,
         commission1: null,
       },
@@ -150,8 +152,9 @@ describe('getOpenPositionPreview', () => {
           amount1Required: 0n,
           postCollateral0: 0n,
           postCollateral1: 0n,
-          postMarginExcess0: null,
-          postMarginExcess1: null,
+          postMintCollateralReqToken0: 0n,
+          postMintCollateralReqToken1: 0n,
+          perPositionCollateralReqs: [],
           commission0: null,
           commission1: null,
         },

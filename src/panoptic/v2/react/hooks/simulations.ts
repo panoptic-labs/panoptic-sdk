@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { Address } from 'viem'
 
 import {
+  type SimulateBatchDispatchParams,
   type SimulateClosePositionParams,
   type SimulateDepositParams,
   type SimulateDispatchParams,
@@ -15,7 +16,10 @@ import {
   type SimulateOpenPositionParams,
   type SimulateSettleParams,
   type SimulateSFPMParams,
+  type SimulateSwapExactInParams,
+  type SimulateSwapExactOutParams,
   type SimulateWithdrawParams,
+  simulateBatchDispatch,
   simulateClosePosition,
   simulateDeposit,
   simulateDispatch,
@@ -25,6 +29,8 @@ import {
   simulateSettle,
   simulateSFPMBurn,
   simulateSFPMMint,
+  simulateSwapExactIn,
+  simulateSwapExactOut,
   simulateWithdraw,
 } from '../../simulations'
 import { getClientCacheScopeKey } from '../cacheScopes'
@@ -175,6 +181,30 @@ export function useSimulateSettle(
   })
 }
 
+export function useSimulateBatchDispatch(
+  poolAddress: Address,
+  params?: OmitClientAndPool<SimulateBatchDispatchParams>,
+) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sim',
+      'batchDispatch',
+      poolAddress,
+      params?.account,
+      params?.items?.length,
+      JSON.stringify(params?.items?.map((i) => `${i.kind}:${i.tokenId.toString()}`)),
+      JSON.stringify(params?.existingPositionIds?.map(String)),
+      getClientCacheScopeKey(publicClient, clientScope),
+      params,
+    ] as const,
+    queryFn: () => simulateBatchDispatch({ client: publicClient, poolAddress, ...params! }),
+    enabled: params !== undefined && params.items !== undefined,
+    staleTime: 0,
+  })
+}
+
 export function useSimulateDispatch(
   poolAddress: Address,
   params?: OmitClientAndPool<SimulateDispatchParams>,
@@ -233,6 +263,50 @@ export function useSimulateSFPMBurn(params?: OmitClient<SimulateSFPMParams>) {
       if (!params) throw new Error('params required for simulateSFPMBurn')
       return simulateSFPMBurn({ client: publicClient, ...params })
     },
+    enabled: params !== undefined,
+    staleTime: 0,
+  })
+}
+
+export function useSimulateSwapExactOut(
+  poolAddress: Address,
+  params?: OmitClientAndPool<SimulateSwapExactOutParams>,
+) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sim',
+      'swapExactOut',
+      poolAddress,
+      params?.tokenOut,
+      params?.amountOut?.toString(),
+      getClientCacheScopeKey(publicClient, clientScope),
+      params,
+    ] as const,
+    queryFn: () => simulateSwapExactOut({ client: publicClient, poolAddress, ...params! }),
+    enabled: params !== undefined,
+    staleTime: 0,
+  })
+}
+
+export function useSimulateSwapExactIn(
+  poolAddress: Address,
+  params?: OmitClientAndPool<SimulateSwapExactInParams>,
+) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sim',
+      'swapExactIn',
+      poolAddress,
+      params?.tokenIn,
+      params?.amountIn?.toString(),
+      getClientCacheScopeKey(publicClient, clientScope),
+      params,
+    ] as const,
+    queryFn: () => simulateSwapExactIn({ client: publicClient, poolAddress, ...params! }),
     enabled: params !== undefined,
     staleTime: 0,
   })

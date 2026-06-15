@@ -6,10 +6,10 @@
 import type { Address, PublicClient } from 'viem'
 
 import {
-  collateralTrackerAbi,
-  panopticPoolAbi,
+  collateralTrackerV2Abi,
+  panopticPoolV2Abi,
   riskEngineAbi,
-  semiFungiblePositionManagerAbi,
+  semiFungiblePositionManagerV4Abi,
 } from '../../../generated'
 import { poolManagerAbi } from '../abis/poolManager'
 import type { EventSubscription, PanopticEvent, PanopticEventType } from '../types'
@@ -236,7 +236,7 @@ export function createEventSubscription(
       try {
         const logs = await client.getContractEvents({
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           eventName: eventType as
             | 'OptionMinted'
             | 'OptionBurnt'
@@ -264,7 +264,7 @@ export function createEventSubscription(
         try {
           const logs = await client.getContractEvents({
             address: trackerAddress,
-            abi: collateralTrackerAbi,
+            abi: collateralTrackerV2Abi,
             eventName: eventType as 'Deposit' | 'Withdraw' | 'ProtocolLossRealized',
             fromBlock,
             toBlock,
@@ -314,7 +314,7 @@ export function createEventSubscription(
         try {
           const logs = await client.getContractEvents({
             address: sfpmAddress,
-            abi: semiFungiblePositionManagerAbi,
+            abi: semiFungiblePositionManagerV4Abi,
             eventName: eventType as 'LiquidityChunkUpdated',
             fromBlock,
             toBlock,
@@ -424,7 +424,7 @@ export function createEventSubscription(
       for (const eventType of poolEventTypes) {
         const unwatch = client.watchContractEvent({
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           eventName: eventType as
             | 'OptionMinted'
             | 'OptionBurnt'
@@ -445,7 +445,7 @@ export function createEventSubscription(
         for (const eventType of collateralEventTypes) {
           const unwatch = client.watchContractEvent({
             address: trackerAddress,
-            abi: collateralTrackerAbi,
+            abi: collateralTrackerV2Abi,
             eventName: eventType as 'Deposit' | 'Withdraw' | 'ProtocolLossRealized',
             onLogs: createCollateralOnLogs(eventType),
             onError: handleError,
@@ -473,7 +473,7 @@ export function createEventSubscription(
         for (const eventType of sfpmEventTypes) {
           const unwatch = client.watchContractEvent({
             address: sfpmAddress,
-            abi: semiFungiblePositionManagerAbi,
+            abi: semiFungiblePositionManagerV4Abi,
             eventName: eventType as 'LiquidityChunkUpdated',
             onLogs: createSfpmOnLogs(eventType),
             onError: handleError,

@@ -11,11 +11,11 @@
 import type { Address, Hex, PublicClient } from 'viem'
 import { encodeAbiParameters } from 'viem'
 
-import { semiFungiblePositionManagerAbi } from '../../../generated'
+import { semiFungiblePositionManagerV4Abi } from '../../../generated'
 import type { PoolKey } from '../types'
 
 /**
- * Encode a PoolKey struct as bytes for the SFPM.
+ * Encode a V4 PoolKey struct as bytes for the SFPM.
  */
 export function encodePoolKeyBytes(poolKey: PoolKey): Hex {
   return encodeAbiParameters(
@@ -41,6 +41,14 @@ export function encodePoolKeyBytes(poolKey: PoolKey): Hex {
       },
     ],
   )
+}
+
+/**
+ * Encode a V3 pool address as poolKey bytes for the V3 SFPM.
+ * V3 SFPM expects `abi.encode(uniswapV3PoolAddress)`.
+ */
+export function encodeV3PoolKeyBytes(v3PoolAddress: Address): Hex {
+  return encodeAbiParameters([{ type: 'address' }], [v3PoolAddress])
 }
 
 /**
@@ -92,7 +100,7 @@ export async function simulateSFPMMint(params: SimulateSFPMParams): Promise<SFPM
 
   const { result } = await client.simulateContract({
     address: sfpmAddress,
-    abi: semiFungiblePositionManagerAbi,
+    abi: semiFungiblePositionManagerV4Abi,
     functionName: 'mintTokenizedPosition',
     args: [
       poolKey,
@@ -127,7 +135,7 @@ export async function simulateSFPMBurn(params: SimulateSFPMParams): Promise<SFPM
 
   const { result } = await client.simulateContract({
     address: sfpmAddress,
-    abi: semiFungiblePositionManagerAbi,
+    abi: semiFungiblePositionManagerV4Abi,
     functionName: 'burnTokenizedPosition',
     args: [
       poolKey,

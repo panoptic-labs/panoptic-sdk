@@ -10,7 +10,7 @@
 
 import type { Address, PublicClient } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients/blockMeta'
 import { PanopticError, StorageDataNotFoundError } from '../errors'
 import { tickToSqrtPriceX96 } from '../formatters'
@@ -212,7 +212,7 @@ export async function getAccountGreeks(
   const [currentTick, _meta, collateral] = await Promise.all([
     client.readContract({
       address: poolAddress,
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       functionName: 'getCurrentTick',
       blockNumber: targetBlock,
     }),

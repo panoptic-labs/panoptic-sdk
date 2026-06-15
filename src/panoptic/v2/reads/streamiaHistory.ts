@@ -10,7 +10,7 @@
 
 import type { Address, PublicClient } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients/blockMeta'
 import { InvalidHistoryRangeError } from '../errors/sdk'
 import type { BlockMeta } from '../types'
@@ -123,8 +123,8 @@ export async function getStreamiaHistory(
   const premiaRequests = blockNumbers.map((bn) =>
     client.readContract({
       address: panopticPoolAddress,
-      abi: panopticPoolAbi,
-      functionName: 'getAccumulatedFeesAndPositionsData',
+      abi: panopticPoolV2Abi,
+      functionName: 'getFullPositionsData',
       args: [account, true, [tokenId]],
       blockNumber: bn,
     }),

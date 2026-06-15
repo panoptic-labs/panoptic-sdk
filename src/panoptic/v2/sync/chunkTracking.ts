@@ -10,6 +10,7 @@ import { getBlockMeta } from '../clients/blockMeta'
 import { ChunkLimitError } from '../errors'
 import type { StorageAdapter } from '../storage'
 import { getTrackedChunksKey, jsonSerializer } from '../storage'
+import { DEFAULT_VEGOID } from '../tokenId/constants'
 import type { BlockMeta } from '../types'
 import { MAX_TRACKED_CHUNKS, WAD } from '../utils/constants'
 
@@ -268,7 +269,7 @@ export async function getChunkSpreads(
 export function calculateSpreadWad(
   netLiquidity: bigint,
   removedLiquidity: bigint,
-  vegoid: bigint = 4n,
+  vegoid: bigint = DEFAULT_VEGOID,
 ): bigint {
   if (netLiquidity === 0n) {
     return WAD // 1.0x spread if no liquidity
@@ -513,7 +514,14 @@ export interface GetPositionChunkDataParams {
 export async function getPositionChunkData(
   params: GetPositionChunkDataParams,
 ): Promise<GetPositionChunkDataResult> {
-  const { client, poolAddress, queryAddress, tokenIds, vegoid = 4n, blockNumber } = params
+  const {
+    client,
+    poolAddress,
+    queryAddress,
+    tokenIds,
+    vegoid = DEFAULT_VEGOID,
+    blockNumber,
+  } = params
 
   if (tokenIds.length === 0) {
     const _meta = await getBlockMeta({ client, blockNumber })

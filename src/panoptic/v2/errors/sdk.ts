@@ -5,6 +5,7 @@
 
 import type { Address } from 'viem'
 
+import type { BatchDiagnostic } from '../batch/types'
 import type { SafeMode } from '../types/oracle'
 import type { PoolHealthStatus } from '../types/pool'
 import { PanopticError } from './base'
@@ -94,6 +95,54 @@ export class ProviderLagError extends PanopticError {
     cause?: Error,
   ) {
     super(`Provider behind: at block ${providerBlock}, expected at least ${expectedBlock}`, cause)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Multicall Errors
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Multicall3 returned fewer results than the number of calls submitted.
+ */
+export class MulticallResultMissingError extends PanopticError {
+  override readonly name = 'MulticallResultMissingError'
+
+  constructor(
+    public readonly label: string,
+    public readonly index: number,
+    cause?: Error,
+  ) {
+    super(`Missing Multicall3 result for ${label} (index ${index})`, cause)
+  }
+}
+
+/**
+ * Multicall3 sub-call reverted (success=false in the result tuple).
+ */
+export class MulticallResultFailedError extends PanopticError {
+  override readonly name = 'MulticallResultFailedError'
+
+  constructor(
+    public readonly label: string,
+    public readonly index: number,
+    cause?: Error,
+  ) {
+    super(`Multicall3 result failed for ${label} (index ${index})`, cause)
+  }
+}
+
+/**
+ * eth_call to Multicall3 returned no data (provider-level failure).
+ */
+export class MulticallNoDataError extends PanopticError {
+  override readonly name = 'MulticallNoDataError'
+
+  constructor(
+    public readonly functionName: string,
+    cause?: Error,
+  ) {
+    super(`Multicall3.${functionName} returned no data`, cause)
   }
 }
 
@@ -309,6 +358,74 @@ export class InvalidTickLimitsError extends PanopticError {
     super(
       `Invalid tick limits: tickLimitLow (${tickLimitLow}) must be <= tickLimitHigh (${tickLimitHigh}). ` +
         'The SDK reorders limits based on swapAtMint — always pass them in ascending order.',
+    )
+  }
+}
+
+/**
+ * No loan positions found for the given token.
+ */
+export class NoLoanPositionsError extends PanopticError {
+  override readonly name = 'NoLoanPositionsError'
+
+  constructor(public readonly token: Address) {
+    super(`No loan positions found for token ${token}`)
+  }
+}
+
+/**
+ * All loan tokenId slots are in use — no unique tokenId could be generated.
+ */
+export class LoanSlotExhaustedError extends PanopticError {
+  override readonly name = 'LoanSlotExhaustedError'
+
+  constructor() {
+    super('Could not build unique loan tokenId — all slots in use')
+  }
+}
+
+/**
+ * Maximum retry attempts exceeded for the given operation.
+ */
+export class MaxRetriesExceededError extends PanopticError {
+  override readonly name = 'MaxRetriesExceededError'
+
+  constructor(public readonly operation: string) {
+    super(`${operation}: max retries exceeded`)
+  }
+}
+
+/**
+ * Batch dispatch validation failed.
+ *
+ * Thrown by `executeBatchDispatch` when the batch contains invalid items
+ * (mint of an existing tokenId, burn of a position not held, duplicate tokenIds,
+ * cross-pool ops, etc.). The `diagnostics` array carries one entry per failure.
+ */
+export class BatchValidationError extends PanopticError {
+  override readonly name = 'BatchValidationError'
+
+  constructor(public readonly diagnostics: BatchDiagnostic[]) {
+    super(
+      `Batch dispatch validation failed (${diagnostics.length} issue${diagnostics.length === 1 ? '' : 's'}): ` +
+        diagnostics.map((d) => `[${d.code}] ${d.message}`).join('; '),
+    )
+  }
+}
+
+/**
+ * Thrown when a swap token address doesn't match either token in the pool.
+ */
+export class SwapTokenMismatchError extends PanopticError {
+  override readonly name = 'SwapTokenMismatchError'
+
+  constructor(
+    public readonly tokenAddress: Address,
+    public readonly token0: Address,
+    public readonly token1: Address,
+  ) {
+    super(
+      `Token ${tokenAddress} does not match either pool token: token0=${token0}, token1=${token1}`,
     )
   }
 }

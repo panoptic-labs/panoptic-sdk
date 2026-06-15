@@ -25,6 +25,8 @@ export interface PanopticContextValue {
   account?: Address
   /** Chain ID */
   chainId: bigint
+  /** Optional StateView address for V4 Uniswap pool reads (per-chain singleton) */
+  stateViewAddress?: Address
   /** Optional storage adapter for position tracking */
   storage?: StorageAdapter
   /**

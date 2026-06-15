@@ -63,7 +63,7 @@ describe('Basic Example 01: Simple Read Operations (Fork Test)', () => {
       )
 
       // Verify tick spacing matches deployment
-      expect(pool.poolKey.tickSpacing).toBe(BigInt(config.contracts.pool.tickSpacing))
+      expect(pool.tickSpacing).toBe(BigInt(config.contracts.pool.tickSpacing))
 
       // Verify metadata is present and valid
       expect(pool._meta.blockNumber).toBeGreaterThan(0n)
@@ -76,7 +76,7 @@ describe('Basic Example 01: Simple Read Operations (Fork Test)', () => {
       console.log(`  Token0: ${pool.collateralTracker0.symbol} (${pool.poolKey.currency0})`)
       console.log(`  Token1: ${pool.collateralTracker1.symbol} (${pool.poolKey.currency1})`)
       console.log(`  Current tick: ${pool.currentTick}`)
-      console.log(`  Tick spacing: ${pool.poolKey.tickSpacing}`)
+      console.log(`  Tick spacing: ${pool.tickSpacing}`)
       console.log(`  Health status: ${pool.healthStatus}`)
       console.log(`  Block: ${pool._meta.blockNumber}`)
     })

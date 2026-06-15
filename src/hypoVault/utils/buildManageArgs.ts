@@ -4,8 +4,8 @@ import { convertJsonTreeToArray, getProofsFromDigests } from './merkleTreeHelper
 
 /**
  * Represents a strategist leaf from the pre-generated artifacts.
- * This type matches the structure of leaves in ProductionWETHPLPStrategistLeaves,
- * ProductionUSDCPLPStrategistLeaves, etc.
+ * This type matches the structure of leaves in SepoliaWETHPLPStrategistLeaves,
+ * SepoliaUSDCPLPStrategistLeaves, etc.
  */
 export type StrategistLeaf = {
   readonly LeafDigest: string
@@ -20,7 +20,7 @@ export type StrategistLeaf = {
 }
 
 /**
- * Represents the structure of a strategist leaves artifact (e.g., ProductionWETHPLPStrategistLeaves).
+ * Represents the structure of a strategist leaves artifact (e.g., SepoliaWETHPLPStrategistLeaves).
  * Generic over the leaf type to preserve literal types for autocomplete.
  */
 export type StrategistLeavesArtifact<TLeaf extends StrategistLeaf = StrategistLeaf> = {
@@ -43,7 +43,7 @@ export type StrategistLeavesArtifact<TLeaf extends StrategistLeaf = StrategistLe
  * Useful for typing variables that hold leaves from a specific artifact.
  *
  * @example
- * type WETHLeaf = InferLeaf<typeof ProductionWETHPLPStrategistLeaves>
+ * type WETHLeaf = InferLeaf<typeof SepoliaWETHPLPStrategistLeaves>
  */
 export type InferLeaf<T extends StrategistLeavesArtifact> = T['leafs'][number]
 
@@ -57,7 +57,7 @@ export type LeafDescription<T extends StrategistLeavesArtifact> = T['leafs'][num
  * Finds a leaf by its description with full type safety and autocomplete.
  * Throws if the leaf is not found.
  *
- * @param artifact - The strategist leaves artifact (e.g., ProductionWETHPLPStrategistLeaves)
+ * @param artifact - The strategist leaves artifact (e.g., SepoliaWETHPLPStrategistLeaves)
  * @param description - The description of the leaf to find (autocomplete enabled)
  * @returns The matching leaf
  * @throws Error if no leaf matches the description
@@ -65,8 +65,8 @@ export type LeafDescription<T extends StrategistLeavesArtifact> = T['leafs'][num
  * @example
  * ```ts
  * // Autocomplete shows all valid descriptions for this artifact
- * const approveLeaf = findLeaf(ProductionWETHPLPStrategistLeaves, 'Approve poWETH to spend WETH')
- * const depositLeaf = findLeaf(ProductionUSDCPLPStrategistLeaves, 'Deposit USDC for poUSDC')
+ * const approveLeaf = findLeaf(SepoliaWETHPLPStrategistLeaves, 'Approve poWETH to spend WETH')
+ * const depositLeaf = findLeaf(SepoliaUSDCPLPStrategistLeaves, 'Deposit USDC for poUSDC')
  * ```
  */
 export function findLeaf<T extends StrategistLeavesArtifact>(
@@ -109,25 +109,25 @@ export type ManageVaultArgs = [
  * manageVaultWithMerkleVerification.
  *
  * @param actions - Array of manage actions to execute
- * @param artifact - The strategist leaves artifact (e.g., ProductionWETHPLPStrategistLeaves)
+ * @param artifact - The strategist leaves artifact (e.g., SepoliaWETHPLPStrategistLeaves)
  * @returns Tuple of [proofs, decodersAndSanitizers, targets, targetData, values]
  *
  * @example
  * ```ts
  * const actions: ManageAction[] = [
  *   {
- *     leaf: findLeaf(ProductionWETHPLPStrategistLeaves, 'Approve poWETH to spend WETH'),
+ *     leaf: findLeaf(SepoliaWETHPLPStrategistLeaves, 'Approve poWETH to spend WETH'),
  *     data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [spender, amount] }),
  *   },
  *   {
- *     leaf: findLeaf(ProductionWETHPLPStrategistLeaves, 'Deposit WETH for poWETH'),
+ *     leaf: findLeaf(SepoliaWETHPLPStrategistLeaves, 'Deposit WETH for poWETH'),
  *     data: encodeFunctionData({ abi: CollateralTrackerAbi, functionName: 'deposit', args: [assets, receiver] }),
  *   },
  * ]
  *
  * const [proofs, decodersAndSanitizers, targets, targetData, values] = buildManageArgs(
  *   actions,
- *   ProductionWETHPLPStrategistLeaves
+ *   SepoliaWETHPLPStrategistLeaves
  * )
  * ```
  */

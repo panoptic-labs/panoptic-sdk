@@ -435,7 +435,7 @@ describe('Sepolia Fork: Liquidation Bot', () => {
         chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
 
       // Build a simple short call position

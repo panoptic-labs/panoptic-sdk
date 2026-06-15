@@ -31,7 +31,7 @@ import {
 import { privateKeyToAccount } from 'viem/accounts'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { panopticPoolAbi, riskEngineAbi } from '../../../../generated'
+import { panopticPoolV2Abi, riskEngineAbi } from '../../../../generated'
 import { formatTokenAmount } from '../../formatters/amount'
 import { roundToTickSpacing } from '../../formatters/tick'
 import { calculatePositionGreeks } from '../../greeks'
@@ -132,7 +132,7 @@ async function seedPoolLiquidity(
 
   // Build ATM straddle
   const pool = await getPool({ client, poolAddress, chainId })
-  const tickSpacing = pool.poolKey.tickSpacing
+  const tickSpacing = pool.tickSpacing
   const atmStrike = (pool.currentTick / tickSpacing) * tickSpacing
 
   const straddleWidth = STANDARD_TICK_WIDTHS['1D'] / tickSpacing
@@ -176,7 +176,7 @@ async function seedPoolLiquidity(
   // Scale down for safety margin
   const riskEngineAddress = await client.readContract({
     address: poolAddress,
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: 'riskEngine',
   })
   const bpDecreaseBuffer = await client.readContract({
@@ -441,7 +441,7 @@ describe('Reverse Gamma Scalping — Fork Tests', () => {
         chainId: config.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const atmStrike = roundToTickSpacing(pool.currentTick, tickSpacing)
       const width = STANDARD_TICK_WIDTHS['1W'] / tickSpacing
 
@@ -527,7 +527,7 @@ describe('Reverse Gamma Scalping — Fork Tests', () => {
         currentTick: pool.currentTick,
         mintTick: position.tickAtMint,
         positionSize: position.positionSize,
-        poolTickSpacing: pool.poolKey.tickSpacing,
+        poolTickSpacing: pool.tickSpacing,
       })
 
       // Short straddle has negative gamma
@@ -682,7 +682,7 @@ describe('Reverse Gamma Scalping — Fork Tests', () => {
         currentTick: pool.currentTick,
         mintTick: straddlePosition.tickAtMint,
         positionSize: straddlePosition.positionSize,
-        poolTickSpacing: pool.poolKey.tickSpacing,
+        poolTickSpacing: pool.tickSpacing,
       })
 
       // Verify the hedge was correctly sized by getDeltaHedgeParams.

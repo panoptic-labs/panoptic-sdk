@@ -16,16 +16,38 @@ export {
   type GetFactoryOwnerOfParams,
   type GetFactoryTokenURIParams,
   type GetPanopticPoolAddressParams,
+  type GetPanopticPoolAddressV3Params,
+  type GetPanopticPoolAddressV4Params,
+  type GetPanopticPoolFromPoolIdParams,
   type MinePoolAddressParams,
   type MinePoolAddressResult,
+  type MinePoolAddressV3Params,
+  type MinePoolAddressV4Params,
+  type ResolvePanopticPoolFromPoolIdParams,
+  type ResolvePanopticPoolFromPoolIdResult,
   type SimulateDeployNewPoolParams,
+  type SimulateDeployNewPoolV3Params,
+  type SimulateDeployNewPoolV4Params,
   getFactoryConstructMetadata,
   getFactoryOwnerOf,
   getFactoryTokenURI,
   getPanopticPoolAddress,
+  getPanopticPoolFromPoolId,
   minePoolAddress,
+  resolvePanopticPoolFromPoolId,
   simulateDeployNewPool,
 } from './factory'
+
+// Local (off-chain) factory mining
+export {
+  type MinePoolAddressLocalParams,
+  type MinePoolAddressLocalV3Params,
+  type MinePoolAddressLocalV4Params,
+  computePoolIdV4,
+  minePoolAddressLocal,
+  minePoolAddressLocalAsync,
+  numberOfLeadingHexZeros,
+} from './minePoolAddressLocal'
 
 // Pool reads
 export {
@@ -44,6 +66,7 @@ export {
   getRiskParameters,
   getUtilization,
   tickToSqrtPriceX96,
+  validateBuilderCode,
 } from './pool'
 
 // Position reads
@@ -75,12 +98,14 @@ export {
   type GetAccountSummaryRiskParams,
   type GetLiquidationPricesParams,
   type GetNetLiquidationValueParams,
+  type GetNetLiquidationValuesParams,
   getAccountCollateral,
   getAccountSummaryBasic,
   getAccountSummaryRisk,
   getCollateralAddresses,
   getLiquidationPrices,
   getNetLiquidationValue,
+  getNetLiquidationValues,
 } from './account'
 
 // Collateral reads
@@ -89,9 +114,35 @@ export {
   type CollateralTrackerMetadata,
   type GetCollateralDataParams,
   type GetCurrentRatesParams,
+  type GetInterestStateParams,
+  type InterestState,
+  type TokenInterestState,
   getCollateralData,
   getCurrentRates,
+  getInterestState,
 } from './collateral'
+
+// IRM reads
+export {
+  type IrmCurrent,
+  type IrmMarketStateInputs,
+  type IrmPoint,
+  BORROW_INDEX_BITS,
+  BPS_SCALE,
+  deriveSupplyRatePerSecWad,
+  getIrmCurrent,
+  getIrmCurve,
+  MARKET_EPOCH_BITS,
+  MARKET_EPOCH_SHIFT,
+  packMarketState,
+  RATE_AT_TARGET_BITS,
+  ratePerSecWadToAprPct,
+  SECONDS_PER_YEAR,
+  UNREALIZED_INTEREST_BITS,
+  utilizationBpsToWad,
+  utilizationPctToWad,
+  WAD,
+} from './irm'
 
 // Collateral estimation (requires PanopticQuery / CollateralTracker)
 export {
@@ -188,6 +239,22 @@ export {
   getOpenPositionPreview,
 } from './openPositionPreview'
 
+// SFPM reads (poolId resolution, enforced tick limits, chunk liquidity)
+export {
+  type ChunkInput,
+  type ChunkLiquidityResult,
+  type EnforcedTickLimits,
+  type GetChunkLiquiditiesParams,
+  type GetChunkLiquiditiesResult,
+  type GetEnforcedTickLimitsParams,
+  type GetUniswapV3PoolFromIdParams,
+  type GetUniswapV4PoolKeyFromIdParams,
+  getChunkLiquidities,
+  getEnforcedTickLimits,
+  getUniswapV3PoolFromId,
+  getUniswapV4PoolKeyFromId,
+} from './sfpm'
+
 // Native token price (on-chain via PanopticPool tick)
 export { type GetNativeTokenPriceParams, getNativeTokenPrice } from './nativeTokenPrice'
 
@@ -219,6 +286,29 @@ export {
   type UniswapFeeSnapshot,
   getUniswapFeeHistory,
 } from './uniswapFeeHistory'
+
+// Direct Uniswap V3 pool reads (no Panoptic deployment required)
+export {
+  type GetUniswapV3PoolInfoParams,
+  type GetUniswapV3PoolLiquiditiesParams,
+  type GetUniswapV4PoolBasicStateParams,
+  type GetUniswapV4PoolInfoParams,
+  type GetUniswapV4PoolLiquiditiesParams,
+  type ResolveUniswapV4PoolKeyParams,
+  type UniswapV3Liquidities,
+  type UniswapV3PoolInfo,
+  type UniswapV3PoolToken,
+  type UniswapV4PoolBasicState,
+  type UniswapV4PoolInfo,
+  type UniswapV4PoolKey,
+  computeV4PoolId,
+  getUniswapV3PoolInfo,
+  getUniswapV3PoolLiquidities,
+  getUniswapV4PoolBasicState,
+  getUniswapV4PoolInfo,
+  getUniswapV4PoolLiquidities,
+  resolveUniswapV4PoolKey,
+} from './uniswapPool'
 
 // Price history (historical tick + sqrtPriceX96)
 export {

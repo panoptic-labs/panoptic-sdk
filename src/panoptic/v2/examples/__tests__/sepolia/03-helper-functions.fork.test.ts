@@ -38,7 +38,7 @@ describe('Sepolia Fork: PanopticQuery Functions', () => {
   describe('getNetLiquidationValue()', () => {
     it('should calculate NLV for account with no positions (may revert)', async () => {
       // Note: The PanopticQuery contract may revert when called with
-      // an empty position list because getAccumulatedFeesAndPositionsData
+      // an empty position list because getFullPositionsData
       // doesn't handle empty arrays well. This is expected behavior.
       try {
         const nlv = await getNetLiquidationValue({

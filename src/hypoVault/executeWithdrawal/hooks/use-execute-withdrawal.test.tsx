@@ -25,7 +25,7 @@ import { HypoVaultManagerWithMerkleVerificationAbi } from '../../../abis/HypoVau
 import { buildManagerInput } from '../../../hypoVault/utils/buildManagerInput'
 import { getAlchemyRpcUrl } from '../../../rpc'
 import { killAnvilProcess, ReactTestWrapper, spawnAnvil } from '../../../test'
-import { ProductionWETHPLPVaultPoolInfos } from '../../hypoVaultManagerArtifacts/ProductionWETHPLPVaultPoolInfos'
+import { SepoliaWETHPLPVaultPoolInfos } from '../../hypoVaultManagerArtifacts/SepoliaWETHPLPVaultPoolInfos'
 import type { QueuedWithdrawalSnapshot, WithdrawalEpochStateSnapshot } from '../utils'
 import { useExecuteWithdrawal } from './use-execute-withdrawal'
 
@@ -206,7 +206,7 @@ describe('useExecuteWithdrawal', () => {
 
     const managerInput = await buildManagerInput({
       viemClient: testClient,
-      poolInfos: ProductionWETHPLPVaultPoolInfos.poolInfos,
+      poolInfos: SepoliaWETHPLPVaultPoolInfos.poolInfos,
       tokenIds: [[]],
       underlyingToken,
     })
@@ -268,7 +268,7 @@ describe('useExecuteWithdrawal', () => {
 
     const managerInputForWithdrawals = await buildManagerInput({
       viemClient: testClient,
-      poolInfos: ProductionWETHPLPVaultPoolInfos.poolInfos,
+      poolInfos: SepoliaWETHPLPVaultPoolInfos.poolInfos,
       tokenIds: [[]],
       underlyingToken,
     })

@@ -58,10 +58,21 @@ export interface OpenPositionSimulation {
   postCollateral0: bigint
   /** Post-trade collateral for token 1 */
   postCollateral1: bigint
-  /** Post-trade margin excess for token 0 (null if PanopticQuery unavailable) */
-  postMarginExcess0: bigint | null
-  /** Post-trade margin excess for token 1 (null if PanopticQuery unavailable) */
-  postMarginExcess1: bigint | null
+  /**
+   * Post-mint collateral requirement in token0, from getFullPositionsData.collateralRequirements[].
+   * Sum of per-position LeftRightUnsigned.right across all positions in finalPositionIdList.
+   */
+  postMintCollateralReqToken0: bigint
+  /**
+   * Post-mint collateral requirement in token1, from getFullPositionsData.collateralRequirements[].
+   * Sum of per-position LeftRightUnsigned.left across all positions in finalPositionIdList.
+   */
+  postMintCollateralReqToken1: bigint
+  /**
+   * Per-position collateral requirements from getFullPositionsData.collateralRequirements[].
+   * One entry per position in finalPositionIdList, in the same order.
+   */
+  perPositionCollateralReqs: { token0: bigint; token1: bigint }[]
   /** Commission paid for token 0 (null: embedded in contract logic, not extractable from token flow) */
   commission0: bigint | null
   /** Commission paid for token 1 (null: embedded in contract logic, not extractable from token flow) */
@@ -184,8 +195,12 @@ export interface DispatchSimulation {
   postCollateral0: bigint
   /** Post-dispatch collateral for token 1 */
   postCollateral1: bigint
-  /** Post-dispatch margin excess for token 0 (null if PanopticQuery unavailable) */
+  /** Post-dispatch margin excess for token 0 (null if full positions decode/token-flow balances are unavailable or omitted; see simulateDispatch/getFullPositionsData). */
   postMarginExcess0: bigint | null
-  /** Post-dispatch margin excess for token 1 (null if PanopticQuery unavailable) */
+  /** Post-dispatch margin excess for token 1 (null if full positions decode/token-flow balances are unavailable or omitted; see simulateDispatch/getFullPositionsData). */
   postMarginExcess1: bigint | null
+  /** Pre-dispatch margin excess for token 0 (null if full positions decode/token-flow balances are unavailable or omitted; see simulateDispatch/getFullPositionsData). */
+  preMarginExcess0: bigint | null
+  /** Pre-dispatch margin excess for token 1 (null if full positions decode/token-flow balances are unavailable or omitted; see simulateDispatch/getFullPositionsData). */
+  preMarginExcess1: bigint | null
 }

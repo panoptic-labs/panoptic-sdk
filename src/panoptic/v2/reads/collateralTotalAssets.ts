@@ -8,7 +8,7 @@ import type { Address, Client } from 'viem'
 import { getAddress, zeroAddress } from 'viem'
 import { multicall } from 'viem/actions'
 
-import { collateralTrackerAbi } from '../../../generated'
+import { collateralTrackerV2Abi } from '../../../generated'
 
 /**
  * Get totalAssets for multiple CollateralTracker contracts in a single multicall.
@@ -30,7 +30,7 @@ export async function getCollateralTotalAssetsBatch(
   try {
     const contracts = collateralTrackerAddresses.map((address) => ({
       address: getAddress(address ?? zeroAddress),
-      abi: collateralTrackerAbi,
+      abi: collateralTrackerV2Abi,
       functionName: 'totalAssets' as const,
       chainId,
     }))

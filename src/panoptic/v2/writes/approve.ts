@@ -6,7 +6,7 @@
 import type { Address, PublicClient, WalletClient } from 'viem'
 import { erc20Abi } from 'viem'
 
-import { collateralTrackerAbi, panopticPoolAbi } from '../../../generated'
+import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import type { TxOverrides, TxReceipt, TxResult } from '../types'
 import { submitWrite } from './utils'
 
@@ -122,12 +122,12 @@ export async function approvePool(params: ApprovePoolParams): Promise<[TxResult,
     contracts: [
       {
         address: poolAddress,
-        abi: panopticPoolAbi,
+        abi: panopticPoolV2Abi,
         functionName: 'collateralToken0',
       },
       {
         address: poolAddress,
-        abi: panopticPoolAbi,
+        abi: panopticPoolV2Abi,
         functionName: 'collateralToken1',
       },
     ],
@@ -139,12 +139,12 @@ export async function approvePool(params: ApprovePoolParams): Promise<[TxResult,
     contracts: [
       {
         address: collateralToken0,
-        abi: collateralTrackerAbi,
+        abi: collateralTrackerV2Abi,
         functionName: 'asset',
       },
       {
         address: collateralToken1,
-        abi: collateralTrackerAbi,
+        abi: collateralTrackerV2Abi,
         functionName: 'asset',
       },
     ],

@@ -5,7 +5,7 @@
 
 import type { Address, PublicClient, WalletClient } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import type { TxOverrides, TxReceipt, TxResult } from '../types'
 import { submitWrite } from './utils'
 
@@ -78,7 +78,7 @@ export async function liquidate(params: LiquidateParams): Promise<TxResult> {
     walletClient,
     account,
     address: poolAddress,
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: 'dispatchFrom',
     args: [
       positionIdListFrom,

@@ -6,7 +6,7 @@
 import type { Address, Hex, PublicClient } from 'viem'
 import { decodeFunctionResult, encodeFunctionData } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients'
 import { PanopticError } from '../errors'
 import type { SettleSimulation, SimulationResult, TokenFlow } from '../types'
@@ -50,7 +50,7 @@ export interface SimulateSettleParams {
  * Simulate premium settlement.
  *
  * When `tokenId` is provided, the simulation also computes forfeit amounts
- * by chaining the dispatch with `getAccumulatedFeesAndPositionsData` reads
+ * by chaining the dispatch with `getFullPositionsData` reads
  * in a single multicall.
  *
  * @param params - Simulation parameters
@@ -71,7 +71,7 @@ export async function simulateSettle(
 
     // Encode dispatch call data
     const callData = encodeFunctionData({
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       functionName: 'dispatch',
       args: [
         positionIdList,
@@ -152,7 +152,7 @@ export async function simulateSettle(
 }
 
 /**
- * Compute forfeit amounts by chaining dispatch + getAccumulatedFeesAndPositionsData
+ * Compute forfeit amounts by chaining dispatch + getFullPositionsData
  * in a single PanopticPool.multicall.
  */
 async function computeForfeitAmounts(params: {
@@ -166,15 +166,15 @@ async function computeForfeitAmounts(params: {
 }): Promise<[bigint, bigint]> {
   const { client, poolAddress, account, tokenId, dispatchCallData, blockNumber } = params
 
-  // Encode getAccumulatedFeesAndPositionsData calls (available = false, total = true)
+  // Encode getFullPositionsData calls (available = false, total = true)
   const feesCallAvailable = encodeFunctionData({
-    abi: panopticPoolAbi,
-    functionName: 'getAccumulatedFeesAndPositionsData',
+    abi: panopticPoolV2Abi,
+    functionName: 'getFullPositionsData',
     args: [account, false, [tokenId]],
   })
   const feesCallTotal = encodeFunctionData({
-    abi: panopticPoolAbi,
-    functionName: 'getAccumulatedFeesAndPositionsData',
+    abi: panopticPoolV2Abi,
+    functionName: 'getFullPositionsData',
     args: [account, true, [tokenId]],
   })
 
@@ -192,8 +192,8 @@ async function computeForfeitAmounts(params: {
     // Decode the two fee reads (result[0] is dispatch, result[1] and result[2] are fees)
     const decodeFeesResult = (data: Hex): bigint => {
       return decodeFunctionResult({
-        abi: panopticPoolAbi,
-        functionName: 'getAccumulatedFeesAndPositionsData',
+        abi: panopticPoolV2Abi,
+        functionName: 'getFullPositionsData',
         data,
       })[0]
     }

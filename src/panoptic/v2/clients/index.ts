@@ -4,5 +4,10 @@
  */
 
 export { type GetBlockMetaParams, getBlockMeta } from './blockMeta'
-export { type ResolveBlockNumbersParams, resolveBlockNumbers } from './blocksByTimestamp'
+export {
+  type EstimateBlockNumbersParams,
+  type ResolveBlockNumbersParams,
+  estimateBlockNumbers,
+  resolveBlockNumbers,
+} from './blocksByTimestamp'
 export { type MulticallContract, type MulticallReadParams, multicallRead } from './multicall'

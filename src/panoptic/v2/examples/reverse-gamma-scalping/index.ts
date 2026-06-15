@@ -28,10 +28,8 @@ import {
   assertFresh,
   assertHealthy,
   // Greeks
-  calculatePositionDeltaWithSwap,
-  calculatePositionGreeks,
+  calculatePositionDelta,
   closePositionAndWait,
-  createFileStorage,
   // TokenId
   createTokenIdBuilder,
   // Writes
@@ -67,6 +65,7 @@ import {
 import { privateKeyToAccount } from 'viem/accounts'
 import { sepolia } from 'viem/chains'
 
+import { createFileStorage } from '../../storage/fileStorage'
 import { CHAIN_ID, loadEnv, USDC_DECIMALS, WETH_DECIMALS } from './config'
 
 // ---------------------------------------------------------------------------
@@ -356,7 +355,8 @@ async function executeHedgeAttempt(
   const { poolAddress, chainId } = config
 
   // Fetch all open positions and compute aggregate delta
-  const openIds = await getOpenPositionIds({ client, chainId, poolAddress, account, storage })
+  const openIds =
+    (await getOpenPositionIds({ client, chainId, poolAddress, account, storage })) ?? []
   if (openIds.length === 0) return { hedged: false, netDelta: 0n }
 
   // Collect position data for delta computation (reusable at different ticks)
@@ -394,24 +394,13 @@ async function executeHedgeAttempt(
     let delta = 0n
     for (const p of positions) {
       if (excludeTokenId !== undefined && p.tokenId === excludeTokenId) continue
-      if (p.isLoan) {
-        delta += calculatePositionDeltaWithSwap({
-          legs: p.legs,
-          currentTick: tick,
-          mintTick: p.tickAtMint,
-          positionSize: p.positionSize,
-          poolTickSpacing: pool.poolKey.tickSpacing,
-          swapAtMint: p.swapAtMint,
-        })
-      } else {
-        delta += calculatePositionGreeks({
-          legs: p.legs,
-          currentTick: tick,
-          mintTick: p.tickAtMint,
-          positionSize: p.positionSize,
-          poolTickSpacing: pool.poolKey.tickSpacing,
-        }).delta
-      }
+      delta += calculatePositionDelta({
+        legs: p.legs,
+        currentTick: tick,
+        mintTick: p.tickAtMint,
+        positionSize: p.positionSize,
+        poolTickSpacing: pool.tickSpacing,
+      })
     }
     return delta
   }
@@ -444,7 +433,7 @@ async function executeHedgeAttempt(
     currentDelta: deltaExHedge,
     asset: 0n,
     currentTick: pool.currentTick,
-    tickSpacing: pool.poolKey.tickSpacing,
+    tickSpacing: pool.tickSpacing,
   })
 
   const { tokenId: newHedgeTokenId } = buildUniqueLoan(
@@ -486,7 +475,7 @@ async function executeHedgeAttempt(
     currentDelta: deltaExHedge,
     asset: 0n,
     currentTick: pool.currentTick,
-    tickSpacing: pool.poolKey.tickSpacing,
+    tickSpacing: pool.tickSpacing,
     totalPositionSize,
     convergenceThresholdBps: config.deltaThresholdBps,
     simulateSwap: async (hedgeAmount, hedgeLeg) => {
@@ -576,7 +565,8 @@ export async function closeAllPositions(
     if (hedgePos.positionSize > 0n) {
       const pool = await getPool({ client, poolAddress, chainId })
       const limits = tickLimits(pool.currentTick, config.slippageToleranceBps)
-      const closeIds = await getOpenPositionIds({ client, chainId, poolAddress, account, storage })
+      const closeIds =
+        (await getOpenPositionIds({ client, chainId, poolAddress, account, storage })) ?? []
 
       const closeSim = await simulateClosePosition({
         client,
@@ -733,13 +723,14 @@ export async function runBot(
     )
 
     // --- Verify open positions exist ---
-    const openIds = await getOpenPositionIds({
-      client,
-      chainId: config.chainId,
-      poolAddress,
-      account,
-      storage,
-    })
+    const openIds =
+      (await getOpenPositionIds({
+        client,
+        chainId: config.chainId,
+        poolAddress,
+        account,
+        storage,
+      })) ?? []
     if (openIds.length === 0) {
       throw new Error('No open positions found. Open a position first using a separate script.')
     }

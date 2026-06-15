@@ -17,16 +17,60 @@ import {
 import type { QueuedWithdrawalSnapshot, WithdrawalEpochStateSnapshot } from '../utils'
 import { calculateClaimableAssetsFromQueuedWithdrawals } from '../utils'
 
+export const selectExecutableWithdrawalEpochs = ({
+  desiredAssets,
+  maxAssetsToExecute,
+  claimableWithdrawals,
+}: {
+  desiredAssets: bigint
+  maxAssetsToExecute?: bigint
+  claimableWithdrawals: ReturnType<typeof calculateClaimableAssetsFromQueuedWithdrawals>['byEpoch']
+}) => {
+  if (desiredAssets <= 0n) {
+    return { epochsToExecute: [] as bigint[], assetsToExecute: 0n }
+  }
+
+  const ordered = [...claimableWithdrawals].sort((a, b) => {
+    if (maxAssetsToExecute !== undefined && a.assetsToReceive !== b.assetsToReceive) {
+      return a.assetsToReceive > b.assetsToReceive ? -1 : 1
+    }
+    return a.epoch < b.epoch ? -1 : 1
+  })
+
+  const selectedEpochs: bigint[] = []
+  let accumulatedAssets = 0n
+
+  for (const entry of ordered) {
+    const nextAccumulatedAssets = accumulatedAssets + entry.assetsToReceive
+    if (maxAssetsToExecute !== undefined && nextAccumulatedAssets > maxAssetsToExecute) {
+      continue
+    }
+
+    selectedEpochs.push(entry.epoch)
+    accumulatedAssets = nextAccumulatedAssets
+
+    if (accumulatedAssets >= desiredAssets) {
+      break
+    }
+  }
+
+  return { epochsToExecute: selectedEpochs, assetsToExecute: accumulatedAssets }
+}
+
 export const useExecuteWithdrawal = ({
+  chainId,
   vaultAddress,
   desiredAssets,
+  maxAssetsToExecute,
   queuedWithdrawals,
   withdrawalEpochStates,
   currentWithdrawalEpoch,
   onWaitSuccess,
 }: {
+  chainId?: number
   vaultAddress: Address
   desiredAssets: bigint
+  maxAssetsToExecute?: bigint
   queuedWithdrawals: QueuedWithdrawalSnapshot[]
   withdrawalEpochStates: WithdrawalEpochStateSnapshot[]
   currentWithdrawalEpoch: bigint
@@ -46,26 +90,12 @@ export const useExecuteWithdrawal = ({
   )
 
   const { epochsToExecute, assetsToExecute } = useMemo(() => {
-    if (desiredAssets <= 0n) {
-      return { epochsToExecute: [] as bigint[], assetsToExecute: 0n }
-    }
-
-    const ordered = [...claimableWithdrawals.byEpoch].sort((a, b) => (a.epoch < b.epoch ? -1 : 1))
-
-    const selectedEpochs: bigint[] = []
-    let accumulatedAssets = 0n
-
-    for (const entry of ordered) {
-      selectedEpochs.push(entry.epoch)
-      accumulatedAssets += entry.assetsToReceive
-
-      if (accumulatedAssets >= desiredAssets) {
-        break
-      }
-    }
-
-    return { epochsToExecute: selectedEpochs, assetsToExecute: accumulatedAssets }
-  }, [desiredAssets, claimableWithdrawals.byEpoch])
+    return selectExecutableWithdrawalEpochs({
+      desiredAssets,
+      maxAssetsToExecute,
+      claimableWithdrawals: claimableWithdrawals.byEpoch,
+    })
+  }, [desiredAssets, maxAssetsToExecute, claimableWithdrawals.byEpoch])
 
   const multicallCalldatas = useMemo(() => {
     return epochsToExecute.length > 0
@@ -96,6 +126,7 @@ export const useExecuteWithdrawal = ({
     account !== zeroAddress
 
   const simulate = useSimulateContract({
+    chainId,
     ...getExecuteWithdrawalMulticallContractConfig({ vaultAddress, multicallCalldatas }),
     account,
     query: {
@@ -107,6 +138,7 @@ export const useExecuteWithdrawal = ({
   const write = useWriteContract()
 
   const wait = useWaitForTransactionReceipt({
+    chainId,
     hash: write.data,
     query: {
       refetchOnWindowFocus: false,

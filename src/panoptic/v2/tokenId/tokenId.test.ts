@@ -47,7 +47,7 @@ describe('TokenId Constants', () => {
   })
 
   it('should have correct default vegoid', () => {
-    expect(DEFAULT_VEGOID).toBe(4n)
+    expect(DEFAULT_VEGOID).toBe(8n)
   })
 
   it('should have correct bit sizes', () => {

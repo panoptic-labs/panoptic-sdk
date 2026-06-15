@@ -5,11 +5,37 @@
 
 import type { Address, PublicClient } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients/blockMeta'
 import { calculatePositionGreeks } from '../greeks'
 import type { BlockMeta, Position, PositionGreeks, TokenIdLeg } from '../types'
 import { decodePosition, decodeTickSpacing } from '../utils/option-encoding-v2'
+
+/**
+ * Decode a packed PositionBalance (uint256) into its component fields.
+ */
+function decodePositionBalance(balance: bigint) {
+  const positionSize = balance & ((1n << 128n) - 1n)
+  const poolUtilization0 = (balance >> 128n) & 0xffffn
+  const poolUtilization1 = (balance >> 144n) & 0xffffn
+  let tickAtMint = (balance >> 160n) & 0xffffffn
+  if (tickAtMint > 0x7fffffn) {
+    tickAtMint = tickAtMint - 0x1000000n
+  }
+  const timestampAtMint = (balance >> 184n) & 0xffffffffn
+  const blockAtMint = (balance >> 216n) & ((1n << 39n) - 1n)
+  const swapAtMint = balance >> 255n === 1n
+
+  return {
+    positionSize,
+    poolUtilization0,
+    poolUtilization1,
+    tickAtMint,
+    timestampAtMint,
+    blockAtMint,
+    swapAtMint,
+  }
+}
 
 /**
  * Parameters for getPosition.
@@ -41,28 +67,27 @@ export async function getPosition(params: GetPositionParams): Promise<Position> 
   const targetBlockNumber =
     blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
 
-  const [positionData, _meta] = await Promise.all([
+  const [fullData, _meta] = await Promise.all([
     client.readContract({
       address: poolAddress,
-      abi: panopticPoolAbi,
-      functionName: 'positionData',
-      args: [owner, tokenId],
+      abi: panopticPoolV2Abi,
+      functionName: 'getFullPositionsData',
+      args: [owner, false, [tokenId]],
       blockNumber: targetBlockNumber,
     }),
     params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
   ])
 
-  // positionData returns: (bool, uint256, uint256, int24, int256, int256, uint128)
-  // These are: swapAtMint, blockAtMint, timestampAtMint, tickAtMint, utilization0AtMint, utilization1AtMint, positionSize
-  const [
-    swapAtMint,
-    blockAtMint,
-    timestampAtMint,
-    tickAtMint,
-    utilization0AtMint,
-    utilization1AtMint,
+  const balanceRaw = fullData[2][0] // positionBalances[0]
+  const {
     positionSize,
-  ] = positionData
+    poolUtilization0: utilization0AtMint,
+    poolUtilization1: utilization1AtMint,
+    tickAtMint,
+    timestampAtMint,
+    blockAtMint,
+    swapAtMint,
+  } = decodePositionBalance(balanceRaw)
 
   // Decode the tokenId to get legs
   const decoded = decodePosition(tokenId)
@@ -151,90 +176,139 @@ export async function getPositions(
   const targetBlockNumber =
     blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
 
-  // Use multicall to get all position data in a single RPC call
-  const [multicallResults, _meta] = await Promise.all([
-    client.multicall({
-      contracts: tokenIds.map((tokenId) => ({
-        address: poolAddress,
-        abi: panopticPoolAbi,
-        functionName: 'positionData' as const,
-        args: [owner, tokenId] as const,
-      })),
-      blockNumber: targetBlockNumber,
-      allowFailure: true,
-    }),
-    params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
-  ])
+  const _meta = params._meta ?? (await getBlockMeta({ client, blockNumber: targetBlockNumber }))
 
-  const positions: Position[] = []
+  const decodePositions = (
+    ids: bigint[],
+    positionBalances: readonly bigint[],
+    meta: BlockMeta,
+  ): Position[] => {
+    const positions: Position[] = []
+    for (let i = 0; i < ids.length; i += 1) {
+      const tokenId = ids[i]
+      if (tokenId === undefined) continue
+      const balanceRaw = positionBalances[i]
+      if (balanceRaw === undefined) continue
 
-  for (let i = 0; i < tokenIds.length; i++) {
-    const result = multicallResults[i]
-    if (result.status !== 'success') {
-      continue // Skip failed calls
-    }
+      const {
+        positionSize,
+        poolUtilization0: utilization0AtMint,
+        poolUtilization1: utilization1AtMint,
+        tickAtMint,
+        timestampAtMint,
+        blockAtMint,
+        swapAtMint,
+      } = decodePositionBalance(balanceRaw)
 
-    const tokenId = tokenIds[i]
-    const [
-      swapAtMint,
-      blockAtMint,
-      timestampAtMint,
-      tickAtMint,
-      utilization0AtMint,
-      utilization1AtMint,
-      positionSize,
-    ] = result.result
-
-    // Skip positions with zero size
-    if (positionSize === 0n) {
-      continue
-    }
-
-    // Decode the tokenId to get legs
-    const decoded = decodePosition(tokenId)
-    const tickSpacing = decodeTickSpacing(tokenId)
-
-    // Convert decoded legs to TokenIdLeg format
-    const legs: TokenIdLeg[] = decoded.legs.map((leg) => {
-      const width = leg.width
-      const strike = leg.strike
-      const tickLower = strike - (width * tickSpacing) / 2n
-      const tickUpper = strike + (width * tickSpacing) / 2n
-
-      return {
-        index: BigInt(leg.index),
-        asset: leg.asset,
-        optionRatio: leg.optionRatio,
-        isLong: leg.isLong === 1n,
-        tokenType: leg.tokenType,
-        riskPartner: leg.riskPartner,
-        strike,
-        width,
-        tickLower,
-        tickUpper,
+      // Skip positions with zero size
+      if (positionSize === 0n) {
+        continue
       }
-    })
 
-    positions.push({
-      tokenId,
-      positionSize,
-      owner,
-      poolAddress,
-      legs,
-      poolUtilization0AtMint: utilization0AtMint,
-      poolUtilization1AtMint: utilization1AtMint,
-      tickAtMint: BigInt(tickAtMint),
-      timestampAtMint,
-      blockNumberAtMint: blockAtMint,
-      swapAtMint,
-      premiaOwed0: 0n, // Premia now tracked separately
-      premiaOwed1: 0n,
-      assetIndex: legs.length > 0 ? legs[0].asset : 0n,
-      _meta,
-    })
+      // Decode the tokenId to get legs
+      const decoded = decodePosition(tokenId)
+      const tickSpacing = decodeTickSpacing(tokenId)
+
+      // Convert decoded legs to TokenIdLeg format
+      const legs: TokenIdLeg[] = decoded.legs.map((leg) => {
+        const width = leg.width
+        const strike = leg.strike
+        const tickLower = strike - (width * tickSpacing) / 2n
+        const tickUpper = strike + (width * tickSpacing) / 2n
+
+        return {
+          index: BigInt(leg.index),
+          asset: leg.asset,
+          optionRatio: leg.optionRatio,
+          isLong: leg.isLong === 1n,
+          tokenType: leg.tokenType,
+          riskPartner: leg.riskPartner,
+          strike,
+          width,
+          tickLower,
+          tickUpper,
+        }
+      })
+
+      positions.push({
+        tokenId,
+        positionSize,
+        owner,
+        poolAddress,
+        legs,
+        poolUtilization0AtMint: utilization0AtMint,
+        poolUtilization1AtMint: utilization1AtMint,
+        tickAtMint: BigInt(tickAtMint),
+        timestampAtMint,
+        blockNumberAtMint: blockAtMint,
+        swapAtMint,
+        premiaOwed0: 0n, // Premia now tracked separately
+        premiaOwed1: 0n,
+        assetIndex: legs.length > 0 ? legs[0].asset : 0n,
+        _meta: meta,
+      })
+    }
+    return positions
   }
 
-  return { positions, _meta }
+  const getOrderingCandidates = (ids: bigint[]): bigint[][] => {
+    if (ids.length <= 1) return [Array.from(ids)]
+    const candidates: bigint[][] = []
+    const seen = new Set<string>()
+    const push = (candidate: bigint[]) => {
+      const key = candidate.map((value) => value.toString()).join(',')
+      if (seen.has(key)) return
+      seen.add(key)
+      candidates.push(candidate)
+    }
+    push(Array.from(ids))
+    push(Array.from(ids).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)))
+    push(Array.from(ids).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0)))
+    return candidates
+  }
+
+  const fetchBalances = async (ids: bigint[]) => {
+    const fullData = await client.readContract({
+      address: poolAddress,
+      abi: panopticPoolV2Abi,
+      functionName: 'getFullPositionsData',
+      args: [owner, false, ids],
+      blockNumber: targetBlockNumber,
+    })
+    const balances = fullData[2]
+    return Array.isArray(balances) ? balances : []
+  }
+
+  // Try full-batch read first.
+  for (const candidate of getOrderingCandidates(tokenIds)) {
+    try {
+      const balances = await fetchBalances(candidate)
+      return { positions: decodePositions(candidate, balances, _meta), _meta }
+    } catch {
+      // fall through to next ordering candidate
+    }
+  }
+
+  // Last-resort fallback: probe each token independently and keep only successful reads.
+  const perTokenResults = await Promise.all(
+    tokenIds.map(async (tokenId) => {
+      try {
+        const balances = await fetchBalances([tokenId])
+        return { tokenId, balance: balances[0] }
+      } catch {
+        return { tokenId, balance: undefined }
+      }
+    }),
+  )
+  const validTokenIds: bigint[] = []
+  const validBalances: bigint[] = []
+  for (const result of perTokenResults) {
+    if (result.balance === undefined) continue
+    validTokenIds.push(result.tokenId)
+    validBalances.push(result.balance)
+  }
+
+  return { positions: decodePositions(validTokenIds, validBalances, _meta), _meta }
 }
 
 /**
@@ -275,18 +349,18 @@ export async function getPositionGreeks(
     blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
 
   // Get position data and current tick in parallel
-  const [positionData, currentTickResult, _meta] = await Promise.all([
+  const [fullData, currentTickResult, _meta] = await Promise.all([
     client.readContract({
       address: poolAddress,
-      abi: panopticPoolAbi,
-      functionName: 'positionData',
-      args: [owner, tokenId],
+      abi: panopticPoolV2Abi,
+      functionName: 'getFullPositionsData',
+      args: [owner, false, [tokenId]],
       blockNumber: targetBlockNumber,
     }),
     atTick === undefined
       ? client.readContract({
           address: poolAddress,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           functionName: 'getCurrentTick',
           blockNumber: targetBlockNumber,
         })
@@ -294,7 +368,7 @@ export async function getPositionGreeks(
     params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
   ])
 
-  const [, , , tickAtMint, , , positionSize] = positionData
+  const { tickAtMint, positionSize } = decodePositionBalance(fullData[2][0])
 
   // Decode the tokenId to get legs
   const decoded = decodePosition(tokenId)

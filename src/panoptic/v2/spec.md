@@ -166,7 +166,7 @@ Panoptic v2 introduces significant architectural changes from v1:
 - `PanopticQuery` - **Note: Not yet implemented in contracts directory. This is a planned upgradable proxy contract for RPC-intensive computations.**
 
 **Key Contract Functions for Computed Values**:
-- `PanopticPool.getAccumulatedFeesAndPositionsData()` - Returns premia owed + position balances (see `contracts/PanopticPool.sol:434`)
+- `PanopticPool.getFullPositionsData()` - Returns premia owed + position balances (see `contracts/PanopticPool.sol:434`)
 - `PanopticPool.dispatch()` - Execute position operations (mint/burn) (see `contracts/PanopticPool.sol:577`)
 - `RiskEngine.getMargin()` - Returns maintenance requirement + available balance per token (see `contracts/RiskEngine.sol:1057`)
 - `CollateralTracker.deposit()` / `withdraw()` - ERC4626 vault operations (see `contracts/CollateralTracker.sol:569`, `contracts/CollateralTracker.sol:720`)
@@ -620,16 +620,16 @@ const tokenIds = await getTrackedPositionIds(config, {
 const positions = await getPositions(config, {
   account: '0x...',
 })
-// Internally: getTrackedPositionIds() → getAccumulatedFeesAndPositionsData() → filter by positionSize > 0
+// Internally: getTrackedPositionIds() → getFullPositionsData() → filter by positionSize > 0
 
 // Manual tokenId query (bypasses cache, user provides tokenId)
 const position = await getPosition(config, {
   tokenId: 123n,
 })
-// Calls PanopticPool.positionData() for balance, getAccumulatedFeesAndPositionsData() for premia
+// Calls PanopticPool.positionData() for balance, getFullPositionsData() for premia
 ```
 
-**Note**: `syncPositions()` only tracks tokenIds locally. Position data (size, premia, ticks at mint) is always fetched fresh from the contract via `getAccumulatedFeesAndPositionsData()` which returns `PositionBalance` data for each position.
+**Note**: `syncPositions()` only tracks tokenIds locally. Position data (size, premia, ticks at mint) is always fetched fresh from the contract via `getFullPositionsData()` which returns `PositionBalance` data for each position.
 
 ### Sync Behavior
 
@@ -1710,7 +1710,7 @@ interface Position {
 
 The SDK fetches position data by composing contract calls (batched via multicall):
 
-1. **`PanopticPool.getAccumulatedFeesAndPositionsData(user, includePending, tokenIds)`**
+1. **`PanopticPool.getFullPositionsData(user, includePending, tokenIds)`**
    - Returns `shortPremia`, `longPremia`, and `PositionBalance[]` array
    - `PositionBalance` is a packed uint256 containing: positionSize, utilizations at mint, ticks at mint, block number and timestamps at mint
 
@@ -1802,7 +1802,7 @@ Position value and sensitivities. The SDK provides two modes:
 
 **Contract Implementation**:
 - Greeks calculations are primarily handled by `PanopticQuery.getPositionGreeks()` (planned contract)
-- Position data comes from `PanopticPool.getAccumulatedFeesAndPositionsData()` (see `contracts/PanopticPool.sol:434`)
+- Position data comes from `PanopticPool.getFullPositionsData()` (see `contracts/PanopticPool.sol:434`)
 - Greeks formulas are based on the Panoptic LP-based option model
 - Value depends on current price relative to the position's strike and width (see `contracts/types/TokenId.sol` for how strike/width are encoded)
 
@@ -2108,7 +2108,7 @@ interface AccountCollateral {
 The SDK fetches account collateral by composing contract calls (batched via multicall):
 
 1. **`getTrackedPositionIds()`** - Get tokenIds from local cache
-2. **`PanopticPool.getAccumulatedFeesAndPositionsData(user, true, tokenIds)`**
+2. **`PanopticPool.getFullPositionsData(user, true, tokenIds)`**
    - Returns `shortPremia`, `longPremia`, `PositionBalance[]`
 3. **`RiskEngine.getMargin(positionBalances, atTick, user, tokenIds, shortPremia, longPremia, ct0, ct1)`**
    - Returns `tokenData0`, `tokenData1`, `globalUtilizations`
@@ -2155,7 +2155,7 @@ interface PositionsWithPremiaResult {
 
 ### How Account Premia is Computed
 
-`getAccountPremia()` and `getPositionsWithPremia()` use `PanopticPool.getAccumulatedFeesAndPositionsData()`:
+`getAccountPremia()` and `getPositionsWithPremia()` use `PanopticPool.getFullPositionsData()`:
 
 ```typescript
 // Get aggregate premia (fast)
@@ -2687,7 +2687,7 @@ All position operations (open, close, settle) are implemented via the `PanopticP
 - Closing a position calls `dispatch()` with a `burn` operation internally
 - The dispatch function routes to `PanopticPool._validatePositionList()` and interacts with the `SemiFungiblePositionManager` (see `contracts/SemiFungiblePositionManagerV4.sol`)
 - Position data is tracked using the `TokenId` type (see `contracts/types/TokenId.sol`)
-- Accumulated fees are computed via `PanopticPool.getAccumulatedFeesAndPositionsData()` (see `contracts/PanopticPool.sol:434`)
+- Accumulated fees are computed via `PanopticPool.getFullPositionsData()` (see `contracts/PanopticPool.sol:434`)
 
 ### Open Position
 
@@ -4741,7 +4741,7 @@ Features explicitly deferred for potential v0.2+:
 | Wait pattern | **Separate functions** - openPosition() vs openPositionAndWait() |
 | Subgraph | **Removed** - position tracking via local event sync with persistent storage |
 | TokenId utils | **Exported** - createTokenIdBuilder(poolId), fetchPoolId, decodeTokenId, countLegs, etc. |
-| Position computed values | **From core contracts** - PanopticPool.getAccumulatedFeesAndPositionsData() + RiskEngine.getMargin() |
+| Position computed values | **From core contracts** - PanopticPool.getFullPositionsData() + RiskEngine.getMargin() |
 | Prepare methods | **Dropped** - use viem directly |
 | Collateral estimation | **RiskEngine.getMargin()** - no separate helper contract needed |
 | IRM exposure | **Just current rates** - no internals |

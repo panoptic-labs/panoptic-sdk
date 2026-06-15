@@ -40,8 +40,8 @@ const mockLegs: LegParams[] = [
 ]
 
 describe('option-encoding-v2', () => {
-  test('Vegoid constant should be 4', () => {
-    expect(BigInt(vegoid)).toBe(4n)
+  test('Vegoid constant should match DEFAULT_VEGOID', () => {
+    expect(BigInt(vegoid)).toBe(8n)
   })
 
   test('Encode poolId with vegoid', () => {

@@ -11,9 +11,8 @@ import { getPositions } from '../reads/position'
 import type { StorageAdapter } from '../storage'
 import { createMemoryStorage, getPoolMetaKey, getPositionMetaKey, jsonSerializer } from '../storage'
 import type { StoredPoolMeta, StoredPositionData, TokenIdLeg } from '../types'
-import { getPoolDeploymentBlock, reconstructFromEvents } from './eventReconstruction'
+import { getOpenPositionIds } from './getTrackedPositionIds'
 import { detectReorg, loadCheckpoint, saveCheckpoint } from './reorgHandling'
-import { recoverSnapshot } from './snapshotRecovery'
 // Import after mocking
 import { syncPositions } from './syncPositions'
 
@@ -26,18 +25,12 @@ vi.mock('../reads/pool', () => ({
   getPoolMetadata: vi.fn(),
 }))
 
-vi.mock('./snapshotRecovery', () => ({
-  recoverSnapshot: vi.fn(),
-}))
-
-vi.mock('./eventReconstruction', () => ({
-  reconstructFromEvents: vi.fn(),
-  getPoolDeploymentBlock: vi.fn(),
+vi.mock('./getTrackedPositionIds', () => ({
+  getOpenPositionIds: vi.fn(),
 }))
 
 vi.mock('./reorgHandling', () => ({
   detectReorg: vi.fn(),
-  calculateResyncBlock: vi.fn(),
   saveCheckpoint: vi.fn(),
   loadCheckpoint: vi.fn(),
 }))
@@ -57,8 +50,6 @@ const MOCK_TOKEN0_ASSET = '0x1111111111111111111111111111111111111111' as Addres
 const MOCK_TOKEN1_ASSET = '0x2222222222222222222222222222222222222222' as Address
 
 // Pool key bytes with tickSpacing = 60 (encoded at slot 3)
-// Slot 0-2: addresses and fee (not important for this test)
-// Slot 3: tickSpacing = 60 = 0x3c (right-padded to 32 bytes)
 const MOCK_POOL_KEY_BYTES = ('0x' +
   '0000000000000000000000001111111111111111111111111111111111111111' + // currency0
   '0000000000000000000000002222222222222222222222222222222222222222' + // currency1
@@ -80,6 +71,10 @@ const MOCK_POOL_METADATA = {
   token1Symbol: 'USDC',
   token0Decimals: 18n,
   token1Decimals: 6n,
+  tickSpacing: 60n,
+  fee: 3000n,
+  isV4: false,
+  underlyingPoolId: TEST_POOL_ADDRESS,
 }
 
 // Mock legs for position
@@ -121,13 +116,7 @@ describe('syncPositions - Position Data Storage', () => {
 
     // Default mock implementations
     ;(loadCheckpoint as Mock).mockResolvedValue(null)
-    ;(recoverSnapshot as Mock).mockResolvedValue(null)
-    ;(getPoolDeploymentBlock as Mock).mockResolvedValue(0n)
-    ;(reconstructFromEvents as Mock).mockResolvedValue({
-      openPositions: [],
-      closedPositions: [],
-      lastBlock: 1000n,
-    })
+    ;(getOpenPositionIds as Mock).mockResolvedValue([])
     ;(saveCheckpoint as Mock).mockResolvedValue(undefined)
     ;(detectReorg as Mock).mockResolvedValue({ detected: false })
     ;(getPoolMetadata as Mock).mockResolvedValue(MOCK_POOL_METADATA)
@@ -135,7 +124,7 @@ describe('syncPositions - Position Data Storage', () => {
 
   describe('Pool Metadata Storage', () => {
     it('should store full pool metadata on first sync', async () => {
-      // Account has no events - quick path
+      // Account has no events, no positions
       ;(mockClient.getLogs as Mock).mockResolvedValue([])
       ;(getPositions as Mock).mockResolvedValue({ positions: [], _meta: {} })
 
@@ -153,18 +142,14 @@ describe('syncPositions - Position Data Storage', () => {
       expect(storedRaw).not.toBeNull()
 
       const poolMeta = jsonSerializer.parse(storedRaw!) as StoredPoolMeta
-      // From PoolKey
       expect(poolMeta.tickSpacing).toBe(60n)
       expect(poolMeta.fee).toBe(3000n)
-      // Pool identifier
       expect(poolMeta.poolId).toBe(12345n)
-      // Addresses
       expect(poolMeta.collateralToken0Address).toBe(MOCK_CT0_ADDRESS)
       expect(poolMeta.collateralToken1Address).toBe(MOCK_CT1_ADDRESS)
       expect(poolMeta.riskEngineAddress).toBe(MOCK_RISK_ENGINE)
       expect(poolMeta.token0Asset).toBe(MOCK_TOKEN0_ASSET)
       expect(poolMeta.token1Asset).toBe(MOCK_TOKEN1_ASSET)
-      // Token metadata
       expect(poolMeta.token0Symbol).toBe('WETH')
       expect(poolMeta.token1Symbol).toBe('USDC')
       expect(poolMeta.token0Decimals).toBe(18n)
@@ -172,7 +157,7 @@ describe('syncPositions - Position Data Storage', () => {
     })
 
     it('should not re-fetch pool metadata if already stored', async () => {
-      // Pre-store pool metadata with full interface
+      // Pre-store pool metadata
       const poolMetaKey = getPoolMetaKey(TEST_CHAIN_ID, TEST_POOL_ADDRESS)
       const existingMeta: StoredPoolMeta = {
         tickSpacing: 100n,
@@ -218,12 +203,8 @@ describe('syncPositions - Position Data Storage', () => {
       const tokenId1 = 123n
       const tokenId2 = 456n
 
-      // Mock event reconstruction returns positions
-      ;(reconstructFromEvents as Mock).mockResolvedValue({
-        openPositions: [tokenId1, tokenId2],
-        closedPositions: [],
-        lastBlock: 1000n,
-      })
+      // getOpenPositionIds returns positions
+      ;(getOpenPositionIds as Mock).mockResolvedValue([tokenId1, tokenId2])
 
       // Mock getPositions returns full position data
       const mockPositions = [
@@ -254,9 +235,6 @@ describe('syncPositions - Position Data Storage', () => {
         positions: mockPositions,
         _meta: { blockNumber: 1000n },
       })
-
-      // Need to make it go through the event reconstruction path
-      ;(mockClient.getLogs as Mock).mockResolvedValueOnce([{ dummy: 'event' }]) // Has events
 
       await syncPositions({
         client: mockClient,
@@ -298,12 +276,8 @@ describe('syncPositions - Position Data Storage', () => {
       })
       ;(detectReorg as Mock).mockResolvedValue({ detected: false })
 
-      // Incremental sync finds new position
-      ;(reconstructFromEvents as Mock).mockResolvedValue({
-        openPositions: [tokenId],
-        closedPositions: [],
-        lastBlock: 1000n,
-      })
+      // getOpenPositionIds returns the position
+      ;(getOpenPositionIds as Mock).mockResolvedValue([tokenId])
       ;(getPositions as Mock).mockResolvedValue({
         positions: [
           {
@@ -321,13 +295,16 @@ describe('syncPositions - Position Data Storage', () => {
         _meta: { blockNumber: 1000n },
       })
 
-      await syncPositions({
+      const result = await syncPositions({
         client: mockClient,
         chainId: TEST_CHAIN_ID,
         poolAddress: TEST_POOL_ADDRESS,
         account: TEST_ACCOUNT,
         storage,
       })
+
+      // Should be incremental since checkpoint existed
+      expect(result.incremental).toBe(true)
 
       // Verify position data was stored
       const posKey = getPositionMetaKey(TEST_CHAIN_ID, TEST_POOL_ADDRESS, tokenId)
@@ -340,7 +317,8 @@ describe('syncPositions - Position Data Storage', () => {
     })
 
     it('should not call getPositions when no positions', async () => {
-      // Account has no events
+      // getOpenPositionIds returns empty, no events
+      ;(getOpenPositionIds as Mock).mockResolvedValue([])
       ;(mockClient.getLogs as Mock).mockResolvedValue([])
 
       await syncPositions({
@@ -383,11 +361,7 @@ describe('syncPositions - Position Data Storage', () => {
     it('should use correct storage key format for position metadata', async () => {
       const tokenId = 999n
 
-      ;(reconstructFromEvents as Mock).mockResolvedValue({
-        openPositions: [tokenId],
-        closedPositions: [],
-        lastBlock: 1000n,
-      })
+      ;(getOpenPositionIds as Mock).mockResolvedValue([tokenId])
       ;(getPositions as Mock).mockResolvedValue({
         positions: [
           {
@@ -404,7 +378,6 @@ describe('syncPositions - Position Data Storage', () => {
         ],
         _meta: { blockNumber: 1000n },
       })
-      ;(mockClient.getLogs as Mock).mockResolvedValueOnce([{ dummy: 'event' }])
 
       await syncPositions({
         client: mockClient,
@@ -424,6 +397,106 @@ describe('syncPositions - Position Data Storage', () => {
       // Should be stored
       const stored = await storage.get(expectedKey)
       expect(stored).not.toBeNull()
+    })
+  })
+
+  describe('Error Propagation', () => {
+    const tokenId1 = 123n
+    const tokenId2 = 456n
+
+    it('should propagate getOpenPositionIds rejection', async () => {
+      ;(getOpenPositionIds as Mock).mockRejectedValue(
+        new Error('RPC timeout fetching position IDs'),
+      )
+
+      await expect(
+        syncPositions({
+          client: mockClient,
+          chainId: TEST_CHAIN_ID,
+          poolAddress: TEST_POOL_ADDRESS,
+          account: TEST_ACCOUNT,
+          storage,
+        }),
+      ).rejects.toThrow('RPC timeout fetching position IDs')
+
+      // getPositions should never be called if getOpenPositionIds fails
+      expect(getPositions).not.toHaveBeenCalled()
+    })
+
+    it('should propagate getPositions rejection when getOpenPositionIds resolves', async () => {
+      ;(getOpenPositionIds as Mock).mockResolvedValue([tokenId1, tokenId2])
+      ;(getPositions as Mock).mockRejectedValue(new Error('RPC timeout fetching positions'))
+
+      await expect(
+        syncPositions({
+          client: mockClient,
+          chainId: TEST_CHAIN_ID,
+          poolAddress: TEST_POOL_ADDRESS,
+          account: TEST_ACCOUNT,
+          storage,
+        }),
+      ).rejects.toThrow('RPC timeout fetching positions')
+
+      // getOpenPositionIds succeeded, getPositions was called with the resolved IDs
+      expect(getOpenPositionIds).toHaveBeenCalled()
+      expect(getPositions).toHaveBeenCalledWith(
+        expect.objectContaining({ tokenIds: [tokenId1, tokenId2] }),
+      )
+
+      // No position data should be stored
+      const pos1Key = getPositionMetaKey(TEST_CHAIN_ID, TEST_POOL_ADDRESS, tokenId1)
+      const stored = await storage.get(pos1Key)
+      expect(stored).toBeNull()
+    })
+  })
+
+  describe('Reorg Detection', () => {
+    it('should detect reorg and still return correct positions', async () => {
+      const tokenId = 111n
+
+      ;(loadCheckpoint as Mock).mockResolvedValue({
+        lastBlock: 900n,
+        lastBlockHash: TEST_BLOCK_HASH,
+        positionIds: [222n], // stale position from checkpoint
+      })
+      ;(detectReorg as Mock).mockResolvedValue({
+        detected: true,
+        reorgBlock: 895n,
+      })
+      ;(getOpenPositionIds as Mock).mockResolvedValue([tokenId])
+      ;(getPositions as Mock).mockResolvedValue({
+        positions: [
+          {
+            tokenId,
+            positionSize: 100n,
+            legs: [],
+            tickAtMint: 0n,
+            poolUtilization0AtMint: 0n,
+            poolUtilization1AtMint: 0n,
+            timestampAtMint: 0n,
+            blockNumberAtMint: 0n,
+            swapAtMint: false,
+          },
+        ],
+        _meta: { blockNumber: 1000n },
+      })
+
+      let reorgDetected = false
+      const result = await syncPositions({
+        client: mockClient,
+        chainId: TEST_CHAIN_ID,
+        poolAddress: TEST_POOL_ADDRESS,
+        account: TEST_ACCOUNT,
+        storage,
+        onUpdate: (event) => {
+          if (event.type === 'reorg-detected') reorgDetected = true
+        },
+      })
+
+      expect(reorgDetected).toBe(true)
+      // getOpenPositionIds returns authoritative list regardless of reorg
+      expect(result.positionIds).toEqual([tokenId])
+      expect(result.positionCount).toBe(1n)
     })
   })
 })

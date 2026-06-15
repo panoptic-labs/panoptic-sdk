@@ -5,7 +5,7 @@
 
 import type { Address, PublicClient } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients/blockMeta'
 import type { BlockMeta, Position, TokenIdLeg } from '../types'
 import { decodePosition, decodeTickSpacing } from '../utils/option-encoding-v2'
@@ -102,8 +102,8 @@ export async function getAccountPremia(params: GetAccountPremiaParams): Promise<
   const [[shortPremiumPacked, longPremiumPacked], _meta] = await Promise.all([
     client.readContract({
       address: poolAddress,
-      abi: panopticPoolAbi,
-      functionName: 'getAccumulatedFeesAndPositionsData',
+      abi: panopticPoolV2Abi,
+      functionName: 'getFullPositionsData',
       args: [account, includePendingPremium, tokenIds],
       blockNumber: targetBlockNumber,
     }),
@@ -174,7 +174,7 @@ export interface GetPositionsWithPremiaParams {
 /**
  * Get positions with per-position premia data.
  *
- * Uses multicall to batch individual getAccumulatedFeesAndPositionsData calls
+ * Uses multicall to batch individual getFullPositionsData calls
  * for each position, giving us per-position premia in a single RPC request.
  *
  * @param params - The parameters
@@ -225,12 +225,12 @@ export async function getPositionsWithPremia(
     }
   }
 
-  // Build multicall contracts - one getAccumulatedFeesAndPositionsData call per tokenId
+  // Build multicall contracts - one getFullPositionsData call per tokenId
   // This gives us per-position premia
   const contracts = tokenIds.map((tokenId) => ({
     address: poolAddress,
-    abi: panopticPoolAbi,
-    functionName: 'getAccumulatedFeesAndPositionsData' as const,
+    abi: panopticPoolV2Abi,
+    functionName: 'getFullPositionsData' as const,
     args: [account, includePendingPremium, [tokenId]] as const,
   }))
 

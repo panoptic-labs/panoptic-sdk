@@ -16,6 +16,36 @@ export type BuildManagerInputParams = {
   poolInfos: readonly PoolInfo[]
   tokenIds: bigint[][]
   underlyingToken: Address
+  wethAddress?: Address
+  erc4626Vaults?: readonly Address[]
+}
+
+const NATIVE_ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const NATIVE_ETH_ALIAS_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+
+export function isUnderlyingEquivalentToken({
+  token,
+  underlyingToken,
+  wethAddress,
+}: {
+  token: Address
+  underlyingToken: Address
+  wethAddress?: Address
+}): boolean {
+  const tokenLower = token.toLowerCase()
+  const underlyingLower = underlyingToken.toLowerCase()
+  if (tokenLower === underlyingLower) {
+    return true
+  }
+
+  if (wethAddress === undefined) {
+    return false
+  }
+
+  const wethLower = wethAddress.toLowerCase()
+  const tokenIsNativeAlias =
+    tokenLower === NATIVE_ZERO_ADDRESS || tokenLower === NATIVE_ETH_ALIAS_ADDRESS
+  return tokenIsNativeAlias && underlyingLower === wethLower
 }
 
 /**
@@ -29,6 +59,7 @@ export type BuildManagerInputParams = {
  * @param params.poolInfos - Array of pool info objects containing pool and token configuration
  * @param params.tokenIds - 2D array of tokenIds for each pool
  * @param params.underlyingToken - Address of the vault's underlying token
+ * @param params.erc4626Vaults - Optional list of ERC4626 vaults considered by accountant NAV
  * @returns Encoded managerInput as Hex
  */
 export async function buildManagerInput({
@@ -36,7 +67,15 @@ export async function buildManagerInput({
   poolInfos,
   tokenIds,
   underlyingToken,
+  wethAddress,
+  erc4626Vaults = [],
 }: BuildManagerInputParams): Promise<Hex> {
+  if (tokenIds.length !== poolInfos.length) {
+    throw new Error(
+      `Invalid managerInput tokenIds length: expected ${poolInfos.length}, received ${tokenIds.length}`,
+    )
+  }
+
   // Fetch TWAP ticks for all pools in parallel
   const twapTicks = await Promise.all(
     poolInfos.map((poolInfo) =>
@@ -55,9 +94,16 @@ export async function buildManagerInput({
   // - token1Price: 0 if token1 == underlyingToken (no conversion needed), otherwise TWAP tick
   const managerPrices = poolInfos.map((poolInfo, i) => {
     const twapTick = Number(twapTicks[i])
-    const underlyingLower = underlyingToken.toLowerCase()
-    const token0IsUnderlying = poolInfo.token0.toLowerCase() === underlyingLower
-    const token1IsUnderlying = poolInfo.token1.toLowerCase() === underlyingLower
+    const token0IsUnderlying = isUnderlyingEquivalentToken({
+      token: poolInfo.token0,
+      underlyingToken,
+      wethAddress,
+    })
+    const token1IsUnderlying = isUnderlyingEquivalentToken({
+      token: poolInfo.token1,
+      underlyingToken,
+      wethAddress,
+    })
 
     return {
       poolPrice: twapTick,
@@ -65,8 +111,13 @@ export async function buildManagerInput({
       token1Price: token1IsUnderlying ? 0 : twapTick,
     }
   })
+  if (managerPrices.length !== poolInfos.length) {
+    throw new Error(
+      `Invalid managerInput managerPrices length: expected ${poolInfos.length}, received ${managerPrices.length}`,
+    )
+  }
 
-  // Encode managerInput: (ManagerPrices[], PoolInfo[], TokenId[][])
+  // Encode managerInput: (ManagerPrices[], PoolInfo[], TokenId[][], IERC4626[])
   return encodeAbiParameters(PanopticVaultAccountantManagerInputAbi, [
     managerPrices,
     poolInfos.map((poolInfo) => ({
@@ -76,5 +127,6 @@ export async function buildManagerInput({
       maxPriceDeviation: poolInfo.maxPriceDeviation,
     })),
     tokenIds,
+    erc4626Vaults,
   ])
 }

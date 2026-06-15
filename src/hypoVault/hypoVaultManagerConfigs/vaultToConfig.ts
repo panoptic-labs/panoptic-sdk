@@ -1,20 +1,24 @@
 import type { Address } from 'viem'
 
 import type { HypoVaultManagerConfig } from './schema'
-import { UsdcGammaVaultSepoliaDevConfig } from './usdcGammaVaultSepoliaDevConfig'
-import { UsdcGammaVaultSepoliaProdConfig } from './usdcGammaVaultSepoliaProdConfig'
+import { UsdcPlpVaultBaseProdConfig } from './usdcPlpVaultBaseProdConfig'
+import { UsdcPlpVaultMainnetProdConfig } from './usdcPlpVaultMainnetProdConfig'
 import { UsdcPlpVaultSepoliaDevConfig } from './usdcPlpVaultSepoliaDevConfig'
 import { UsdcPlpVaultSepoliaProdConfig } from './usdcPlpVaultSepoliaProdConfig'
+import { WethPlpVaultBaseProdConfig } from './wethPlpVaultBaseProdConfig'
+import { WethPlpVaultMainnetProdConfig } from './wethPlpVaultMainnetProdConfig'
 import { WethPlpVaultSepoliaDevConfig } from './wethPlpVaultSepoliaDevConfig'
 import { WethPlpVaultSepoliaProdConfig } from './wethPlpVaultSepoliaProdConfig'
 
 const ALL_HYPO_VAULT_CONFIGS: HypoVaultManagerConfig[] = [
+  WethPlpVaultBaseProdConfig,
+  UsdcPlpVaultBaseProdConfig,
   WethPlpVaultSepoliaDevConfig,
   WethPlpVaultSepoliaProdConfig,
   UsdcPlpVaultSepoliaDevConfig,
   UsdcPlpVaultSepoliaProdConfig,
-  UsdcGammaVaultSepoliaDevConfig,
-  UsdcGammaVaultSepoliaProdConfig,
+  WethPlpVaultMainnetProdConfig,
+  UsdcPlpVaultMainnetProdConfig,
 ]
 
 type GetHypoVaultConfigOptions = {

@@ -111,7 +111,7 @@ describe('Basic Example 03: Close Position (Fork Test)', () => {
         chainId: config.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
       // Place strike slightly OTM (above current for calls)
       const strike = (currentTick / tickSpacing + 5n) * tickSpacing
@@ -262,7 +262,7 @@ describe('Basic Example 03: Close Position (Fork Test)', () => {
         chainId: config.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
       const fakeStrike = (currentTick / tickSpacing + 50n) * tickSpacing
 

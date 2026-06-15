@@ -6,10 +6,10 @@
 import type { Address, Hash, Log, PublicClient } from 'viem'
 
 import {
-  collateralTrackerAbi,
-  panopticPoolAbi,
+  collateralTrackerV2Abi,
+  panopticPoolV2Abi,
   riskEngineAbi,
-  semiFungiblePositionManagerAbi,
+  semiFungiblePositionManagerV4Abi,
 } from '../../../generated'
 import { poolManagerAbi } from '../abis/poolManager'
 import type { PanopticEvent, PanopticEventType } from '../types'
@@ -459,7 +459,7 @@ export function watchEvents(params: WatchEventsParams): () => void {
     try {
       const unwatch = client.watchContractEvent({
         address: poolAddress,
-        abi: panopticPoolAbi,
+        abi: panopticPoolV2Abi,
         eventName: eventType as
           | 'OptionMinted'
           | 'OptionBurnt'
@@ -499,7 +499,7 @@ export function watchEvents(params: WatchEventsParams): () => void {
       try {
         const unwatch = client.watchContractEvent({
           address: trackerAddress,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           eventName: eventType as 'Deposit' | 'Withdraw' | 'ProtocolLossRealized',
           onLogs: (logs) => {
             const events: PanopticEvent[] = []
@@ -565,7 +565,7 @@ export function watchEvents(params: WatchEventsParams): () => void {
       try {
         const unwatch = client.watchContractEvent({
           address: sfpmAddress,
-          abi: semiFungiblePositionManagerAbi,
+          abi: semiFungiblePositionManagerV4Abi,
           eventName: eventType as 'LiquidityChunkUpdated',
           onLogs: (logs) => {
             const events: PanopticEvent[] = []

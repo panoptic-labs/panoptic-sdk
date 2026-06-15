@@ -1,211 +1,306 @@
 /**
- * Tests for check functions with PanopticQuery.
+ * Tests for check functions.
+ *
+ * `isLiquidatable` now sources gross collateral from
+ * `CollateralTracker.assetsOf` and required margin from
+ * `PanopticPool.getFullPositionsData.collateralRequirements[]`, replacing
+ * the prior `PanopticQuery.checkCollateral` call. Tests use `atTick=0` so
+ * `sqrtPriceX96 = 2^96` and the token0↔token1 cross-conversion is identity.
+ *
  * @module v2/reads/checks.test
  */
 
-import type { PublicClient } from 'viem'
+import { type Address, type Hex, type PublicClient, encodeFunctionResult } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
+import { Multicall3Abi } from '../../../abis/multicall3'
+import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import { isLiquidatable } from './checks'
 
-// Common mock addresses
 const POOL_ADDRESS = '0x1111111111111111111111111111111111111111' as const
 const ACCOUNT_ADDRESS = '0x2222222222222222222222222222222222222222' as const
 const QUERY_ADDRESS = '0x3333333333333333333333333333333333333333' as const
+const CT0_ADDRESS = '0x4444444444444444444444444444444444444444' as const
+const CT1_ADDRESS = '0x5555555555555555555555555555555555555555' as const
+const COLLATERAL_ADDRESSES = {
+  collateralToken0: CT0_ADDRESS as Address,
+  collateralToken1: CT1_ADDRESS as Address,
+}
 
-// Common mock block
 const MOCK_BLOCK = {
   number: 12345678n,
   hash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890' as const,
   timestamp: 1700000000n,
 }
 
-/**
- * Pack two unsigned 128-bit values into LeftRightUnsigned format.
- * right (token0) = lower 128 bits, left (token1) = upper 128 bits
- */
 function packLeftRightUnsigned(right: bigint, left: bigint): bigint {
   return right + (left << 128n)
 }
 
-// Mock PublicClient factory
+type FullPositionsData = readonly [bigint, bigint, bigint[], bigint[], bigint[]]
+
+function mockFullPositionsData(reqs: Array<{ token0: bigint; token1: bigint }>): FullPositionsData {
+  return [
+    0n,
+    0n,
+    new Array(reqs.length).fill(0n) as bigint[],
+    reqs.map((r) => packLeftRightUnsigned(r.token0, r.token1)),
+    new Array(reqs.length).fill(0n) as bigint[],
+  ]
+}
+
 function createMockClient(): PublicClient {
   return {
+    call: vi.fn(),
     getBlock: vi.fn().mockResolvedValue(MOCK_BLOCK),
     getBlockNumber: vi.fn().mockResolvedValue(MOCK_BLOCK.number),
     readContract: vi.fn(),
+    multicall: vi.fn(),
   } as unknown as PublicClient
 }
 
-describe('Liquidation Checks with PanopticQuery', () => {
-  describe('isLiquidatable', () => {
-    it('should return isLiquidatable=true when margin shortfall exists', async () => {
-      const client = createMockClient()
+function success(returnData: Hex) {
+  return { success: true, returnData }
+}
 
-      // Mock collateral balance: 100 token0, 200 token1
-      const collateralBalance = packLeftRightUnsigned(100n, 200n)
-      // Mock required collateral: 150 token0, 180 token1 (shortfall in token0)
-      const requiredCollateral = packLeftRightUnsigned(150n, 180n)
+function encodeBlockAndAggregate(results: ReturnType<typeof success>[]): Hex {
+  return encodeFunctionResult({
+    abi: Multicall3Abi,
+    functionName: 'blockAndAggregate',
+    result: [MOCK_BLOCK.number, MOCK_BLOCK.hash, results],
+  })
+}
 
-      vi.mocked(client.readContract)
-        .mockResolvedValueOnce(100) // getCurrentTick
-        .mockResolvedValueOnce([collateralBalance, requiredCollateral]) // checkCollateral
+function timestampResult() {
+  return success(
+    encodeFunctionResult({
+      abi: Multicall3Abi,
+      functionName: 'getCurrentBlockTimestamp',
+      result: MOCK_BLOCK.timestamp,
+    }),
+  )
+}
 
-      const result = await isLiquidatable({
-        client,
-        poolAddress: POOL_ADDRESS,
-        account: ACCOUNT_ADDRESS,
-        tokenIds: [123n, 456n],
-        queryAddress: QUERY_ADDRESS,
-      })
-
-      expect(result.isLiquidatable).toBe(true)
-      expect(result.currentMargin0).toBe(100n)
-      expect(result.currentMargin1).toBe(200n)
-      expect(result.requiredMargin0).toBe(150n)
-      expect(result.requiredMargin1).toBe(180n)
-      expect(result.marginShortfall0).toBe(50n) // 150 - 100 = 50 shortfall
-      expect(result.marginShortfall1).toBe(-20n) // 180 - 200 = -20 excess
-      expect(result.atTick).toBe(100n)
-      expect(result._meta.blockNumber).toBe(12345678n)
-    })
-
-    it('should return isLiquidatable=false when no shortfall', async () => {
-      const client = createMockClient()
-
-      // Mock collateral balance: 200 token0, 300 token1
-      const collateralBalance = packLeftRightUnsigned(200n, 300n)
-      // Mock required collateral: 100 token0, 150 token1 (excess in both)
-      const requiredCollateral = packLeftRightUnsigned(100n, 150n)
-
-      vi.mocked(client.readContract)
-        .mockResolvedValueOnce(100) // getCurrentTick
-        .mockResolvedValueOnce([collateralBalance, requiredCollateral]) // checkCollateral
-
-      const result = await isLiquidatable({
-        client,
-        poolAddress: POOL_ADDRESS,
-        account: ACCOUNT_ADDRESS,
-        tokenIds: [123n],
-        queryAddress: QUERY_ADDRESS,
-      })
-
-      expect(result.isLiquidatable).toBe(false)
-      expect(result.currentMargin0).toBe(200n)
-      expect(result.currentMargin1).toBe(300n)
-      expect(result.requiredMargin0).toBe(100n)
-      expect(result.requiredMargin1).toBe(150n)
-      expect(result.marginShortfall0).toBe(-100n) // excess
-      expect(result.marginShortfall1).toBe(-150n) // excess
-      expect(result._meta.blockNumber).toBe(12345678n)
-    })
-
-    it('should use provided atTick parameter', async () => {
-      const client = createMockClient()
-
-      const collateralBalance = packLeftRightUnsigned(100n, 100n)
-      const requiredCollateral = packLeftRightUnsigned(50n, 50n)
-
-      vi.mocked(client.readContract).mockResolvedValueOnce([collateralBalance, requiredCollateral])
-
-      const result = await isLiquidatable({
-        client,
-        poolAddress: POOL_ADDRESS,
-        account: ACCOUNT_ADDRESS,
-        tokenIds: [123n],
-        atTick: 500n,
-        queryAddress: QUERY_ADDRESS,
-      })
-
-      expect(result.isLiquidatable).toBe(false)
-      expect(result.atTick).toBe(500n)
-
-      // Verify atTick was used (not getCurrentTick) - tick is converted to number for viem
-      expect(vi.mocked(client.readContract)).toHaveBeenCalledWith(
-        expect.objectContaining({
-          functionName: 'checkCollateral',
-          args: expect.arrayContaining([
-            expect.anything(),
-            expect.anything(),
-            expect.anything(),
-            500,
-          ]),
+function mockLiquidationMulticall(
+  client: PublicClient,
+  input: {
+    tick?: number
+    assets0: bigint
+    assets1: bigint
+    positionData?: FullPositionsData
+  },
+) {
+  const results = []
+  if (input.tick !== undefined) {
+    results.push(
+      success(
+        encodeFunctionResult({
+          abi: panopticPoolV2Abi,
+          functionName: 'getCurrentTick',
+          result: input.tick,
         }),
-      )
+      ),
+    )
+  }
+  results.push(
+    success(
+      encodeFunctionResult({
+        abi: collateralTrackerV2Abi,
+        functionName: 'assetsOf',
+        result: input.assets0,
+      }),
+    ),
+    success(
+      encodeFunctionResult({
+        abi: collateralTrackerV2Abi,
+        functionName: 'assetsOf',
+        result: input.assets1,
+      }),
+    ),
+  )
+  if (input.positionData !== undefined) {
+    results.push(
+      success(
+        encodeFunctionResult({
+          abi: panopticPoolV2Abi,
+          functionName: 'getFullPositionsData',
+          result: input.positionData,
+        }),
+      ),
+    )
+  }
+  results.push(timestampResult())
+  vi.mocked(client.call).mockResolvedValueOnce({ data: encodeBlockAndAggregate(results) } as never)
+}
+
+describe('isLiquidatable', () => {
+  it('returns isLiquidatable=true when required margin exceeds gross collateral', async () => {
+    const client = createMockClient()
+
+    // assets: 100 token0, 200 token1 → gross in token1 = 300, in token0 = 300
+    // required: 150 + 180 = 330 in either denom
+    // shortfall = 30  → liquidatable
+    mockLiquidationMulticall(client, {
+      tick: 0,
+      assets0: 100n,
+      assets1: 200n,
+      positionData: mockFullPositionsData([{ token0: 150n, token1: 180n }]),
     })
 
-    it('should detect liquidatable when only token1 has shortfall', async () => {
-      const client = createMockClient()
-
-      // Excess in token0, shortfall in token1
-      const collateralBalance = packLeftRightUnsigned(1000n, 50n)
-      const requiredCollateral = packLeftRightUnsigned(500n, 100n)
-
-      vi.mocked(client.readContract)
-        .mockResolvedValueOnce(0) // getCurrentTick
-        .mockResolvedValueOnce([collateralBalance, requiredCollateral])
-
-      const result = await isLiquidatable({
-        client,
-        poolAddress: POOL_ADDRESS,
-        account: ACCOUNT_ADDRESS,
-        tokenIds: [123n],
-        queryAddress: QUERY_ADDRESS,
-      })
-
-      expect(result.isLiquidatable).toBe(true)
-      expect(result.marginShortfall0).toBe(-500n) // excess
-      expect(result.marginShortfall1).toBe(50n) // shortfall
+    const result = await isLiquidatable({
+      client,
+      poolAddress: POOL_ADDRESS,
+      account: ACCOUNT_ADDRESS,
+      tokenIds: [123n, 456n],
+      queryAddress: QUERY_ADDRESS,
+      collateralAddresses: COLLATERAL_ADDRESSES,
     })
 
-    it('should handle zero margin case', async () => {
-      const client = createMockClient()
+    expect(result.isLiquidatable).toBe(true)
+    expect(result.currentMargin0).toBe(300n)
+    expect(result.currentMargin1).toBe(300n)
+    expect(result.requiredMargin0).toBe(330n)
+    expect(result.requiredMargin1).toBe(330n)
+    expect(result.marginShortfall1).toBe(30n)
+    expect(result.atTick).toBe(0n)
+    expect(result.denominatedInToken).toBe(1n)
+    expect(result._meta.blockNumber).toBe(12345678n)
+  })
 
-      // Zero collateral, some required
-      const collateralBalance = packLeftRightUnsigned(0n, 0n)
-      const requiredCollateral = packLeftRightUnsigned(100n, 100n)
+  it('returns isLiquidatable=false when gross collateral covers requirement', async () => {
+    const client = createMockClient()
 
-      vi.mocked(client.readContract)
-        .mockResolvedValueOnce(0) // getCurrentTick
-        .mockResolvedValueOnce([collateralBalance, requiredCollateral])
-
-      const result = await isLiquidatable({
-        client,
-        poolAddress: POOL_ADDRESS,
-        account: ACCOUNT_ADDRESS,
-        tokenIds: [123n],
-        queryAddress: QUERY_ADDRESS,
-      })
-
-      expect(result.isLiquidatable).toBe(true)
-      expect(result.currentMargin0).toBe(0n)
-      expect(result.currentMargin1).toBe(0n)
-      expect(result.marginShortfall0).toBe(100n)
-      expect(result.marginShortfall1).toBe(100n)
+    mockLiquidationMulticall(client, {
+      tick: 0,
+      assets0: 200n,
+      assets1: 300n,
+      positionData: mockFullPositionsData([{ token0: 100n, token1: 150n }]),
     })
 
-    it('should handle no positions (zero required margin)', async () => {
-      const client = createMockClient()
-
-      // Some collateral, zero required (no positions)
-      const collateralBalance = packLeftRightUnsigned(1000n, 2000n)
-      const requiredCollateral = packLeftRightUnsigned(0n, 0n)
-
-      vi.mocked(client.readContract)
-        .mockResolvedValueOnce(0) // getCurrentTick
-        .mockResolvedValueOnce([collateralBalance, requiredCollateral])
-
-      const result = await isLiquidatable({
-        client,
-        poolAddress: POOL_ADDRESS,
-        account: ACCOUNT_ADDRESS,
-        tokenIds: [],
-        queryAddress: QUERY_ADDRESS,
-      })
-
-      expect(result.isLiquidatable).toBe(false)
-      expect(result.marginShortfall0).toBe(-1000n) // all excess
-      expect(result.marginShortfall1).toBe(-2000n) // all excess
+    const result = await isLiquidatable({
+      client,
+      poolAddress: POOL_ADDRESS,
+      account: ACCOUNT_ADDRESS,
+      tokenIds: [123n],
+      queryAddress: QUERY_ADDRESS,
+      collateralAddresses: COLLATERAL_ADDRESSES,
     })
+
+    // gross = 500, required = 250 → safely covered
+    expect(result.isLiquidatable).toBe(false)
+    expect(result.currentMargin1).toBe(500n)
+    expect(result.requiredMargin1).toBe(250n)
+    expect(result.marginShortfall1).toBe(-250n)
+  })
+
+  it('reflects a loan as required margin (not as netted balance)', async () => {
+    // Models the repro: 2,200 deposit + 10,000 borrow → assetsOf 12,200 in token1.
+    // Loan tokenId contributes ~10,000 to collateralRequirements; option ~810.
+    // gross 12,200 > required 10,810 → not liquidatable, but tight.
+    const client = createMockClient()
+    const ONE = 1_000_000n
+    const grossUSDC = 12_200n * ONE
+    const loanReq = 10_000n * ONE
+    const optionReq = 810n * ONE
+
+    mockLiquidationMulticall(client, {
+      tick: 0,
+      assets0: 0n,
+      assets1: grossUSDC,
+      positionData: mockFullPositionsData([
+        { token0: 0n, token1: loanReq },
+        { token0: 0n, token1: optionReq },
+      ]),
+    })
+
+    const result = await isLiquidatable({
+      client,
+      poolAddress: POOL_ADDRESS,
+      account: ACCOUNT_ADDRESS,
+      tokenIds: [111n, 222n],
+      queryAddress: QUERY_ADDRESS,
+      collateralAddresses: COLLATERAL_ADDRESSES,
+    })
+
+    expect(result.isLiquidatable).toBe(false)
+    expect(result.currentMargin1).toBe(grossUSDC)
+    expect(result.requiredMargin1).toBe(loanReq + optionReq)
+    expect(result.marginShortfall1).toBe(loanReq + optionReq - grossUSDC)
+  })
+
+  it('uses provided atTick parameter and skips getCurrentTick', async () => {
+    const client = createMockClient()
+
+    mockLiquidationMulticall(client, {
+      assets0: 100n,
+      assets1: 100n,
+      positionData: mockFullPositionsData([{ token0: 50n, token1: 50n }]),
+    })
+
+    const result = await isLiquidatable({
+      client,
+      poolAddress: POOL_ADDRESS,
+      account: ACCOUNT_ADDRESS,
+      tokenIds: [123n],
+      atTick: 500n,
+      queryAddress: QUERY_ADDRESS,
+      collateralAddresses: COLLATERAL_ADDRESSES,
+    })
+
+    expect(result.atTick).toBe(500n)
+    expect(result.isLiquidatable).toBe(false)
+
+    const callData = vi.mocked(client.call).mock.calls[0]?.[0]?.data
+    expect(callData).toBeDefined()
+    expect(client.readContract).not.toHaveBeenCalled()
+  })
+
+  it('handles zero margin case (no collateral, some required)', async () => {
+    const client = createMockClient()
+
+    mockLiquidationMulticall(client, {
+      tick: 0,
+      assets0: 0n,
+      assets1: 0n,
+      positionData: mockFullPositionsData([{ token0: 100n, token1: 100n }]),
+    })
+
+    const result = await isLiquidatable({
+      client,
+      poolAddress: POOL_ADDRESS,
+      account: ACCOUNT_ADDRESS,
+      tokenIds: [123n],
+      queryAddress: QUERY_ADDRESS,
+      collateralAddresses: COLLATERAL_ADDRESSES,
+    })
+
+    expect(result.isLiquidatable).toBe(true)
+    expect(result.currentMargin1).toBe(0n)
+    expect(result.marginShortfall1).toBe(200n)
+  })
+
+  it('handles no positions (zero required margin, with live collateral)', async () => {
+    const client = createMockClient()
+
+    mockLiquidationMulticall(client, {
+      tick: 0,
+      assets0: 1000n,
+      assets1: 2000n,
+    })
+
+    const result = await isLiquidatable({
+      client,
+      poolAddress: POOL_ADDRESS,
+      account: ACCOUNT_ADDRESS,
+      tokenIds: [],
+      queryAddress: QUERY_ADDRESS,
+      collateralAddresses: COLLATERAL_ADDRESSES,
+    })
+
+    expect(result.isLiquidatable).toBe(false)
+    expect(result.requiredMargin0).toBe(0n)
+    expect(result.requiredMargin1).toBe(0n)
+    expect(result.currentMargin1).toBe(3000n)
+    expect(result.marginShortfall1).toBe(-3000n)
   })
 })

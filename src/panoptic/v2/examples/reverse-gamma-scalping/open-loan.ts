@@ -24,7 +24,6 @@
  */
 
 import {
-  createFileStorage,
   createTokenIdBuilder,
   fetchPoolId,
   formatTokenAmount,
@@ -37,6 +36,7 @@ import {
   tickLimits,
 } from '@panoptic-eng/sdk/v2'
 
+import { createFileStorage } from '../../storage/fileStorage'
 import { CHAIN_ID, createClients, loadEnv, USDC_DECIMALS, WETH_DECIMALS } from './config'
 
 // ---------------------------------------------------------------------------

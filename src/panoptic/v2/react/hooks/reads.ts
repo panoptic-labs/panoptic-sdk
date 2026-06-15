@@ -6,14 +6,21 @@
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import type { Address, PublicClient } from 'viem'
 
-import { resolveBlockNumbers } from '../../clients/blocksByTimestamp'
+import { estimateBlockNumbers, resolveBlockNumbers } from '../../clients/blocksByTimestamp'
+import { PanopticValidationError } from '../../errors'
 import {
+  type GetEnforcedTickLimitsParams,
   type GetFactoryConstructMetadataParams,
   type GetFactoryOwnerOfParams,
   type GetFactoryTokenURIParams,
   type GetPanopticPoolAddressParams,
-  type MinePoolAddressParams,
+  type GetPanopticPoolFromPoolIdParams,
+  type GetUniswapV3PoolFromIdParams,
+  type GetUniswapV4PoolKeyFromIdParams,
+  type MinePoolAddressLocalParams,
+  type ResolvePanopticPoolFromPoolIdParams,
   type SimulateDeployNewPoolParams,
+  type UniswapV4PoolKey,
   estimateCollateralRequired,
   getAccountCollateral,
   getAccountGreeks,
@@ -22,18 +29,22 @@ import {
   getAccountSummaryRisk,
   getCollateralData,
   getCurrentRates,
+  getEnforcedTickLimits,
   getFactoryConstructMetadata,
   getFactoryOwnerOf,
   getFactoryTokenURI,
+  getInterestState,
   getLiquidationPrices,
   getMarginBuffer,
   getMaxPositionSize,
   getMaxWithdrawable,
   getNativeTokenPrice,
   getNetLiquidationValue,
+  getNetLiquidationValues,
   getOpenPositionPreview,
   getOracleState,
   getPanopticPoolAddress,
+  getPanopticPoolFromPoolId,
   getPool,
   getPoolLiquidities,
   getPosition,
@@ -43,14 +54,24 @@ import {
   getRequiredCreditForITM,
   getRiskParameters,
   getSafeMode,
+  getUniswapV3PoolFromId,
+  getUniswapV3PoolInfo,
+  getUniswapV3PoolLiquidities,
+  getUniswapV4PoolBasicState,
+  getUniswapV4PoolInfo,
+  getUniswapV4PoolKeyFromId,
+  getUniswapV4PoolLiquidities,
   getUtilization,
   isLiquidatable,
-  minePoolAddress,
+  minePoolAddressLocalAsync,
   previewDeposit,
   previewMint,
   previewRedeem,
   previewWithdraw,
+  resolvePanopticPoolFromPoolId,
+  resolveUniswapV4PoolKey,
   simulateDeployNewPool,
+  validateBuilderCode,
 } from '../../reads'
 import { getPriceHistory } from '../../reads/priceHistory'
 import { optimizeTokenIdRiskPartners } from '../../reads/queryUtils'
@@ -64,9 +85,11 @@ import {
   getSyncStatus,
   getTrackedPositionIds,
   getTradeHistory,
+  scanChunks,
 } from '../../sync'
 import type { PoolVersionConfig } from '../../types/poolConfig'
 import { interpolateBlocks } from '../../utils/interpolateBlocks'
+import { previewBorrow } from '../../writes/lending'
 import { getAtTickCacheKey, getClientCacheScopeKey, getStorageCacheScopeKey } from '../cacheScopes'
 import { usePanopticContext, useRequireStorage } from '../provider'
 import { queryKeys } from '../queryKeys'
@@ -78,21 +101,31 @@ export interface QueryOptions {
   /** Whether the query is enabled */
   enabled?: boolean
   /** Refetch interval in milliseconds */
-  refetchInterval?: number
+  refetchInterval?: number | false
+  /** Time in milliseconds that data is considered fresh */
+  staleTime?: number
+  /** Time in milliseconds that unused data is kept in cache */
+  gcTime?: number
 }
 
 // --- Pool reads ---
 
 export function usePool(poolAddress: Address, options?: QueryOptions) {
-  const { publicClient, chainId, clientScope } = usePanopticContext()
+  const { publicClient, chainId, clientScope, stateViewAddress } = usePanopticContext()
   return useQuery({
     queryKey: [
       ...queryKeys.pool(chainId, poolAddress),
       getClientCacheScopeKey(publicClient, clientScope),
+      stateViewAddress,
     ],
-    queryFn: () => getPool({ client: publicClient, poolAddress, chainId }),
+    queryFn: () => getPool({ client: publicClient, poolAddress, chainId, stateViewAddress }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    // Caching is opt-in per consumer: per the SDK's "no memoization of dynamic RPC
+    // data" constraint, we never default a staleTime here. App code can set one
+    // explicitly when it knows the consumer can tolerate cached pool state.
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -106,6 +139,8 @@ export function useUtilization(poolAddress: Address, options?: QueryOptions) {
     queryFn: () => getUtilization({ client: publicClient, poolAddress }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -119,6 +154,8 @@ export function useOracleState(poolAddress: Address, options?: QueryOptions) {
     queryFn: () => getOracleState({ client: publicClient, poolAddress }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -132,6 +169,8 @@ export function useRiskParameters(poolAddress: Address, options?: QueryOptions) 
     queryFn: () => getRiskParameters({ client: publicClient, poolAddress }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -145,6 +184,8 @@ export function useCurrentRates(poolAddress: Address, options?: QueryOptions) {
     queryFn: () => getCurrentRates({ client: publicClient, poolAddress }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -158,6 +199,8 @@ export function useSafeMode(poolAddress: Address, options?: QueryOptions) {
     queryFn: () => getSafeMode({ client: publicClient, poolAddress }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -172,6 +215,8 @@ export function useCollateralData(poolAddress: Address, tokenIndex: 0 | 1, optio
     queryFn: () => getCollateralData({ client: publicClient, poolAddress, tokenIndex }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -199,6 +244,40 @@ export function usePoolLiquidities(
       }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+export function useScanChunks(
+  poolAddress: Address,
+  params: { queryAddress: Address; tickLower: bigint; tickUpper: bigint; width: bigint },
+  options?: QueryOptions,
+) {
+  const { publicClient, chainId, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.chunkSpreads(chainId, poolAddress),
+      'scanChunks',
+      getClientCacheScopeKey(publicClient, clientScope),
+      params.queryAddress,
+      params.tickLower,
+      params.tickUpper,
+      params.width,
+    ],
+    queryFn: () =>
+      scanChunks({
+        client: publicClient,
+        poolAddress,
+        queryAddress: params.queryAddress,
+        tickLower: params.tickLower,
+        tickUpper: params.tickUpper,
+        width: params.width,
+      }),
+    enabled: options?.enabled,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -226,6 +305,8 @@ export function useChunkSpreads(
       }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -247,6 +328,8 @@ export function usePosition(
     queryFn: () => getPosition({ client: publicClient, poolAddress, owner, tokenId }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -270,6 +353,8 @@ export function usePositions(
     },
     enabled: (options?.enabled ?? true) && !!resolvedOwner,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -289,6 +374,8 @@ export function usePositionGreeks(
     queryFn: () => getPositionGreeks({ client: publicClient, poolAddress, tokenId, owner }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -316,6 +403,31 @@ export function useAccountCollateral(
     },
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+export function useInterestState(poolAddress: Address, account?: Address, options?: QueryOptions) {
+  const ctx = usePanopticContext()
+  const resolvedAccount = account ?? ctx.account
+  return useQuery({
+    queryKey: [
+      ...queryKeys.interestState(ctx.chainId, poolAddress, resolvedAccount ?? ('' as Address)),
+      getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
+    ],
+    queryFn: () => {
+      if (!resolvedAccount) throw new Error('account required for getInterestState')
+      return getInterestState({
+        client: ctx.publicClient,
+        poolAddress,
+        account: resolvedAccount,
+      })
+    },
+    enabled: (options?.enabled ?? true) && !!resolvedAccount,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -349,6 +461,8 @@ export function useAccountSummaryBasic(
     },
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -383,6 +497,8 @@ export function useAccountSummaryRisk(
       }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -418,6 +534,46 @@ export function useNetLiquidationValue(
       }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+export function useNetLiquidationValues(
+  poolAddress: Address,
+  tokenIds: bigint[],
+  queryAddress: Address,
+  atTicks: bigint[],
+  account?: Address,
+  options?: QueryOptions,
+) {
+  const ctx = usePanopticContext()
+  const resolvedAccount = account ?? ctx.account
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'netLiquidationValues',
+      ctx.chainId.toString(),
+      poolAddress,
+      resolvedAccount!,
+      getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
+      tokenIds,
+      queryAddress,
+      atTicks,
+    ],
+    queryFn: () =>
+      getNetLiquidationValues({
+        client: ctx.publicClient,
+        poolAddress,
+        account: resolvedAccount!,
+        tokenIds,
+        atTicks,
+        queryAddress,
+      }),
+    enabled: (options?.enabled ?? true) && !!resolvedAccount && atTicks.length > 0,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -447,6 +603,8 @@ export function useLiquidationPrices(
       }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -470,6 +628,8 @@ export function useAccountGreeks(poolAddress: Address, account?: Address, option
       }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -499,6 +659,8 @@ export function useMarginBuffer(
       }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -528,6 +690,8 @@ export function useIsLiquidatable(
       }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -554,6 +718,8 @@ export function useAccountPremia(
       }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -580,6 +746,8 @@ export function usePositionsWithPremia(
       }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -601,6 +769,8 @@ export function usePreviewDeposit(
     queryFn: () => previewDeposit({ client: publicClient, poolAddress, tokenIndex, amount }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -620,6 +790,8 @@ export function usePreviewWithdraw(
     queryFn: () => previewWithdraw({ client: publicClient, poolAddress, tokenIndex, amount }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -639,6 +811,8 @@ export function usePreviewMint(
     queryFn: () => previewMint({ client: publicClient, poolAddress, tokenIndex, amount }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -658,6 +832,8 @@ export function usePreviewRedeem(
     queryFn: () => previewRedeem({ client: publicClient, poolAddress, tokenIndex, amount }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -693,6 +869,8 @@ export function useEstimateCollateralRequired(
       }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -843,6 +1021,8 @@ export function useMaxWithdrawable(
     },
     enabled: (options?.enabled ?? true) && !!resolvedAccount && totalAssets > 0n,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -861,6 +1041,7 @@ export function useOpenPositionPreview(
     spreadLimit?: bigint
     swapAtMint?: boolean
     usePremiaAsCollateral?: boolean
+    blockNumber?: bigint
   },
 ) {
   const ctx = usePanopticContext()
@@ -883,6 +1064,7 @@ export function useOpenPositionPreview(
       options?.spreadLimit?.toString(),
       options?.swapAtMint,
       options?.usePremiaAsCollateral,
+      options?.blockNumber?.toString(),
     ],
     queryFn: () =>
       getOpenPositionPreview({
@@ -899,9 +1081,10 @@ export function useOpenPositionPreview(
         swapAtMint: options?.swapAtMint,
         usePremiaAsCollateral: options?.usePremiaAsCollateral,
         chainId: ctx.chainId,
+        blockNumber: options?.blockNumber,
       }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount && tokenId !== 0n,
-    staleTime: 0,
+    staleTime: options?.staleTime ?? 0,
   })
 }
 
@@ -929,6 +1112,8 @@ export function useTrackedPositionIds(
       }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -945,6 +1130,8 @@ export function useTradeHistory(poolAddress: Address, account?: Address, options
       getTradeHistory({ chainId: ctx.chainId, poolAddress, account: resolvedAccount!, storage }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -961,6 +1148,8 @@ export function useRealizedPnL(poolAddress: Address, account?: Address, options?
       getRealizedPnL({ chainId: ctx.chainId, poolAddress, account: resolvedAccount!, storage }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -981,6 +1170,8 @@ export function useClosedPositions(
       getClosedPositions({ chainId: ctx.chainId, poolAddress, account: resolvedAccount!, storage }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -1004,12 +1195,14 @@ export function useSyncStatus(poolAddress: Address, account?: Address, options?:
       }),
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
 // --- Factory reads ---
 
-type OmitFactoryClient<T> = Omit<T, 'client'>
+type OmitFactoryClient<T> = T extends unknown ? Omit<T, 'client'> : never
 
 export function usePanopticPoolAddress(
   params?: OmitFactoryClient<GetPanopticPoolAddressParams>,
@@ -1025,9 +1218,14 @@ export function usePanopticPoolAddress(
       getClientCacheScopeKey(publicClient, clientScope),
       params,
     ] as const,
-    queryFn: () => getPanopticPoolAddress({ client: publicClient, ...params! }),
+    queryFn: () => {
+      if (!params) throw new PanopticValidationError('params is required')
+      return getPanopticPoolAddress({ client: publicClient, ...params })
+    },
     enabled: (options?.enabled ?? true) && params !== undefined,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -1046,9 +1244,14 @@ export function useFactoryTokenURI(
       getClientCacheScopeKey(publicClient, clientScope),
       params,
     ] as const,
-    queryFn: () => getFactoryTokenURI({ client: publicClient, ...params! }),
+    queryFn: () => {
+      if (!params) throw new PanopticValidationError('params is required')
+      return getFactoryTokenURI({ client: publicClient, ...params })
+    },
     enabled: (options?.enabled ?? true) && params !== undefined,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -1067,19 +1270,20 @@ export function useFactoryOwnerOf(
       getClientCacheScopeKey(publicClient, clientScope),
       params,
     ] as const,
-    queryFn: () => getFactoryOwnerOf({ client: publicClient, ...params! }),
+    queryFn: () => {
+      if (!params) throw new PanopticValidationError('params is required')
+      return getFactoryOwnerOf({ client: publicClient, ...params })
+    },
     enabled: (options?.enabled ?? true) && params !== undefined,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
-type OmitMineClient<T> = Omit<T, 'client'>
-
 export function useMinePoolAddress() {
-  const { publicClient } = usePanopticContext()
   return useMutation({
-    mutationFn: (params: OmitMineClient<MinePoolAddressParams>) =>
-      minePoolAddress({ client: publicClient, ...params }),
+    mutationFn: (params: MinePoolAddressLocalParams) => minePoolAddressLocalAsync(params),
   })
 }
 
@@ -1101,11 +1305,18 @@ export function useFactoryConstructMetadata(
       getClientCacheScopeKey(publicClient, clientScope),
       params,
     ] as const,
-    queryFn: () => getFactoryConstructMetadata({ client: publicClient, ...params! }),
+    queryFn: () => {
+      if (!params) throw new PanopticValidationError('params is required')
+      return getFactoryConstructMetadata({ client: publicClient, ...params })
+    },
     enabled: (options?.enabled ?? true) && params !== undefined,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
+
+type OmitMineClient<T> = T extends unknown ? Omit<T, 'client'> : never
 
 export function useSimulateDeployNewPool(
   params?: OmitMineClient<SimulateDeployNewPoolParams>,
@@ -1123,15 +1334,20 @@ export function useSimulateDeployNewPool(
       getClientCacheScopeKey(publicClient, clientScope),
       params,
     ] as const,
-    queryFn: () => simulateDeployNewPool({ client: publicClient, ...params! }),
+    queryFn: () => {
+      if (!params) throw new PanopticValidationError('params is required')
+      return simulateDeployNewPool({ client: publicClient, ...params })
+    },
     enabled: (options?.enabled ?? true) && params !== undefined,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
 // --- Price history ---
 
-/** Timestamp-based time range. Start/end resolved to blocks via RPC binary search. */
+/** Timestamp-based time range. Start/end resolved to blocks via RPC binary search or estimation. */
 export interface TimestampTimeRange {
   mode: 'timestamps'
   /** Start of the range (Unix seconds) */
@@ -1140,6 +1356,15 @@ export interface TimestampTimeRange {
   endTimestamp?: number
   /** Number of evenly-spaced data points to fetch */
   points: number
+  /** Extra block numbers to include in the fetched set (e.g. blockAtMint) */
+  pinnedBlocks?: bigint[]
+  /**
+   * Block resolution strategy.
+   * - 'exact': RPC binary search (~25 sequential getBlock calls). Default.
+   * - 'estimate': 2-RPC linear extrapolation. Suitable for charts where
+   *   ±N-block error is invisible. Saves ~23 RPCs per call.
+   */
+  resolution?: 'exact' | 'estimate'
 }
 
 /** Block-based time range. No RPC resolution needed. */
@@ -1151,6 +1376,8 @@ export interface BlockTimeRange {
   endBlock?: bigint
   /** Number of evenly-spaced data points to fetch */
   points: number
+  /** Extra block numbers to include in the fetched set (e.g. blockAtMint) */
+  pinnedBlocks?: bigint[]
 }
 
 export type PriceHistoryTimeRange = TimestampTimeRange | BlockTimeRange
@@ -1159,9 +1386,12 @@ export type PriceHistoryTimeRange = TimestampTimeRange | BlockTimeRange
  * Build a stable string cache key from time range params (no object references).
  */
 function buildRangeHash(timeRange: PriceHistoryTimeRange): string {
+  const pinnedSuffix = timeRange.pinnedBlocks?.length
+    ? `-pin:${timeRange.pinnedBlocks.join(',')}`
+    : ''
   return timeRange.mode === 'timestamps'
-    ? `ts:${timeRange.startTimestamp}-${timeRange.endTimestamp ?? 'now'}-${timeRange.points}`
-    : `blk:${timeRange.startBlock}-${timeRange.endBlock ?? 'latest'}-${timeRange.points}`
+    ? `ts:${timeRange.startTimestamp}-${timeRange.endTimestamp ?? 'now'}-${timeRange.points}-${timeRange.resolution ?? 'exact'}${pinnedSuffix}`
+    : `blk:${timeRange.startBlock}-${timeRange.endBlock ?? 'latest'}-${timeRange.points}${pinnedSuffix}`
 }
 
 /**
@@ -1172,15 +1402,17 @@ async function resolveTimeRange(
   timeRange: PriceHistoryTimeRange,
 ): Promise<{ startBlock: bigint; endBlock: bigint }> {
   if (timeRange.mode === 'timestamps') {
+    const resolver =
+      timeRange.resolution === 'estimate' ? estimateBlockNumbers : resolveBlockNumbers
     if (timeRange.endTimestamp !== undefined) {
-      const resolved = await resolveBlockNumbers({
+      const resolved = await resolver({
         client,
         timestamps: [timeRange.startTimestamp, timeRange.endTimestamp],
       })
       return { startBlock: resolved[0], endBlock: resolved[1] }
     } else {
       const [resolved, latest] = await Promise.all([
-        resolveBlockNumbers({ client, timestamps: [timeRange.startTimestamp] }),
+        resolver({ client, timestamps: [timeRange.startTimestamp] }),
         client.getBlockNumber(),
       ])
       return { startBlock: resolved[0], endBlock: latest }
@@ -1202,12 +1434,12 @@ async function resolveTimeRange(
  * - **blocks**: Uses start/end blocks directly, interpolates in between.
  *   Zero resolution overhead.
  *
- * In both cases, the actual price reads are O(points) slot0 calls,
- * HTTP-batched by viem.
+ * In both cases, the actual price reads are O(points) slot0 calls.
+ * Reads at different historical blocks cannot be coalesced into one multicall.
  *
  * @param poolConfig - Pool version config (V3 pool address or V4 StateView + poolId)
  * @param timeRange - Time range specification (timestamps or blocks)
- * @param options - Query options (enabled, refetchInterval)
+ * @param options - Query options (enabled, refetchInterval, staleTime, gcTime)
  */
 export function usePriceHistory(
   poolConfig: PoolVersionConfig,
@@ -1228,11 +1460,27 @@ export function usePriceHistory(
     ],
     queryFn: async () => {
       const { startBlock, endBlock } = await resolveTimeRange(publicClient, timeRange)
-      const blockNumbers = interpolateBlocks(startBlock, endBlock, timeRange.points)
+      let blockNumbers = interpolateBlocks(startBlock, endBlock, timeRange.points)
+
+      // Merge pinned blocks (e.g. blockAtMint) into the sorted array
+      if (timeRange.pinnedBlocks?.length) {
+        const blockSet = new Set(blockNumbers.map(String))
+        const extras = timeRange.pinnedBlocks.filter(
+          (b) => b >= startBlock && b <= endBlock && !blockSet.has(String(b)),
+        )
+        if (extras.length > 0) {
+          blockNumbers = [...blockNumbers, ...extras].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        }
+      }
+
       return getPriceHistory({ client: publicClient, blockNumbers, poolConfig })
     },
     enabled: (options?.enabled ?? true) && timeRange.points > 0,
-    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime ?? Infinity,
+    gcTime: options?.gcTime ?? 60 * 60_000,
+    refetchInterval: options?.refetchInterval ?? false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 }
 
@@ -1285,7 +1533,16 @@ export function useStreamiaHistory(
     ],
     queryFn: async () => {
       const { startBlock, endBlock } = await resolveTimeRange(publicClient, timeRange)
-      const blockNumbers = interpolateBlocks(startBlock, endBlock, timeRange.points)
+      let blockNumbers = interpolateBlocks(startBlock, endBlock, timeRange.points)
+      if (timeRange.pinnedBlocks?.length) {
+        const pinSet = new Set(blockNumbers.map(String))
+        const pins = timeRange.pinnedBlocks.filter(
+          (b) => b >= startBlock && b <= endBlock && !pinSet.has(String(b)),
+        )
+        if (pins.length) {
+          blockNumbers = [...blockNumbers, ...pins].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        }
+      }
       return getStreamiaHistory({
         client: publicClient,
         panopticPoolAddress,
@@ -1299,7 +1556,11 @@ export function useStreamiaHistory(
       })
     },
     enabled: (options?.enabled ?? true) && timeRange.points > 0,
-    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime ?? Infinity,
+    gcTime: options?.gcTime ?? 60 * 60_000,
+    refetchInterval: options?.refetchInterval ?? false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 }
 
@@ -1309,7 +1570,7 @@ export function useStreamiaHistory(
  * @param legs - Decoded legs with pre-computed liquidity
  * @param poolConfig - Pool version config (V3 pool address or V4 StateView + poolId)
  * @param timeRange - Time range specification (timestamps or blocks)
- * @param options - Query options (enabled, refetchInterval)
+ * @param options - Query options (enabled, refetchInterval, staleTime, gcTime)
  */
 export function useUniswapFeeHistory(
   legs: StreamiaLeg[],
@@ -1334,11 +1595,272 @@ export function useUniswapFeeHistory(
     ],
     queryFn: async () => {
       const { startBlock, endBlock } = await resolveTimeRange(publicClient, timeRange)
-      const blockNumbers = interpolateBlocks(startBlock, endBlock, timeRange.points)
+      let blockNumbers = interpolateBlocks(startBlock, endBlock, timeRange.points)
+      if (timeRange.pinnedBlocks?.length) {
+        const pinSet = new Set(blockNumbers.map(String))
+        const pins = timeRange.pinnedBlocks.filter(
+          (b) => b >= startBlock && b <= endBlock && !pinSet.has(String(b)),
+        )
+        if (pins.length) {
+          blockNumbers = [...blockNumbers, ...pins].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        }
+      }
       return getUniswapFeeHistory({ client: publicClient, blockNumbers, legs, poolConfig })
     },
     enabled: (options?.enabled ?? true) && timeRange.points > 0 && legs.length > 0,
+    staleTime: options?.staleTime ?? Infinity,
+    gcTime: options?.gcTime ?? 60 * 60_000,
+    refetchInterval: options?.refetchInterval ?? false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
+}
+
+// --- Direct Uniswap V3 pool info (no Panoptic required) ---
+
+/**
+ * Reads basic on-chain info (token0, token1, fee, tickSpacing, slot0, liquidity) from a Uniswap V3 pool.
+ * @param poolAddress - The Uniswap V3 pool contract address.
+ * @param options - Optional React Query options (`enabled`, `staleTime`, `gcTime`, `refetchInterval`).
+ * @returns React Query result resolving to the pool info object.
+ */
+export function useUniswapV3PoolInfo(poolAddress: Address | undefined, options?: QueryOptions) {
+  const { publicClient, chainId, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'uniswapV3PoolInfo',
+      chainId.toString(),
+      poolAddress,
+      getClientCacheScopeKey(publicClient, clientScope),
+    ],
+    queryFn: () =>
+      getUniswapV3PoolInfo({ client: publicClient, poolAddress: poolAddress as Address }),
+    enabled: (options?.enabled ?? true) && !!poolAddress,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+/**
+ * Reads per-tick active liquidity from a Uniswap V3 pool via PanopticQuery's `getTickNetsV3`.
+ * @param poolAddress - The Uniswap V3 pool contract address.
+ * @param queryAddress - The PanopticQuery helper contract address.
+ * @param args - Tick window: `startTick` (inclusive) and `nTicks` count to scan.
+ * @param options - Optional React Query options (`enabled`, `staleTime`, `gcTime`, `refetchInterval`).
+ * @returns React Query result resolving to `{ ticks, liquidityNets }` parallel arrays.
+ */
+export function useUniswapV3PoolLiquidities(
+  poolAddress: Address | undefined,
+  queryAddress: Address | undefined,
+  args: { startTick: number; nTicks: bigint } | undefined,
+  options?: QueryOptions,
+) {
+  const { publicClient, chainId, clientScope } = usePanopticContext()
+  return useQuery({
+    // eslint-disable-next-line @tanstack/query/exhaustive-deps
+    queryKey: [
+      ...queryKeys.all,
+      'uniswapV3PoolLiquidities',
+      chainId.toString(),
+      poolAddress,
+      queryAddress,
+      args?.startTick,
+      args?.nTicks,
+      getClientCacheScopeKey(publicClient, clientScope),
+    ],
+    queryFn: () => {
+      if (!poolAddress || !queryAddress || !args) {
+        throw new PanopticValidationError('useUniswapV3PoolLiquidities: missing required args')
+      }
+      const { startTick, nTicks } = args
+      return getUniswapV3PoolLiquidities({
+        client: publicClient,
+        poolAddress,
+        queryAddress,
+        startTick,
+        nTicks,
+      })
+    },
+    enabled: (options?.enabled ?? true) && !!poolAddress && !!queryAddress && !!args,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+// --- Uniswap V4 direct reads (no Panoptic required) ---
+
+/**
+ * Resolves a Uniswap V4 PoolKey from a poolId hash by scanning `Initialize` event logs on the PoolManager.
+ * PoolKey is immutable, so results are cached indefinitely within the session by default.
+ * @param poolManager - The Uniswap V4 PoolManager contract address.
+ * @param poolId - The 32-byte poolId hash.
+ * @param args - Optional `fromBlock` and `chunkSize` for log paging.
+ * @param options - Optional React Query options (`enabled`, `staleTime`, `gcTime`, `refetchInterval`).
+ * @returns React Query result resolving to the resolved `UniswapV4PoolKey`.
+ */
+export function useResolveUniswapV4PoolKey(
+  poolManager: Address | undefined,
+  poolId: `0x${string}` | undefined,
+  args?: { fromBlock?: bigint; chunkSize?: bigint },
+  options?: QueryOptions,
+) {
+  const { publicClient, chainId, clientScope } = usePanopticContext()
+  return useQuery({
+    // eslint-disable-next-line @tanstack/query/exhaustive-deps
+    queryKey: [
+      ...queryKeys.all,
+      'uniswapV4PoolKey',
+      chainId.toString(),
+      poolManager,
+      poolId,
+      args?.fromBlock?.toString(),
+      args?.chunkSize?.toString(),
+      getClientCacheScopeKey(publicClient, clientScope),
+    ],
+    queryFn: () =>
+      resolveUniswapV4PoolKey({
+        client: publicClient,
+        poolManager: poolManager as Address,
+        poolId: poolId as `0x${string}`,
+        fromBlock: args?.fromBlock,
+        chunkSize: args?.chunkSize,
+      }),
+    enabled: (options?.enabled ?? true) && !!poolManager && !!poolId,
+    // PoolKey is immutable — cache forever within the session.
+    staleTime: options?.staleTime ?? Infinity,
+    gcTime: options?.gcTime,
+    refetchInterval: options?.refetchInterval,
+  })
+}
+
+/**
+ * Reads basic on-chain state (slot0, liquidity) for a Uniswap V4 pool via the StateView contract.
+ * @param stateViewAddress - The Uniswap V4 StateView contract address.
+ * @param poolId - The 32-byte poolId hash.
+ * @param options - Optional React Query options (`enabled`, `staleTime`, `gcTime`, `refetchInterval`).
+ * @returns React Query result resolving to the pool's basic state.
+ */
+export function useUniswapV4PoolBasicState(
+  stateViewAddress: Address | undefined,
+  poolId: `0x${string}` | undefined,
+  options?: QueryOptions,
+) {
+  const { publicClient, chainId, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'uniswapV4PoolBasicState',
+      chainId.toString(),
+      stateViewAddress,
+      poolId,
+      getClientCacheScopeKey(publicClient, clientScope),
+    ],
+    queryFn: () =>
+      getUniswapV4PoolBasicState({
+        client: publicClient,
+        stateViewAddress: stateViewAddress as Address,
+        poolId: poolId as `0x${string}`,
+      }),
+    enabled: (options?.enabled ?? true) && !!stateViewAddress && !!poolId,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+/**
+ * Reads full pool info (slot0, liquidity, and PoolKey-derived metadata) for a Uniswap V4 pool via the StateView contract.
+ * @param stateViewAddress - The Uniswap V4 StateView contract address.
+ * @param poolKey - The pool's `UniswapV4PoolKey` (currency0, currency1, fee, tickSpacing, hooks).
+ * @param options - Optional React Query options (`enabled`, `staleTime`, `gcTime`, `refetchInterval`).
+ * @returns React Query result resolving to the full pool info object.
+ */
+export function useUniswapV4PoolInfo(
+  stateViewAddress: Address | undefined,
+  poolKey: UniswapV4PoolKey | undefined,
+  options?: QueryOptions,
+) {
+  const { publicClient, chainId, clientScope } = usePanopticContext()
+  return useQuery({
+    // eslint-disable-next-line @tanstack/query/exhaustive-deps
+    queryKey: [
+      ...queryKeys.all,
+      'uniswapV4PoolInfo',
+      chainId.toString(),
+      stateViewAddress,
+      poolKey?.currency0,
+      poolKey?.currency1,
+      poolKey?.fee,
+      poolKey?.tickSpacing,
+      poolKey?.hooks,
+      getClientCacheScopeKey(publicClient, clientScope),
+    ],
+    queryFn: () =>
+      getUniswapV4PoolInfo({
+        client: publicClient,
+        stateViewAddress: stateViewAddress as Address,
+        poolKey: poolKey as UniswapV4PoolKey,
+      }),
+    enabled: (options?.enabled ?? true) && !!stateViewAddress && !!poolKey,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+/**
+ * Reads per-tick active liquidity from a Uniswap V4 pool via PanopticQuery's `getTickNetsV4`.
+ * @param queryAddress - The PanopticQuery helper contract address.
+ * @param poolManager - The Uniswap V4 PoolManager contract address.
+ * @param poolId - The 32-byte poolId hash.
+ * @param args - `tickSpacing`, `startTick` (inclusive), and `nTicks` count to scan.
+ * @param options - Optional React Query options (`enabled`, `staleTime`, `gcTime`, `refetchInterval`).
+ * @returns React Query result resolving to `{ ticks, liquidityNets }` parallel arrays.
+ */
+export function useUniswapV4PoolLiquidities(
+  queryAddress: Address | undefined,
+  poolManager: Address | undefined,
+  poolId: `0x${string}` | undefined,
+  args: { tickSpacing: number; startTick: number; nTicks: bigint } | undefined,
+  options?: QueryOptions,
+) {
+  const { publicClient, chainId, clientScope } = usePanopticContext()
+  return useQuery({
+    // eslint-disable-next-line @tanstack/query/exhaustive-deps
+    queryKey: [
+      ...queryKeys.all,
+      'uniswapV4PoolLiquidities',
+      chainId.toString(),
+      queryAddress,
+      poolManager,
+      poolId,
+      args?.tickSpacing,
+      args?.startTick,
+      args?.nTicks,
+      getClientCacheScopeKey(publicClient, clientScope),
+    ],
+    queryFn: () => {
+      if (!queryAddress || !poolManager || !poolId || !args) {
+        throw new PanopticValidationError('useUniswapV4PoolLiquidities: missing required args')
+      }
+      const { tickSpacing, startTick, nTicks } = args
+      return getUniswapV4PoolLiquidities({
+        client: publicClient,
+        queryAddress,
+        poolManager,
+        poolId,
+        tickSpacing,
+        startTick,
+        nTicks,
+      })
+    },
+    enabled: (options?.enabled ?? true) && !!queryAddress && !!poolManager && !!poolId && !!args,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -1373,5 +1895,229 @@ export function useNativeTokenPrice(
       }),
     enabled: (options?.enabled ?? true) && panopticPoolAddress !== undefined,
     refetchInterval: options?.refetchInterval ?? 30_000,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+// --- SFPM reads ---
+
+type OmitSfpmClient<T> = Omit<T, 'client'>
+
+export function useUniswapV3PoolFromId(
+  params?: OmitSfpmClient<GetUniswapV3PoolFromIdParams>,
+  options?: QueryOptions,
+) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sfpm',
+      'getUniswapV3PoolFromId',
+      params?.sfpmAddress,
+      params?.poolId?.toString(),
+      getClientCacheScopeKey(publicClient, clientScope),
+      params,
+    ] as const,
+    queryFn: () => {
+      if (!params) throw new PanopticValidationError('params is required')
+      return getUniswapV3PoolFromId({ client: publicClient, ...params })
+    },
+    enabled: (options?.enabled ?? true) && params !== undefined,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+export function useUniswapV4PoolKeyFromId(
+  params?: OmitSfpmClient<GetUniswapV4PoolKeyFromIdParams>,
+  options?: QueryOptions,
+) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sfpm',
+      'getUniswapV4PoolKeyFromId',
+      params?.sfpmAddress,
+      params?.poolId?.toString(),
+      getClientCacheScopeKey(publicClient, clientScope),
+      params,
+    ] as const,
+    queryFn: () => {
+      if (!params) throw new PanopticValidationError('params is required')
+      return getUniswapV4PoolKeyFromId({ client: publicClient, ...params })
+    },
+    enabled: (options?.enabled ?? true) && params !== undefined,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+export function useEnforcedTickLimits(
+  params?: OmitSfpmClient<GetEnforcedTickLimitsParams>,
+  options?: QueryOptions,
+) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sfpm',
+      'getEnforcedTickLimits',
+      params?.sfpmAddress,
+      params?.poolId?.toString(),
+      getClientCacheScopeKey(publicClient, clientScope),
+      params,
+    ] as const,
+    queryFn: () => {
+      if (!params) throw new PanopticValidationError('params is required')
+      return getEnforcedTickLimits({ client: publicClient, ...params })
+    },
+    enabled: (options?.enabled ?? true) && params !== undefined,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+// --- Factory + SFPM composite reads ---
+
+export function usePanopticPoolFromPoolId(
+  params?: OmitFactoryClient<GetPanopticPoolFromPoolIdParams>,
+  options?: QueryOptions,
+) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'factory',
+      'getPanopticPoolFromPoolId',
+      params?.sfpmAddress,
+      params?.factoryAddress,
+      params?.riskEngine,
+      params?.poolId?.toString(),
+      getClientCacheScopeKey(publicClient, clientScope),
+      params,
+    ] as const,
+    queryFn: () => {
+      if (!params) throw new PanopticValidationError('params is required')
+      return getPanopticPoolFromPoolId({ client: publicClient, ...params })
+    },
+    enabled: (options?.enabled ?? true) && params !== undefined,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+type OmitResolveClient = Omit<ResolvePanopticPoolFromPoolIdParams, 'client'>
+
+export function useResolvePanopticPoolFromPoolId(
+  params?: OmitResolveClient,
+  options?: QueryOptions,
+) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'factory',
+      'resolvePanopticPoolFromPoolId',
+      params?.poolId?.toString(),
+      params?.riskEngine,
+      params?.v3?.sfpmAddress,
+      params?.v3?.factoryAddress,
+      params?.v4?.sfpmAddress,
+      params?.v4?.factoryAddress,
+      getClientCacheScopeKey(publicClient, clientScope),
+      params,
+    ] as const,
+    queryFn: () => {
+      if (!params) throw new PanopticValidationError('params is required')
+      return resolvePanopticPoolFromPoolId({ client: publicClient, ...params })
+    },
+    enabled: (options?.enabled ?? true) && params !== undefined,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+// --- Borrow preview ---
+
+export function usePreviewBorrow(
+  poolAddress: Address,
+  params?: {
+    account: Address
+    token: Address
+    amount: bigint
+    slippageBps: bigint
+    existingPositionIds: bigint[]
+  },
+  options?: QueryOptions,
+) {
+  const ctx = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'previewBorrow',
+      ctx.chainId,
+      poolAddress,
+      params?.account,
+      params?.token,
+      params?.amount?.toString(),
+      params?.slippageBps?.toString(),
+      params?.existingPositionIds?.map(String).join(','),
+      getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
+    ],
+    queryFn: () =>
+      previewBorrow({
+        client: ctx.publicClient,
+        poolAddress,
+        chainId: ctx.chainId,
+        account: params!.account,
+        token: params!.token,
+        amount: params!.amount,
+        slippageBps: params!.slippageBps,
+        existingPositionIds: params!.existingPositionIds,
+      }),
+    enabled: (options?.enabled ?? true) && !!params && params.amount > 0n,
+    staleTime: options?.staleTime ?? 10_000,
+    gcTime: options?.gcTime,
+    placeholderData: keepPreviousData,
+  })
+}
+
+/**
+ * Validate whether a builder code maps to a deployed builder wallet.
+ *
+ * Returns `{ data: true }` for valid codes, `{ data: false }` for invalid.
+ * Disabled when `builderCode` is `undefined` or `0n`.
+ */
+export function useValidateBuilderCode(
+  poolAddress: Address,
+  builderCode: bigint | undefined,
+  options?: QueryOptions,
+) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      'validateBuilderCode',
+      poolAddress,
+      String(builderCode),
+      getClientCacheScopeKey(publicClient, clientScope),
+    ],
+    queryFn: () => {
+      if (builderCode === undefined) throw new Error('builderCode is undefined')
+      return validateBuilderCode({
+        client: publicClient,
+        poolAddress,
+        builderCode,
+      })
+    },
+    enabled: (options?.enabled ?? true) && builderCode !== undefined && builderCode !== 0n,
+    staleTime: options?.staleTime ?? 60_000,
+    gcTime: options?.gcTime,
   })
 }

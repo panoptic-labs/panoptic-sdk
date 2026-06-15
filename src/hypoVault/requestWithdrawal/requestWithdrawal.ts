@@ -10,6 +10,7 @@ import {
   calculateAvailableShares,
   calculateClaimableSharesFromQueuedDeposits,
   calculateSharesFromAssets,
+  selectExecuteDepositEpochs,
 } from './utils'
 
 export function encodeExecuteDepositFunctionData({
@@ -193,9 +194,18 @@ export function buildRequestWithdrawalCalldatas({
       ? availableShares
       : sharesForAssets
 
+  const requiredClaimableShares =
+    sharesToRequest > walletShares ? sharesToRequest - walletShares : 0n
+
+  const selectedExecuteDepositEpochs = selectExecuteDepositEpochs({
+    claimableByExecutionEpoch: claimable.byExecutionEpoch,
+    requiredClaimableShares,
+    requestAllAvailableShares,
+  })
+
   const executeDepositCalldatas = buildExecuteDepositCalldatas({
     user,
-    epochsToExecute: claimable.epochsToExecute,
+    epochsToExecute: selectedExecuteDepositEpochs,
   })
 
   const requestWithdrawalCalldata =
@@ -207,6 +217,7 @@ export function buildRequestWithdrawalCalldatas({
 
   return {
     claimableDepositShares: claimable,
+    selectedExecuteDepositEpochs,
     availableShares,
     sharesToRequest,
     multicallCalldatas,

@@ -36,11 +36,15 @@ export type {
   CollateralEstimate,
   LiquidationPrices,
   NetLiquidationValue,
+  NetLiquidationValues,
   TokenCollateral,
 } from './account'
 
 // Oracle types
 export type { CurrentRates, OracleState, RiskParameters, SafeMode, SafeModeState } from './oracle'
+
+// IRM types
+export type { IrmCurrent, IrmMarketStateInputs, IrmPoint } from './irm'
 
 // Transaction types
 export type {

@@ -6,7 +6,7 @@
 import type { Address, PublicClient } from 'viem'
 import { encodeFunctionData } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients'
 import { PanopticError } from '../errors'
 import type { ClosePositionSimulation, SimulationResult } from '../types'
@@ -97,7 +97,7 @@ export async function simulateClosePosition(
 
     // Encode dispatch call data for burn (positionSize = 0 signals close)
     const callData = encodeFunctionData({
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       functionName: 'dispatch',
       args: [
         [tokenId],

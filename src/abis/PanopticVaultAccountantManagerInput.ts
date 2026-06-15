@@ -17,4 +17,5 @@ export const PanopticVaultAccountantManagerInputAbi = [
     ],
   },
   { type: 'uint256[][]' }, // TokenId[][]
+  { type: 'address[]' }, // IERC4626[]
 ] as const

@@ -69,15 +69,26 @@ export {
 
 // SDK-specific errors
 export {
+  // Batch dispatch
+  BatchValidationError,
   // Chunk Tracking
   ChunkLimitError,
   CrossPoolError,
   // Validation
   InvalidHistoryRangeError,
   InvalidTickLimitsError,
+  // Loan
+  LoanSlotExhaustedError,
+  MaxRetriesExceededError,
   MissingPositionIdsError,
+  // Multicall
+  MulticallNoDataError,
+  MulticallResultFailedError,
+  MulticallResultMissingError,
   // Configuration & Network
   NetworkMismatchError,
+  // Lending
+  NoLoanPositionsError,
   // Oracle
   OracleRateLimitedError,
   // Helper Contract
@@ -94,6 +105,8 @@ export {
   StaleDataError,
   // Storage
   StorageDataNotFoundError,
+  // Swap
+  SwapTokenMismatchError,
   // Sync & Position Tracking
   SyncTimeoutError,
   UnhealthyPoolError,

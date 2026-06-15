@@ -114,6 +114,20 @@ export interface NetLiquidationValue {
 }
 
 /**
+ * Net liquidation values at multiple ticks.
+ */
+export interface NetLiquidationValues {
+  /** Net liquidation values for token 0 at each tick */
+  values0: bigint[]
+  /** Net liquidation values for token 1 at each tick */
+  values1: bigint[]
+  /** Ticks used for calculation */
+  atTicks: bigint[]
+  /** Block metadata */
+  _meta: BlockMeta
+}
+
+/**
  * Liquidation prices result.
  */
 export interface LiquidationPrices {

@@ -93,3 +93,79 @@ export async function resolveBlockNumbers(params: ResolveBlockNumbersParams): Pr
 
   return results
 }
+
+/**
+ * Parameters for estimateBlockNumbers.
+ */
+export interface EstimateBlockNumbersParams {
+  /** viem PublicClient */
+  client: PublicClient
+  /** Array of Unix timestamps (seconds) to resolve to block numbers */
+  timestamps: number[]
+  /**
+   * Bootstrap block-time used only to pick the anchor block (seconds).
+   * The final estimate uses the *measured* rate between latest and anchor,
+   * so this only affects which sample point we draw — not accuracy on the
+   * sampled window. Default 12 (Ethereum L1).
+   */
+  fallbackBlockTimeSec?: number
+}
+
+/**
+ * Estimate block numbers for the given Unix timestamps using a 2-RPC linear
+ * extrapolation. Trades binary-search accuracy (~25 RPCs) for ~2 RPCs.
+ *
+ * Suitable for chart-style use cases where the consumer plots tens-to-hundreds
+ * of evenly-spaced points and a ±N-block error is invisible. Not suitable when
+ * exact block correspondence is required (e.g. event log ranges).
+ *
+ * Algorithm:
+ * 1. Fetch `latest` block.
+ * 2. Use `fallbackBlockTimeSec` to estimate an anchor block roughly co-temporal
+ *    with the *earliest* requested timestamp.
+ * 3. Fetch the anchor block.
+ * 4. Compute the measured average block time over [anchor, latest].
+ * 5. Linearly extrapolate every requested timestamp from `latest`.
+ *
+ * If the sampled window is degenerate (e.g. anchor too close to latest, or
+ * timestamps near genesis), falls back to {@link resolveBlockNumbers}.
+ */
+export async function estimateBlockNumbers(params: EstimateBlockNumbersParams): Promise<bigint[]> {
+  const { client, timestamps, fallbackBlockTimeSec = 12 } = params
+
+  if (timestamps.length === 0) return []
+
+  const latest = await client.getBlock({ blockTag: 'latest', includeTransactions: false })
+  const latestNum = latest.number
+  const latestTs = Number(latest.timestamp)
+
+  const earliest = Math.min(...timestamps)
+  const secAgoMax = Math.max(0, latestTs - earliest)
+
+  // All requested timestamps are now-or-future
+  if (secAgoMax === 0) return timestamps.map(() => latestNum)
+
+  const blocksBackEst = BigInt(Math.floor(secAgoMax / fallbackBlockTimeSec))
+  const anchorNum = blocksBackEst >= latestNum ? 1n : latestNum - blocksBackEst
+  const anchor = await client.getBlock({
+    blockNumber: anchorNum,
+    includeTransactions: false,
+  })
+
+  const numDelta = latestNum - anchor.number
+  const tsDelta = latestTs - Number(anchor.timestamp)
+
+  // Degenerate sample window — fall back to exact resolution.
+  if (numDelta <= 0n || tsDelta <= 0) {
+    return resolveBlockNumbers({ client, timestamps })
+  }
+
+  const avgBlockTimeSec = tsDelta / Number(numDelta)
+
+  return timestamps.map((ts) => {
+    const secAgo = latestTs - ts
+    if (secAgo <= 0) return latestNum
+    const blocksAgo = BigInt(Math.round(secAgo / avgBlockTimeSec))
+    return blocksAgo >= latestNum ? 1n : latestNum - blocksAgo
+  })
+}

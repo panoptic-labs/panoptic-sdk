@@ -37,6 +37,7 @@ function createPool(healthStatus: 'active' | 'low_liquidity' | 'paused' = 'activ
       tickSpacing: 10n,
       hooks: '0x0000000000000000000000000000000000000000',
     },
+    tickSpacing: 10n,
     collateralTracker0: {
       address: '0x0000000000000000000000000000000000000003',
       token: '0x0000000000000000000000000000000000000001',
@@ -68,9 +69,12 @@ function createPool(healthStatus: 'active' | 'low_liquidity' | 'paused' = 'activ
       collateralRequirement: 10000n,
       maintenanceMargin: 5000n,
       commissionRate: 10n,
+      vegoid: 4n,
+      maxSpread: 9000n,
     },
     currentTick: 0n,
     sqrtPriceX96: 2n ** 96n,
+    uniswapPoolLiquidity: 0n,
     healthStatus,
     metadata: {
       poolKeyBytes: '0x00' as `0x${string}`,
@@ -89,6 +93,8 @@ function createPool(healthStatus: 'active' | 'low_liquidity' | 'paused' = 'activ
       underlyingPoolId: '0x0000000000000000000000000000000000000006',
       isV4: false,
       tickSpacing: 10n,
+      fee: 500n,
+      sfpmAddress: '0x0000000000000000000000000000000000000007',
     },
     _meta: createMeta(BigInt(Math.floor(Date.now() / 1000))),
   }
@@ -101,10 +107,11 @@ function createSafeMode(
 ): SafeModeState {
   const defaults: SafeModeState = {
     mode,
-    canMint: mode === 'normal',
+    canMint: mode !== 'emergency',
     canBurn: mode !== 'emergency',
     canForceExercise: mode !== 'emergency',
     canLiquidate: true, // Always allowed
+    canSwapAtMint: mode === 'normal',
     _meta: createMeta(BigInt(Math.floor(Date.now() / 1000))),
   }
   return { ...defaults, ...overrides }

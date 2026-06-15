@@ -11,6 +11,7 @@ export {
 } from './builder'
 export {
   type Timescale,
+  DEFAULT_MAX_SPREAD,
   DEFAULT_VEGOID,
   LEG_BITS,
   LEG_LIMITS,

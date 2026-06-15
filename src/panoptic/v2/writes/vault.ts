@@ -5,7 +5,7 @@
 
 import type { Address, PublicClient, WalletClient } from 'viem'
 
-import { collateralTrackerAbi } from '../../../generated'
+import { collateralTrackerV2Abi } from '../../../generated'
 import type { TxOverrides, TxReceipt, TxResult } from '../types'
 import { submitWrite } from './utils'
 
@@ -66,7 +66,7 @@ export async function deposit(params: DepositParams): Promise<TxResult> {
     walletClient,
     account,
     address: collateralTrackerAddress,
-    abi: collateralTrackerAbi,
+    abi: collateralTrackerV2Abi,
     functionName: 'deposit',
     args: [assets, receiver],
     value: isNativeETH ? assets : undefined,
@@ -127,7 +127,7 @@ export async function withdraw(params: WithdrawParams): Promise<TxResult> {
     walletClient,
     account,
     address: collateralTrackerAddress,
-    abi: collateralTrackerAbi,
+    abi: collateralTrackerV2Abi,
     functionName: 'withdraw',
     args: [assets, receiver, owner],
     txOverrides,
@@ -180,7 +180,7 @@ export async function withdrawWithPositions(
     walletClient,
     account,
     address: collateralTrackerAddress,
-    abi: collateralTrackerAbi,
+    abi: collateralTrackerV2Abi,
     functionName: 'withdraw',
     args: [assets, receiver, owner, positionIdList, usePremiaAsCollateral],
     txOverrides,
@@ -239,7 +239,7 @@ export async function mint(params: MintParams): Promise<TxResult> {
     walletClient,
     account,
     address: collateralTrackerAddress,
-    abi: collateralTrackerAbi,
+    abi: collateralTrackerV2Abi,
     functionName: 'mint',
     args: [shares, receiver],
     txOverrides,
@@ -299,7 +299,7 @@ export async function redeem(params: RedeemParams): Promise<TxResult> {
     walletClient,
     account,
     address: collateralTrackerAddress,
-    abi: collateralTrackerAbi,
+    abi: collateralTrackerV2Abi,
     functionName: 'redeem',
     args: [shares, receiver, owner],
     txOverrides,

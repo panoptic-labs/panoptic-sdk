@@ -38,9 +38,9 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
-  panopticPoolAbi,
+  panopticPoolV2Abi,
   riskEngineAbi,
-  semiFungiblePositionManagerAbi,
+  semiFungiblePositionManagerV4Abi,
 } from '../../../../../generated'
 import { calculatePositionGreeks } from '../../../greeks'
 import { getAccountCollateral } from '../../../reads/account'
@@ -139,7 +139,7 @@ async function seedPoolLiquidity(
 
   // Build ATM straddle
   const pool = await getPool({ client, poolAddress, chainId })
-  const tickSpacing = pool.poolKey.tickSpacing
+  const tickSpacing = pool.tickSpacing
   const atmStrike = (pool.currentTick / tickSpacing) * tickSpacing
 
   // Width in the tokenId is a tickSpacing multiplier: actualTicks = width * tickSpacing
@@ -184,7 +184,7 @@ async function seedPoolLiquidity(
   // Scale down by BP_DECREASE_BUFFER for safety margin
   const riskEngineAddress = await client.readContract({
     address: poolAddress,
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: 'riskEngine',
   })
   const bpDecreaseBuffer = await client.readContract({
@@ -236,14 +236,14 @@ async function seedPoolLiquidity(
   const chunkTickUpper = Number(atmStrike + halfWidth)
 
   const [sfpmAddress, poolKeyBytes] = await Promise.all([
-    client.readContract({ address: poolAddress, abi: panopticPoolAbi, functionName: 'SFPM' }),
-    client.readContract({ address: poolAddress, abi: panopticPoolAbi, functionName: 'poolKey' }),
+    client.readContract({ address: poolAddress, abi: panopticPoolV2Abi, functionName: 'SFPM' }),
+    client.readContract({ address: poolAddress, abi: panopticPoolV2Abi, functionName: 'poolKey' }),
   ])
 
   for (const tokenType of [0n, 1n]) {
     const liq = await client.readContract({
       address: sfpmAddress,
-      abi: semiFungiblePositionManagerAbi,
+      abi: semiFungiblePositionManagerV4Abi,
       functionName: 'getAccountLiquidity',
       args: [poolKeyBytes, poolAddress, tokenType, chunkTickLower, chunkTickUpper],
     })
@@ -345,7 +345,7 @@ describe('Intermediate 01: Delta-Neutral Hedging (Fork Test)', () => {
         chainId: config.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
       // OTM: strike above current tick for calls
       const strike = (currentTick / tickSpacing + 5n) * tickSpacing
@@ -447,7 +447,7 @@ describe('Intermediate 01: Delta-Neutral Hedging (Fork Test)', () => {
         currentTick: pool.currentTick,
         mintTick: position.tickAtMint,
         positionSize: position.positionSize,
-        poolTickSpacing: pool.poolKey.tickSpacing,
+        poolTickSpacing: pool.tickSpacing,
       })
 
       // Short call = negative delta
@@ -632,7 +632,7 @@ describe('Intermediate 01: Delta-Neutral Hedging (Fork Test)', () => {
         currentTick: pool.currentTick,
         mintTick: callPosition.tickAtMint,
         positionSize: callPosition.positionSize,
-        poolTickSpacing: pool.poolKey.tickSpacing,
+        poolTickSpacing: pool.tickSpacing,
       })
 
       console.log('callGreels', callGreeks)

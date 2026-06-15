@@ -8,7 +8,7 @@
 
 import { type Abi, BaseError, decodeErrorResult, toFunctionSelector } from 'viem'
 
-import { collateralTrackerAbi, panopticPoolAbi, riskEngineAbi } from '../../../generated'
+import { collateralTrackerV2Abi, panopticPoolV2Abi, riskEngineAbi } from '../../../generated'
 import { PanopticError } from './base'
 import {
   // Solvency & Margin
@@ -88,8 +88,8 @@ export interface ParsedError {
  * Includes the dedicated errors ABI for complete coverage.
  */
 const combinedAbi = [
-  ...panopticPoolAbi,
-  ...collateralTrackerAbi,
+  ...panopticPoolV2Abi,
+  ...collateralTrackerV2Abi,
   ...riskEngineAbi,
   ...panopticErrorsAbi,
 ] as Abi

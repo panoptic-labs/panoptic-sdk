@@ -25,7 +25,6 @@ export const HypoVaultFragmentDoc = gql`
     symbol
     decimals
     name
-    derivedETH
   }
   performanceFeeBps
   owner
@@ -277,9 +276,6 @@ export const GetVaultHistoryDocument = gql`
     `;
 export const GetFilteredHypoVaultsDocument = gql`
     query GetFilteredHypoVaults($hypoVaultWhitelist: [Bytes!]!) {
-  bundle(id: "1") {
-    ethPriceUSD
-  }
   hypoVaults(where: {id_in: $hypoVaultWhitelist}) {
     ...HypoVault
   }

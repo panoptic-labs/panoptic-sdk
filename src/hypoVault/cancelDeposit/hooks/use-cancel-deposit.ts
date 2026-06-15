@@ -13,9 +13,11 @@ import type { BaseContractWriteHookOutput } from '../../../types/baseContractWri
 import { getCancelDepositContractConfig } from '../cancelDeposit'
 
 export const useCancelDeposit = ({
+  chainId,
   vaultAddress,
   onWaitSuccess,
 }: {
+  chainId?: number
   vaultAddress: Address
   onWaitSuccess?: () => void
 }) => {
@@ -24,6 +26,7 @@ export const useCancelDeposit = ({
   const canSimulate = vaultAddress !== zeroAddress && account != null && account !== zeroAddress
 
   const simulate = useSimulateContract({
+    chainId,
     ...getCancelDepositContractConfig({ vaultAddress }),
     account,
     query: {
@@ -35,6 +38,7 @@ export const useCancelDeposit = ({
   const write = useWriteContract()
 
   const wait = useWaitForTransactionReceipt({
+    chainId,
     hash: write.data,
     query: {
       refetchOnWindowFocus: false,

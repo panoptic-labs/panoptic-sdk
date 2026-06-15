@@ -61,7 +61,7 @@ describe('Sepolia Fork: Basic Reads', () => {
       )
 
       // Verify tick spacing matches deployment
-      expect(pool.poolKey.tickSpacing).toBe(BigInt(SEPOLIA_CONTRACTS.pool.tickSpacing))
+      expect(pool.tickSpacing).toBe(BigInt(SEPOLIA_CONTRACTS.pool.tickSpacing))
 
       // Log pool state for debugging
       console.log('Pool state:')
@@ -69,7 +69,7 @@ describe('Sepolia Fork: Basic Reads', () => {
       console.log(`  Token0: ${pool.collateralTracker0.symbol} (${pool.poolKey.currency0})`)
       console.log(`  Token1: ${pool.collateralTracker1.symbol} (${pool.poolKey.currency1})`)
       console.log(`  Current tick: ${pool.currentTick}`)
-      console.log(`  Tick spacing: ${pool.poolKey.tickSpacing}`)
+      console.log(`  Tick spacing: ${pool.tickSpacing}`)
       console.log(`  Health status: ${pool.healthStatus}`)
       console.log(`  Block: ${pool._meta.blockNumber}`)
     })

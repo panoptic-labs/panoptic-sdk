@@ -134,6 +134,22 @@ export const panopticQueryAbi = [
       { name: 'account', type: 'address', internalType: 'address' },
       { name: 'includePendingPremium', type: 'bool', internalType: 'bool' },
       { name: 'positionIdList', type: 'uint256[]', internalType: 'TokenId[]' },
+      { name: 'atTicks', type: 'int24[]', internalType: 'int24[]' },
+    ],
+    outputs: [
+      { name: 'value0', type: 'int256[]', internalType: 'int256[]' },
+      { name: 'value1', type: 'int256[]', internalType: 'int256[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getNetLiquidationValue',
+    inputs: [
+      { name: 'pool', type: 'address', internalType: 'contract PanopticPool' },
+      { name: 'account', type: 'address', internalType: 'address' },
+      { name: 'includePendingPremium', type: 'bool', internalType: 'bool' },
+      { name: 'positionIdList', type: 'uint256[]', internalType: 'TokenId[]' },
       { name: 'atTick', type: 'int24', internalType: 'int24' },
     ],
     outputs: [
@@ -173,6 +189,36 @@ export const panopticQueryAbi = [
     name: 'getTickNets',
     inputs: [
       { name: 'pool', type: 'address', internalType: 'contract PanopticPool' },
+      { name: 'startTick', type: 'int24', internalType: 'int24' },
+      { name: 'nTicks', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [
+      { name: 'tickData', type: 'int256[]', internalType: 'int256[]' },
+      { name: 'liquidityNets', type: 'int256[]', internalType: 'int256[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getTickNetsV3',
+    inputs: [
+      { name: 'univ3pool', type: 'address', internalType: 'contract IUniswapV3Pool' },
+      { name: 'startTick', type: 'int24', internalType: 'int24' },
+      { name: 'nTicks', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [
+      { name: 'tickData', type: 'int256[]', internalType: 'int256[]' },
+      { name: 'liquidityNets', type: 'int256[]', internalType: 'int256[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getTickNetsV4',
+    inputs: [
+      { name: 'manager', type: 'address', internalType: 'contract IPoolManager' },
+      { name: 'poolId', type: 'bytes32', internalType: 'PoolId' },
+      { name: 'tickSpacing', type: 'int24', internalType: 'int24' },
       { name: 'startTick', type: 'int24', internalType: 'int24' },
       { name: 'nTicks', type: 'uint256', internalType: 'uint256' },
     ],

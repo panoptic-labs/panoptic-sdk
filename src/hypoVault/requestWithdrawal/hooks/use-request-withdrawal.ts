@@ -17,6 +17,7 @@ import {
 import type { DepositEpochStateSnapshot, QueuedDepositSnapshot, SharePrice } from '../utils'
 
 export const useRequestWithdrawal = ({
+  chainId,
   vaultAddress,
   desiredAssets,
   requestAllAvailableShares = false,
@@ -27,6 +28,7 @@ export const useRequestWithdrawal = ({
   currentDepositEpoch,
   onWaitSuccess,
 }: {
+  chainId?: number
   vaultAddress: Address
   desiredAssets: bigint
   requestAllAvailableShares?: boolean
@@ -40,7 +42,13 @@ export const useRequestWithdrawal = ({
   const { address: account } = useAccount()
   const user = account ?? zeroAddress
 
-  const { claimableDepositShares, availableShares, sharesToRequest, multicallCalldatas } = useMemo(
+  const {
+    claimableDepositShares,
+    selectedExecuteDepositEpochs,
+    availableShares,
+    sharesToRequest,
+    multicallCalldatas,
+  } = useMemo(
     () =>
       buildRequestWithdrawalCalldatas({
         user,
@@ -71,6 +79,7 @@ export const useRequestWithdrawal = ({
     account !== zeroAddress
 
   const simulate = useSimulateContract({
+    chainId,
     ...getRequestWithdrawalMulticallContractConfig({ vaultAddress, multicallCalldatas }),
     account,
     query: {
@@ -82,6 +91,7 @@ export const useRequestWithdrawal = ({
   const write = useWriteContract()
 
   const wait = useWaitForTransactionReceipt({
+    chainId,
     hash: write.data,
     query: {
       refetchOnWindowFocus: false,
@@ -144,6 +154,7 @@ export const useRequestWithdrawal = ({
   return {
     ...output,
     claimableDepositShares,
+    selectedExecuteDepositEpochs,
     availableShares,
     sharesToRequest,
     multicallCalldatas,

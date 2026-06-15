@@ -3,9 +3,8 @@ import type { Address, PublicClient } from 'viem'
 import { getAccountCollateral } from '../../panoptic/v2/reads/account'
 import { getCollateralData } from '../../panoptic/v2/reads/collateral'
 import { getPoolMetadata } from '../../panoptic/v2/reads/pool'
-import { ProductionUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/ProductionUSDCPLPVaultPoolInfos'
-import { ProductionWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/ProductionWETHPLPVaultPoolInfos'
 import { getHypoVaultConfigForVault } from '../hypoVaultManagerConfigs/vaultToConfig'
+import { getVaultPoolInfos } from '../utils/vaultManagerInput'
 
 const erc20BalanceOfAbi = [
   {
@@ -19,12 +18,14 @@ const erc20BalanceOfAbi = [
 
 export type LendingAllocationRow = {
   market: string
+  borrowRateWad: bigint | null
   supplyRateWad: bigint | null
   utilizationBps: bigint | null
   allocationUnderlying: bigint
   allocationPctBps: bigint
   isIdle: boolean
   poolAddress: Address | null
+  collateralTrackerAddress: Address | null
 }
 
 export type LendingAllocationResult = {
@@ -56,15 +57,7 @@ function discoverPoolAddresses({
     }
   }
 
-  const vaultLower = toLowerAddress(vaultAddress)
-  const artifactPoolInfos = [
-    ...(toLowerAddress(ProductionUSDCPLPVaultPoolInfos.vaultAddress) === vaultLower
-      ? ProductionUSDCPLPVaultPoolInfos.poolInfos
-      : []),
-    ...(toLowerAddress(ProductionWETHPLPVaultPoolInfos.vaultAddress) === vaultLower
-      ? ProductionWETHPLPVaultPoolInfos.poolInfos
-      : []),
-  ]
+  const artifactPoolInfos = getVaultPoolInfos(vaultAddress, chainId)
 
   for (const poolInfo of artifactPoolInfos) {
     const key = toLowerAddress(poolInfo.pool)
@@ -151,12 +144,17 @@ export async function getLendingAllocationRows({
 
       return {
         market: `${metadata.token0Symbol}/${metadata.token1Symbol}`,
+        borrowRateWad: collateralData.borrowRate,
         supplyRateWad: collateralData.supplyRate,
         utilizationBps: collateralData.utilization,
         allocationUnderlying,
         allocationPctBps: 0n,
         isIdle: false,
         poolAddress,
+        collateralTrackerAddress:
+          underlyingIndex === 0
+            ? metadata.collateralToken0Address
+            : metadata.collateralToken1Address,
       }
     }),
   )
@@ -175,12 +173,14 @@ export async function getLendingAllocationRows({
 
   const idleRow: LendingAllocationRow = {
     market: 'Idle Funds',
+    borrowRateWad: null,
     supplyRateWad: null,
     utilizationBps: null,
     allocationUnderlying: idleBalance,
     allocationPctBps: 0n,
     isIdle: true,
     poolAddress: null,
+    collateralTrackerAddress: null,
   }
 
   const rowsBeforePct = [...nonNullPoolRows, idleRow]

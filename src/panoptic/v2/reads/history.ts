@@ -9,7 +9,7 @@
 
 import type { Address, Hash, PublicClient } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients'
 import type { BlockMeta } from '../types'
 import { decodePositionBalance } from '../writes/utils'
@@ -108,7 +108,7 @@ export async function getAccountHistory(params: GetAccountHistoryParams): Promis
   const [mintLogs, burnLogs, _meta] = await Promise.all([
     client.getContractEvents({
       address: poolAddress,
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       eventName: 'OptionMinted',
       args: { recipient: account },
       fromBlock,
@@ -116,7 +116,7 @@ export async function getAccountHistory(params: GetAccountHistoryParams): Promis
     }),
     client.getContractEvents({
       address: poolAddress,
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       eventName: 'OptionBurnt',
       args: { recipient: account },
       fromBlock,

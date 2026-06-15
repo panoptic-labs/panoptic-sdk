@@ -1,16 +1,35 @@
+import { requireChainDeployment, SEPOLIA_CHAIN_ID } from '../chainDeployments'
 import type { HypoVaultManagerConfig } from './schema'
+
+const SEPOLIA_DEPLOYMENT = requireChainDeployment(SEPOLIA_CHAIN_ID)
+const SEPOLIA_HYPOVAULT_ADDRESSES = SEPOLIA_DEPLOYMENT.hypovault.vaults
+const SEPOLIA_HYPOVAULT_MANAGER_ADDRESSES = SEPOLIA_DEPLOYMENT.hypovault.managers
+const SEPOLIA_PANOPTIC_POOL_ADDRESSES = SEPOLIA_DEPLOYMENT.panoptic.pool
 
 export const WethPlpVaultSepoliaDevConfig: HypoVaultManagerConfig = {
   deployment: 'dev',
-  manageCycleIntervalMs: 10000,
-  vaultCapInUnderlying: 1000000000000000000n, // 1 WETH
-  chainId: 11155111,
-  hypoVaultAddress: '0x225Bf020d280E98C3037fb3c5aa291De6F618834',
+  vaultAssetIndex: 1n,
+  manageCycleIntervalMs: 600000,
+  vaultCapInUnderlying: 1_000_000_000_000_000_000n, // 1 WETH
+  maxBuyingPowerUsageBps: 6600,
+  chainId: SEPOLIA_CHAIN_ID,
+  hypoVaultAddress: SEPOLIA_HYPOVAULT_ADDRESSES.wethPlpVault,
   addresses: {
-    ethUsdc500bpsV4Collateral0: '0x4d2579A5F9BC32641D6AdbFC47C6dAceF30027F1',
-    ethUsdc500bpsV4PanopticPool: '0x5D44F6574B8dE88ffa2CCAEba0B07aD3C204571E',
-    hypoVaultManagerWithMerkleVerification: '0xe675A002d7f8C9476Ebf3706550b80221BA2AE5E',
-    hypoVault: '0x225Bf020d280E98C3037fb3c5aa291De6F618834',
+    ethUsdc500bpsV4Collateral0: SEPOLIA_PANOPTIC_POOL_ADDRESSES.collateralTracker0,
+    ethUsdc500bpsV4PanopticPool: SEPOLIA_PANOPTIC_POOL_ADDRESSES.panopticPool,
+    hypoVaultManagerWithMerkleVerification: SEPOLIA_HYPOVAULT_MANAGER_ADDRESSES.wethPlpVaultManager,
+    hypoVault: SEPOLIA_HYPOVAULT_ADDRESSES.wethPlpVault,
     underlyingToken: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
+  },
+  manualTxDefaults: {
+    collateralAllocations: [
+      {
+        trackerAddress: SEPOLIA_PANOPTIC_POOL_ADDRESSES.collateralTracker0,
+        allocationBps: 10000,
+      },
+    ],
+  },
+  deltaHedge: {
+    maxHedgeSlots: 12,
   },
 }

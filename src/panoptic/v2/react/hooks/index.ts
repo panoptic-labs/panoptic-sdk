@@ -20,6 +20,7 @@ export {
   useFactoryConstructMetadata,
   useFactoryOwnerOf,
   useFactoryTokenURI,
+  useInterestState,
   useIsLiquidatable,
   useLiquidationPrices,
   useMarginBuffer,
@@ -28,6 +29,7 @@ export {
   useMinePoolAddress,
   useNativeTokenPrice,
   useNetLiquidationValue,
+  useNetLiquidationValues,
   useOpenPositionPreview,
   useOptimizeRiskPartners,
   useOracleState,
@@ -38,6 +40,7 @@ export {
   usePositionGreeks,
   usePositions,
   usePositionsWithPremia,
+  usePreviewBorrow,
   usePreviewDeposit,
   usePreviewMint,
   usePreviewRedeem,
@@ -45,21 +48,31 @@ export {
   usePriceHistory,
   useRealizedPnL,
   useRequiredCreditForITM,
+  useResolveUniswapV4PoolKey,
   useRiskParameters,
   useSafeMode,
+  useScanChunks,
   useSimulateDeployNewPool,
   useStreamiaHistory,
   useSyncStatus,
   useTrackedPositionIds,
   useTradeHistory,
   useUniswapFeeHistory,
+  useUniswapV3PoolInfo,
+  useUniswapV3PoolLiquidities,
+  useUniswapV4PoolBasicState,
+  useUniswapV4PoolInfo,
+  useUniswapV4PoolLiquidities,
   useUtilization,
+  useValidateBuilderCode,
 } from './reads'
 
 // Write hooks
 export {
   useApprove,
   useApprovePool,
+  useBatchDispatch,
+  useBorrow,
   useClosePosition,
   useDeployNewPool,
   useDeposit,
@@ -70,14 +83,23 @@ export {
   useOpenPosition,
   usePokeOracle,
   useRedeem,
+  useRepay,
   useRollPosition,
   useSettleAccumulatedPremia,
+  useSmartRepay,
+  useSupply,
+  useSwapExactIn,
+  useSwapExactOut,
+  useUnsupply,
+  useUnwrapXstock,
   useWithdraw,
   useWithdrawWithPositions,
+  useWrapXstock,
 } from './writes'
 
 // Simulation hooks
 export {
+  useSimulateBatchDispatch,
   useSimulateClosePosition,
   useSimulateDeposit,
   useSimulateDispatch,
@@ -87,8 +109,32 @@ export {
   useSimulateSettle,
   useSimulateSFPMBurn,
   useSimulateSFPMMint,
+  useSimulateSwapExactIn,
+  useSimulateSwapExactOut,
   useSimulateWithdraw,
 } from './simulations'
+
+// Uniswap v4 router swap hooks
+export {
+  useApproveErc20ForPermit2,
+  useApproveRouterViaPermit2,
+  useCheckRouterApproval,
+  useQuoteSwapExactInViaRouter,
+  useQuoteSwapExactOutViaRouter,
+  useSwapExactInViaRouter,
+  useSwapExactOutViaRouter,
+} from './uniswapRouter'
+
+// CoW Swap order-book hooks
+export {
+  isCowSupportedChain,
+  useApproveErc20ForCow,
+  useCancelCowOrder,
+  useCheckCowApproval,
+  useCowOrderStatus,
+  useQuoteCowSwap,
+  useSubmitCowOrder,
+} from './cowSwap'
 
 // Sync hooks
 export {
@@ -100,4 +146,9 @@ export {
 } from './sync'
 
 // Event hooks
-export { useEventPoller, useEventSubscription, useWatchEvents } from './events'
+export {
+  useEventPoller,
+  useEventSubscription,
+  useTxEventConfirmation,
+  useWatchEvents,
+} from './events'

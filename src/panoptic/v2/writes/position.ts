@@ -3,9 +3,10 @@
  * @module v2/writes/position
  */
 
-import type { Address, PublicClient, WalletClient } from 'viem'
+import type { Address, Hex, PublicClient, WalletClient } from 'viem'
+import { encodeFunctionData } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { InvalidTickLimitsError, MissingPositionIdsError } from '../errors'
 import type { StorageAdapter } from '../storage'
 import { getPositionsKey, jsonSerializer } from '../storage'
@@ -190,7 +191,7 @@ export async function openPosition(params: OpenPositionParams): Promise<TxResult
     walletClient,
     account,
     address: poolAddress,
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: 'dispatch',
     args: [
       positionIdList,
@@ -202,6 +203,67 @@ export async function openPosition(params: OpenPositionParams): Promise<TxResult
     ],
     txOverrides,
   })
+}
+
+/**
+ * Build the dispatch calldata for opening a position without executing.
+ * Returns the target address and encoded calldata, suitable for manual
+ * transaction construction (e.g. RFQ broadcast-reconstruct flow).
+ *
+ * @param params - Position parameters (existingPositionIds required, no storage resolution)
+ * @returns { to, data } — contract address and encoded dispatch calldata
+ */
+export function buildOpenPositionCalldata(params: {
+  poolAddress: Address
+  existingPositionIds: bigint[]
+  tokenId: bigint
+  positionSize: bigint
+  tickLimitLow: bigint
+  tickLimitHigh: bigint
+  spreadLimit?: bigint
+  swapAtMint?: boolean
+  usePremiaAsCollateral?: boolean
+  builderCode?: bigint
+}): { to: Address; data: Hex } {
+  const {
+    poolAddress,
+    existingPositionIds,
+    tokenId,
+    positionSize,
+    tickLimitLow,
+    tickLimitHigh,
+    spreadLimit = 0n,
+    swapAtMint = false,
+    usePremiaAsCollateral = false,
+    builderCode = 0n,
+  } = params
+
+  if (tickLimitLow > tickLimitHigh) {
+    throw new InvalidTickLimitsError(tickLimitLow, tickLimitHigh)
+  }
+
+  const positionIdList = [tokenId]
+  const finalPositionIdList = [...existingPositionIds, tokenId]
+  const positionSizes = [positionSize]
+
+  const tickLimits: readonly [number, number, number] = swapAtMint
+    ? [Number(tickLimitHigh), Number(tickLimitLow), Number(spreadLimit)]
+    : [Number(tickLimitLow), Number(tickLimitHigh), Number(spreadLimit)]
+
+  const data = encodeFunctionData({
+    abi: panopticPoolV2Abi,
+    functionName: 'dispatch',
+    args: [
+      positionIdList,
+      finalPositionIdList,
+      positionSizes,
+      [tickLimits],
+      usePremiaAsCollateral,
+      builderCode,
+    ],
+  })
+
+  return { to: poolAddress, data }
 }
 
 /**
@@ -326,7 +388,7 @@ export async function closePosition(params: ClosePositionParams): Promise<TxResu
     walletClient,
     account,
     address: poolAddress,
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: 'dispatch',
     args: [[tokenId], finalPositionIdList, [0n], [tickLimits], usePremiaAsCollateral, builderCode],
     txOverrides,
@@ -471,7 +533,7 @@ export async function rollPosition(params: RollPositionParams): Promise<TxResult
     walletClient,
     account,
     address: poolAddress,
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: 'dispatch',
     args: [
       positionIdList,

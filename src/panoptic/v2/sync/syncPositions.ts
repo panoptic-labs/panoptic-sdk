@@ -6,16 +6,14 @@
 import type { Address, Hash, PublicClient } from 'viem'
 
 import { isRetryableRpcError } from '../bot'
-import { PositionSnapshotNotFoundError, ProviderLagError, SyncTimeoutError } from '../errors'
+import { ProviderLagError, SyncTimeoutError } from '../errors'
 import { getPoolMetadata } from '../reads/pool'
 import { getPositions } from '../reads/position'
 import type { StorageAdapter } from '../storage'
 import { getPoolMetaKey, getPositionMetaKey, getPositionsKey, jsonSerializer } from '../storage'
-import type { StoredPoolMeta, StoredPositionData, SyncEvent } from '../types'
-import { REORG_DEPTH } from '../utils/constants'
-import { getPoolDeploymentBlock, reconstructFromEvents } from './eventReconstruction'
-import { calculateResyncBlock, detectReorg, loadCheckpoint, saveCheckpoint } from './reorgHandling'
-import { decodeDispatchCalldata, recoverSnapshot } from './snapshotRecovery'
+import type { StoredPoolMeta, StoredPositionData } from '../types'
+import { getOpenPositionIds } from './getTrackedPositionIds'
+import { detectReorg, loadCheckpoint, saveCheckpoint } from './reorgHandling'
 
 /**
  * Parameters for syncPositions.
@@ -106,7 +104,6 @@ export async function syncPositions(params: SyncPositionsParams): Promise<SyncPo
     poolAddress,
     account,
     storage,
-    maxLogsPerQuery = 10000n,
     syncTimeout = 300000n, // 5 minutes
     onUpdate,
     minBlockNumber,
@@ -115,17 +112,10 @@ export async function syncPositions(params: SyncPositionsParams): Promise<SyncPo
 
   const startTime = Date.now()
 
-  // Track progress for timeout errors
-  let lastProcessedBlock = 0n
-  let targetBlockForTimeout = 0n
-
-  // Check for timeout
   const checkTimeout = () => {
     const elapsed = BigInt(Date.now() - startTime)
     if (elapsed > syncTimeout) {
-      const blocksRemaining =
-        targetBlockForTimeout > lastProcessedBlock ? targetBlockForTimeout - lastProcessedBlock : 0n
-      throw new SyncTimeoutError(elapsed, lastProcessedBlock, blocksRemaining)
+      throw new SyncTimeoutError(elapsed, toBlock, 0n)
     }
   }
 
@@ -138,16 +128,9 @@ export async function syncPositions(params: SyncPositionsParams): Promise<SyncPo
     throw new ProviderLagError(minBlockNumber, latestBlock)
   }
 
-  // Load existing checkpoint
+  // Reorg detection using existing checkpoint
   const checkpoint = await loadCheckpoint(storage, chainId, poolAddress, account)
-
-  let positionIds: bigint[] = []
-  let fromBlock: bigint
-  let incremental = false
-  let skipEventScan = false
-
   if (checkpoint) {
-    // Check for reorg
     const reorgResult = await detectReorg({
       client,
       chainId,
@@ -157,31 +140,43 @@ export async function syncPositions(params: SyncPositionsParams): Promise<SyncPo
     })
 
     if (reorgResult.detected) {
-      // Notify about reorg
       onUpdate?.({
         type: 'reorg-detected',
         blockNumber: reorgResult.reorgBlock ?? 0n,
       })
-
-      // Roll back and resync from safe block
-      fromBlock = calculateResyncBlock(checkpoint.lastBlock, REORG_DEPTH)
-      positionIds = [] // Clear positions, will re-discover
-
-      // If we rolled back to 0, do a full scan
-      if (fromBlock === 0n) {
-        const deploymentBlock = await getPoolDeploymentBlock(client, poolAddress)
-        fromBlock = deploymentBlock ?? 0n
-      }
-    } else {
-      // Incremental sync from last checkpoint
-      fromBlock = checkpoint.lastBlock + 1n
-      positionIds = [...checkpoint.positionIds]
-      incremental = true
     }
+  }
+
+  checkTimeout()
+
+  // Get authoritative position IDs from latest dispatch calldata.
+  // When resuming from a checkpoint, narrow the event scan window to avoid
+  // re-scanning the entire chain history on every incremental sync.
+  // Returns null when no dispatch event was found in the scanned range,
+  // or [] when a dispatch was found with an empty position list.
+  const snapshotResult = await getOpenPositionIds({
+    client,
+    chainId,
+    poolAddress,
+    account,
+    storage,
+    lastDispatchTxHash: snapshotTxHash,
+    fromBlock: checkpoint?.lastBlock ?? params.fromBlock,
+  })
+
+  // If no dispatch events were found in the scanned range (null) but the
+  // checkpoint had positions, the user simply hasn't traded since the last
+  // sync — keep the cached list. An explicit empty array means a dispatch
+  // was found that authoritatively shows zero open positions.
+  let positionIds: bigint[]
+  if (snapshotResult === null && checkpoint && checkpoint.positionIds.length > 0) {
+    positionIds = checkpoint.positionIds
   } else {
-    // No checkpoint - need to do initial sync
-    // First, quick check if account has ANY position events at all
-    // This is fast because 'recipient' is indexed
+    positionIds = snapshotResult ?? []
+  }
+
+  // If no positions and no history, save empty checkpoint and return early
+  if (positionIds.length === 0) {
     const hasAnyEvents = await accountHasPositionEvents({
       client,
       poolAddress,
@@ -191,11 +186,8 @@ export async function syncPositions(params: SyncPositionsParams): Promise<SyncPo
     })
 
     if (!hasAnyEvents) {
-      // Account has never had any positions - short circuit
-      // Save empty checkpoint at current block and return immediately
       const finalBlock = await client.getBlock({ blockNumber: toBlock })
 
-      // Store pool metadata if not already stored
       const poolMetaKey = getPoolMetaKey(chainId, poolAddress)
       const existingPoolMeta = await storage.get(poolMetaKey)
       if (!existingPoolMeta) {
@@ -215,132 +207,18 @@ export async function syncPositions(params: SyncPositionsParams): Promise<SyncPo
       const positionsKey = getPositionsKey(chainId, poolAddress, account)
       await storage.set(positionsKey, jsonSerializer.stringify([]))
 
-      const endTime = Date.now()
       return {
         lastSyncedBlock: toBlock,
         lastSyncedBlockHash: finalBlock.hash,
         positionCount: 0n,
         positionIds: [],
         incremental: false,
-        durationMs: BigInt(endTime - startTime),
+        durationMs: BigInt(Date.now() - startTime),
       }
-    }
-
-    // Try snapshot recovery first (finds most recent dispatch calldata)
-    const snapshot = await recoverSnapshot({
-      client,
-      poolAddress,
-      account,
-      fromBlock: params.fromBlock,
-      toBlock,
-    })
-
-    if (snapshot) {
-      // Snapshot from the most recent dispatch is authoritative —
-      // finalPositionIdList IS the current open position set.
-      // No event scan needed since recoverSnapshot already searched
-      // all events up to toBlock and found the most recent one.
-      positionIds = snapshot.positionIds
-      fromBlock = snapshot.blockNumber + 1n
-      skipEventScan = true
-    } else if (snapshotTxHash) {
-      // Manual snapshot tx hash provided - decode via shared helper
-      try {
-        const tx = await client.getTransaction({ hash: snapshotTxHash })
-        const decoded = decodeDispatchCalldata(tx.input)
-
-        if (!decoded) {
-          throw new PositionSnapshotNotFoundError()
-        }
-
-        positionIds = decoded.positionIds
-        const block = await client.getBlock({
-          blockNumber: tx.blockNumber ?? 0n,
-        })
-        fromBlock = (tx.blockNumber ?? 0n) + 1n
-
-        // Save initial checkpoint from manual snapshot
-        await saveCheckpoint({
-          storage,
-          chainId,
-          poolAddress,
-          account,
-          lastBlock: tx.blockNumber ?? 0n,
-          lastBlockHash: block.hash,
-          positionIds,
-        })
-      } catch (error) {
-        if (error instanceof PositionSnapshotNotFoundError) {
-          throw error
-        }
-        throw new PositionSnapshotNotFoundError(error instanceof Error ? error : undefined)
-      }
-    } else {
-      // No snapshot found - fall back to full event reconstruction
-      const deploymentBlock =
-        params.fromBlock ?? (await getPoolDeploymentBlock(client, poolAddress))
-      fromBlock = deploymentBlock ?? 0n
     }
   }
 
-  // If we need to sync (fromBlock <= toBlock) and snapshot wasn't already authoritative
-  if (!skipEventScan && fromBlock <= toBlock) {
-    // Update tracking for timeout errors
-    targetBlockForTimeout = toBlock
-    lastProcessedBlock = fromBlock
-
-    checkTimeout()
-
-    // Scan events incrementally
-    const result = await reconstructFromEvents({
-      client,
-      poolAddress,
-      account,
-      fromBlock,
-      toBlock,
-      batchSize: maxLogsPerQuery,
-      onProgress: (event: SyncEvent) => {
-        lastProcessedBlock = event.currentBlock
-        checkTimeout()
-        onUpdate?.({
-          type: 'progress',
-          blockNumber: event.currentBlock,
-          progress: {
-            current: event.currentBlock - fromBlock,
-            total: toBlock - fromBlock + 1n,
-          },
-        })
-      },
-    })
-
-    // Merge with existing positions
-    // Open positions: add new, keep existing that aren't in closed
-    const closedSet = new Set(result.closedPositions.map((id) => id.toString()))
-
-    // Filter out closed positions from existing
-    positionIds = positionIds.filter((id) => !closedSet.has(id.toString()))
-
-    // Add newly opened positions
-    for (const newId of result.openPositions) {
-      if (!positionIds.some((id) => id === newId)) {
-        positionIds.push(newId)
-        onUpdate?.({
-          type: 'position-opened',
-          tokenId: newId,
-          blockNumber: result.lastBlock,
-        })
-      }
-    }
-
-    // Notify about closed positions
-    for (const closedId of result.closedPositions) {
-      onUpdate?.({
-        type: 'position-closed',
-        tokenId: closedId,
-        blockNumber: result.lastBlock,
-      })
-    }
-  }
+  checkTimeout()
 
   // Get final block info
   const finalBlock = await client.getBlock({ blockNumber: toBlock })
@@ -362,7 +240,6 @@ export async function syncPositions(params: SyncPositionsParams): Promise<SyncPo
       blockNumber: toBlock,
     })
 
-    // Store each position's immutable data
     for (const pos of positions) {
       const positionMetaKey = getPositionMetaKey(chainId, poolAddress, pos.tokenId)
       const storedData: StoredPositionData = {
@@ -395,21 +272,20 @@ export async function syncPositions(params: SyncPositionsParams): Promise<SyncPo
   const positionsKey = getPositionsKey(chainId, poolAddress, account)
   await storage.set(positionsKey, jsonSerializer.stringify(positionIds))
 
-  const endTime = Date.now()
-
   return {
     lastSyncedBlock: toBlock,
     lastSyncedBlockHash: finalBlock.hash,
     positionCount: BigInt(positionIds.length),
     positionIds,
-    incremental,
-    durationMs: BigInt(endTime - startTime),
+    incremental: !!checkpoint,
+    durationMs: BigInt(Date.now() - startTime),
   }
 }
 
 /**
- * Quick check if an account has ANY position events (OptionMinted or OptionBurnt).
- * This is fast because 'recipient' is indexed.
+ * Quick check if an account has ANY position events.
+ * Checks OptionMinted, OptionBurnt, ForcedExercised (user), and AccountLiquidated (liquidatee).
+ * All checked fields are indexed so this is fast.
  *
  * **Warning:** RPC index lag can cause false negatives for recently minted positions.
  * If the RPC node's event index is behind the chain tip, this function may return
@@ -429,9 +305,7 @@ async function accountHasPositionEvents(params: {
 }): Promise<boolean> {
   const { client, poolAddress, account, fromBlock = 0n, toBlock } = params
 
-  // Query with limit: 1 to check existence quickly
-  // Check OptionMinted events first (most common for accounts with positions)
-  const [mintEvents, burnEvents] = await Promise.all([
+  const [mintEvents, burnEvents, forceExerciseEvents, liquidationEvents] = await Promise.all([
     withRetry(() =>
       client.getLogs({
         address: poolAddress,
@@ -471,9 +345,53 @@ async function accountHasPositionEvents(params: {
         toBlock,
       }),
     ),
+    withRetry(() =>
+      client.getLogs({
+        address: poolAddress,
+        event: {
+          type: 'event',
+          name: 'ForcedExercised',
+          inputs: [
+            { type: 'address', name: 'exercisor', indexed: true },
+            { type: 'address', name: 'user', indexed: true },
+            { type: 'uint256', name: 'tokenId', indexed: true },
+            { type: 'int256', name: 'exerciseFee', indexed: false },
+          ],
+        },
+        args: {
+          user: account,
+        },
+        fromBlock,
+        toBlock,
+      }),
+    ),
+    withRetry(() =>
+      client.getLogs({
+        address: poolAddress,
+        event: {
+          type: 'event',
+          name: 'AccountLiquidated',
+          inputs: [
+            { type: 'address', name: 'liquidator', indexed: true },
+            { type: 'address', name: 'liquidatee', indexed: true },
+            { type: 'int256', name: 'bonusAmounts', indexed: false },
+          ],
+        },
+        args: {
+          liquidatee: account,
+        },
+        fromBlock,
+        toBlock,
+      }),
+    ),
   ])
 
-  return mintEvents.length > 0 || burnEvents.length > 0
+  return (
+    mintEvents.length > 0 ||
+    burnEvents.length > 0 ||
+    forceExerciseEvents.length > 0 ||
+    liquidationEvents.length > 0
+  )
 }
 
 /**
@@ -488,14 +406,9 @@ async function fetchAndStorePoolMeta(
 ): Promise<void> {
   const metadata = await getPoolMetadata({ client, poolAddress })
 
-  // Parse tickSpacing and fee from poolKeyBytes
-  const hex = metadata.poolKeyBytes.slice(2)
-  const fee = BigInt(`0x${hex.slice(128, 192)}`)
-  const tickSpacing = BigInt(`0x${hex.slice(192, 256)}`)
-
   const poolMeta: StoredPoolMeta = {
-    tickSpacing,
-    fee,
+    tickSpacing: metadata.tickSpacing,
+    fee: metadata.fee,
     poolId: metadata.poolId,
     collateralToken0Address: metadata.collateralToken0Address,
     collateralToken1Address: metadata.collateralToken1Address,

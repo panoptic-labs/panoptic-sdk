@@ -317,4 +317,9 @@ export const queryKeys = {
       account,
       tokenId.toString(),
     ] as const,
+  /**
+   * Key for interest state (per-user borrows).
+   */
+  interestState: (chainId: bigint, poolAddress: Address, account: Address) =>
+    [...queryKeys.all, 'interestState', chainId.toString(), poolAddress, account] as const,
 } as const

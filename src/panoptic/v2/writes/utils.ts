@@ -6,7 +6,7 @@
 import type { Abi, Address, Hash, Log, PublicClient, WalletClient } from 'viem'
 import { decodeEventLog, encodeFunctionData } from 'viem'
 
-import { collateralTrackerAbi, panopticPoolAbi } from '../../../generated'
+import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import type { PanopticEvent, TxOverrides, TxReceipt, TxResult } from '../types'
 
 /**
@@ -116,7 +116,7 @@ export function parsePanopticEvents(logs: Log[]): PanopticEvent[] {
     try {
       // Try PanopticPool events
       const poolEvent = decodeEventLog({
-        abi: panopticPoolAbi,
+        abi: panopticPoolV2Abi,
         data: log.data,
         topics: log.topics,
       })
@@ -215,7 +215,7 @@ export function parsePanopticEvents(logs: Log[]): PanopticEvent[] {
       // Not a PanopticPool event, try CollateralTracker
       try {
         const collateralEvent = decodeEventLog({
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           data: log.data,
           topics: log.topics,
         })

@@ -50,6 +50,8 @@ export interface SafeModeState {
   canForceExercise: boolean
   /** Whether liquidations are allowed */
   canLiquidate: boolean
+  /** Whether swapAtMint is allowed (false for NO_SWAP level 2+) */
+  canSwapAtMint: boolean
   /** Reason for current safe mode (if not normal) */
   reason?: string
   /** Block metadata */

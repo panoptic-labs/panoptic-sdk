@@ -105,6 +105,12 @@ export interface GetOpenPositionIdsParams {
    * scanning events to find the most recent dispatch.
    */
   lastDispatchTxHash?: Hash
+  /**
+   * Starting block for event scanning in recoverSnapshot.
+   * When set, limits the getLogs window to [fromBlock, latest] instead of
+   * scanning from block 0. Use the checkpoint's lastBlock for incremental syncs.
+   */
+  fromBlock?: bigint
 }
 
 /**
@@ -121,10 +127,12 @@ export interface GetOpenPositionIdsParams {
  * If `storage` is provided, the local cache is updated with the result.
  *
  * @param params - Query parameters
- * @returns Array of currently open position token IDs
+ * @returns Array of currently open position token IDs, or null if no snapshot was found
  */
-export async function getOpenPositionIds(params: GetOpenPositionIdsParams): Promise<bigint[]> {
-  const { client, chainId, poolAddress, account, storage, lastDispatchTxHash } = params
+export async function getOpenPositionIds(
+  params: GetOpenPositionIdsParams,
+): Promise<bigint[] | null> {
+  const { client, chainId, poolAddress, account, storage, lastDispatchTxHash, fromBlock } = params
 
   // Fast path: decode directly from a known tx hash (O(1), no event scanning)
   // Falls back to full event-scanning recovery if the fast path returns null or throws
@@ -144,11 +152,11 @@ export async function getOpenPositionIds(params: GetOpenPositionIdsParams): Prom
   }
 
   if (!snapshot) {
-    snapshot = await recoverSnapshot({ client, poolAddress, account })
+    snapshot = await recoverSnapshot({ client, poolAddress, account, fromBlock })
   }
 
   if (!snapshot) {
-    return []
+    return null
   }
 
   // Update local cache if storage provided

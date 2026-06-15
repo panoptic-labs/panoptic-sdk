@@ -3,6 +3,11 @@
  * @module v2/simulations
  */
 
+export {
+  type SimulateBatchDispatchParams,
+  type SimulateBatchDispatchResult,
+  simulateBatchDispatch,
+} from './simulateBatchDispatch'
 export { type SimulateClosePositionParams, simulateClosePosition } from './simulateClosePosition'
 export { type SimulateDispatchParams, simulateDispatch } from './simulateDispatch'
 export { type SimulateForceExerciseParams, simulateForceExercise } from './simulateForceExercise'
@@ -21,9 +26,19 @@ export {
   type SFPMSimulationResult,
   type SimulateSFPMParams,
   encodePoolKeyBytes,
+  encodeV3PoolKeyBytes,
   simulateSFPMBurn,
   simulateSFPMMint,
 } from './sfpm'
+
+// Swap simulations
+export {
+  type SimulateSwapExactInParams,
+  type SimulateSwapExactOutParams,
+  type SwapSimulation,
+  simulateSwapExactIn,
+  simulateSwapExactOut,
+} from './simulateSwap'
 
 // Token flow utilities (uses PanopticPool.multicall + getAssetsOf)
 export {

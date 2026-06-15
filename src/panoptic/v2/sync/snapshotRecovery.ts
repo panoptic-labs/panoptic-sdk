@@ -3,10 +3,10 @@
  * @module v2/sync/snapshotRecovery
  */
 
-import type { Address, Hash, PublicClient } from 'viem'
-import { decodeFunctionData } from 'viem'
+import type { AbiFunction, Address, Hash, PublicClient } from 'viem'
+import { decodeFunctionData, toFunctionSelector } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 
 /**
  * Parameters for recovering position snapshot from dispatch calldata.
@@ -64,8 +64,13 @@ export async function recoverSnapshot(
   // Strategy: Look for OptionMinted or OptionBurnt events to find transactions,
   // then decode the transaction input to get the full position list
 
-  // Get recent events for this account
-  const [mintEvents, burnEvents] = await Promise.all([
+  // Get recent events for this account.
+  // OptionMinted/OptionBurnt cover the account's own dispatches.
+  // ForcedExercised/AccountLiquidated cover third-party dispatchFrom calls
+  // (liquidations and force exercises) where the tx sender is NOT the account
+  // but the calldata contains the account's positionIdListToFinal.
+  const searchFromBlock = params.fromBlock ?? 0n
+  const [mintEvents, burnEvents, forceExerciseEvents, liquidationEvents] = await Promise.all([
     client.getLogs({
       address: poolAddress,
       event: {
@@ -80,7 +85,7 @@ export async function recoverSnapshot(
       args: {
         recipient: account,
       },
-      fromBlock: params.fromBlock ?? 0n,
+      fromBlock: searchFromBlock,
       toBlock: latestBlock,
     }),
     client.getLogs({
@@ -98,13 +103,53 @@ export async function recoverSnapshot(
       args: {
         recipient: account,
       },
-      fromBlock: params.fromBlock ?? 0n,
+      fromBlock: searchFromBlock,
+      toBlock: latestBlock,
+    }),
+    client.getLogs({
+      address: poolAddress,
+      event: {
+        type: 'event',
+        name: 'ForcedExercised',
+        inputs: [
+          { type: 'address', name: 'exercisor', indexed: true },
+          { type: 'address', name: 'user', indexed: true },
+          { type: 'uint256', name: 'tokenId', indexed: true },
+          { type: 'int256', name: 'exerciseFee', indexed: false },
+        ],
+      },
+      args: {
+        user: account,
+      },
+      fromBlock: searchFromBlock,
+      toBlock: latestBlock,
+    }),
+    client.getLogs({
+      address: poolAddress,
+      event: {
+        type: 'event',
+        name: 'AccountLiquidated',
+        inputs: [
+          { type: 'address', name: 'liquidator', indexed: true },
+          { type: 'address', name: 'liquidatee', indexed: true },
+          { type: 'int256', name: 'bonusAmounts', indexed: false },
+        ],
+      },
+      args: {
+        liquidatee: account,
+      },
+      fromBlock: searchFromBlock,
       toBlock: latestBlock,
     }),
   ])
 
   // Combine and sort by block number (descending) to get most recent first
-  const allEvents = [...mintEvents, ...burnEvents].sort((a, b) => {
+  const allEvents = [
+    ...mintEvents,
+    ...burnEvents,
+    ...forceExerciseEvents,
+    ...liquidationEvents,
+  ].sort((a, b) => {
     const blockDiff = Number(b.blockNumber - a.blockNumber)
     if (blockDiff !== 0) return blockDiff
     return Number(b.logIndex - a.logIndex)
@@ -251,9 +296,21 @@ export interface DispatchCalldata {
  * @returns Decoded dispatch data or null if not a dispatch call
  */
 export function decodeDispatchCalldata(input: `0x${string}`): DispatchCalldata | null {
+  // Try direct dispatch/dispatchFrom first
+  const direct = decodeDirectDispatch(input)
+  if (direct) return direct
+
+  // Try unwrapping smart contract wallet wrappers (executeBatch, execute)
+  return decodeWrappedDispatch(input)
+}
+
+/**
+ * Try to decode input as a direct dispatch or dispatchFrom call.
+ */
+function decodeDirectDispatch(input: `0x${string}`): DispatchCalldata | null {
   try {
     const decoded = decodeFunctionData({
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       data: input,
     })
 
@@ -281,4 +338,57 @@ export function decodeDispatchCalldata(input: `0x${string}`): DispatchCalldata |
   } catch {
     return null
   }
+}
+
+/**
+ * 4-byte function selectors for dispatch/dispatchFrom, derived from the generated ABI.
+ * Used for scanning raw calldata inside smart contract wallet wrappers.
+ */
+const DISPATCH_SELECTOR = toFunctionSelector(
+  panopticPoolV2Abi.find((e) => e.type === 'function' && e.name === 'dispatch') as AbiFunction,
+).slice(2) // strip 0x prefix for hex scanning
+
+const DISPATCH_FROM_SELECTOR = toFunctionSelector(
+  panopticPoolV2Abi.find((e) => e.type === 'function' && e.name === 'dispatchFrom') as AbiFunction,
+).slice(2)
+
+/**
+ * Scan raw transaction input for embedded dispatch calldata.
+ *
+ * Smart contract wallets (Safe, Turnkey, ERC-4337) and vault managers
+ * wrap dispatch calls inside executeBatch → manage → dispatch chains.
+ * Instead of decoding each wrapper layer, we scan the raw hex for the
+ * dispatch function selector and attempt to decode from that offset.
+ *
+ * This handles arbitrary nesting depth without knowing wrapper ABIs.
+ */
+function decodeWrappedDispatch(input: `0x${string}`): DispatchCalldata | null {
+  const hex = input.slice(2).toLowerCase()
+  const selectors = [DISPATCH_SELECTOR, DISPATCH_FROM_SELECTOR]
+
+  // Single left-to-right pass: find the earliest selector match at each offset,
+  // collect all successful decodes, and return the last one (deepest nesting).
+  const results: DispatchCalldata[] = []
+  let offset = 0
+
+  while (offset < hex.length) {
+    // Find the nearest selector match from current offset
+    let earliestIdx = -1
+    for (const selector of selectors) {
+      const idx = hex.indexOf(selector, offset)
+      if (idx !== -1 && (earliestIdx === -1 || idx < earliestIdx)) {
+        earliestIdx = idx
+      }
+    }
+    if (earliestIdx === -1) break
+
+    const candidate = `0x${hex.slice(earliestIdx)}` as `0x${string}`
+    const result = decodeDirectDispatch(candidate)
+    if (result) results.push(result)
+
+    offset = earliestIdx + 8 // Move past this selector
+  }
+
+  // Return the last successful decode (innermost / deepest nested call)
+  return results.length > 0 ? results[results.length - 1] : null
 }

@@ -5,7 +5,7 @@
 
 import type { Address, PublicClient, WalletClient } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { OracleRateLimitedError } from '../errors'
 import type { TxOverrides, TxReceipt, TxResult } from '../types'
 import { submitWrite } from './utils'
@@ -58,7 +58,7 @@ export async function pokeOracle(params: PokeOracleParams): Promise<TxResult> {
     const [oracleData, block] = await Promise.all([
       client.readContract({
         address: poolAddress,
-        abi: panopticPoolAbi,
+        abi: panopticPoolV2Abi,
         functionName: 'getOracleTicks',
       }),
       client.getBlock(),
@@ -83,7 +83,7 @@ export async function pokeOracle(params: PokeOracleParams): Promise<TxResult> {
     walletClient,
     account,
     address: poolAddress,
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: 'pokeOracle',
     args: [],
     txOverrides,

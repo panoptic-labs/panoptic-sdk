@@ -40,10 +40,11 @@ function createMockClients() {
 }
 
 describe('deployNewPool', () => {
-  it('should call writeContract with factory ABI and return TxResult', async () => {
+  it('should call writeContract with v4 ABI and poolKey args', async () => {
     const { publicClient, walletClient } = createMockClients()
 
     const result = await deployNewPool({
+      version: 'v4',
       client: publicClient,
       walletClient,
       account: MOCK_ACCOUNT,
@@ -59,6 +60,41 @@ describe('deployNewPool', () => {
       expect.objectContaining({
         address: MOCK_FACTORY,
         functionName: 'deployNewPool',
+        args: [
+          expect.objectContaining({
+            currency0: MOCK_POOL_KEY.currency0,
+            currency1: MOCK_POOL_KEY.currency1,
+          }),
+          MOCK_RISK_ENGINE,
+          42n,
+        ],
+      }),
+    )
+  })
+
+  it('should call writeContract with v3 ABI and token/fee args', async () => {
+    const { publicClient, walletClient } = createMockClients()
+
+    const result = await deployNewPool({
+      version: 'v3',
+      client: publicClient,
+      walletClient,
+      account: MOCK_ACCOUNT,
+      factoryAddress: MOCK_FACTORY,
+      token0: MOCK_POOL_KEY.currency0,
+      token1: MOCK_POOL_KEY.currency1,
+      fee: 500n,
+      riskEngine: MOCK_RISK_ENGINE,
+      salt: 42n,
+    })
+
+    expect(result.hash).toBe(MOCK_HASH)
+    expect(typeof result.wait).toBe('function')
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: MOCK_FACTORY,
+        functionName: 'deployNewPool',
+        args: [MOCK_POOL_KEY.currency0, MOCK_POOL_KEY.currency1, 500n, MOCK_RISK_ENGINE, 42n],
       }),
     )
   })

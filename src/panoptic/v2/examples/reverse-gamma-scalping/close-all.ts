@@ -34,12 +34,13 @@ async function main() {
   )
 
   // Get open positions from last dispatch tx (fast — ~2 RPC calls)
-  const openIds = await getOpenPositionIds({
-    client,
-    chainId: CHAIN_ID,
-    poolAddress: env.poolAddress,
-    account: account.address,
-  })
+  const openIds =
+    (await getOpenPositionIds({
+      client,
+      chainId: CHAIN_ID,
+      poolAddress: env.poolAddress,
+      account: account.address,
+    })) ?? []
 
   if (openIds.length === 0) {
     console.log('\nNo open positions. Nothing to close.')

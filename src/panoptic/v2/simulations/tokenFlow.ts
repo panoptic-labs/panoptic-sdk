@@ -15,7 +15,7 @@ import {
   encodeFunctionData,
 } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { panopticErrorsAbi } from '../errors/errorsAbi'
 
 /**
@@ -88,6 +88,20 @@ export interface SimulateWithTokenFlowParams {
   callData: Hex
   /** Optional block number for simulation */
   blockNumber?: bigint
+  /**
+   * Optional additional encoded calls to append after the 5-call pattern.
+   * These execute post-dispatch within the same multicall (same state).
+   * Raw encoded bytes are returned in `postCallResults`.
+   */
+  postCallData?: Hex[]
+  /**
+   * Optional additional encoded calls to insert between the pre-dispatch
+   * `getAssetsOf` / `getCurrentTick` and the target call. These execute
+   * pre-dispatch within the same multicall — useful for reading per-position
+   * data (e.g. `getFullPositionsData`) against the original `positionIdList`
+   * before state mutates. Raw encoded bytes are returned in `preCallResults`.
+   */
+  preCallData?: Hex[]
 }
 
 /**
@@ -104,6 +118,10 @@ export interface SimulateWithTokenFlowResult {
   rawError?: Error
   /** Gas estimate for the inner call */
   gasEstimate: bigint
+  /** Raw results from postCallData entries (only if success and postCallData was provided) */
+  postCallResults?: Hex[]
+  /** Raw results from preCallData entries (only if success and preCallData was provided) */
+  preCallResults?: Hex[]
 }
 
 /**
@@ -131,7 +149,7 @@ export interface SimulateWithTokenFlowResult {
  * @example
  * ```typescript
  * const callData = encodeFunctionData({
- *   abi: panopticPoolAbi,
+ *   abi: panopticPoolV2Abi,
  *   functionName: 'dispatch',
  *   args: [positionIdList, finalPositionIdList, positionSizes, tickAndSpreadLimits, false, 0n],
  * })
@@ -152,7 +170,7 @@ export interface SimulateWithTokenFlowResult {
 export async function simulateWithTokenFlow(
   params: SimulateWithTokenFlowParams,
 ): Promise<SimulateWithTokenFlowResult> {
-  const { client, poolAddress, user, callData, blockNumber } = params
+  const { client, poolAddress, user, callData, blockNumber, postCallData, preCallData } = params
 
   // Encode getAssetsOf call
   const getAssetsOfCallData = encodeFunctionData({
@@ -163,17 +181,21 @@ export async function simulateWithTokenFlow(
 
   // Encode getCurrentTick call
   const getCurrentTickCallData = encodeFunctionData({
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: 'getCurrentTick',
   })
 
-  // Build multicall data array: [getAssetsOf, getCurrentTick, targetCall, getCurrentTick, getAssetsOf]
-  const multicallData = [
+  const preLen = preCallData?.length ?? 0
+
+  // Build multicall: [getAssetsOf, getCurrentTick, ...preCallData, targetCall, getCurrentTick, getAssetsOf, ...postCallData]
+  const multicallData: Hex[] = [
     getAssetsOfCallData,
     getCurrentTickCallData,
+    ...(preCallData ?? []),
     callData,
     getCurrentTickCallData,
     getAssetsOfCallData,
+    ...(postCallData ?? []),
   ]
 
   try {
@@ -201,7 +223,7 @@ export async function simulateWithTokenFlow(
     const decodeTick = (data: Hex): bigint => {
       return BigInt(
         decodeFunctionResult({
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           functionName: 'getCurrentTick',
           data,
         }),
@@ -210,9 +232,14 @@ export async function simulateWithTokenFlow(
 
     const assetsBefore = decodeAssets(result[0])
     const tickBefore = decodeTick(result[1])
-    // result[2] is the target call result (dispatch)
-    const tickAfter = decodeTick(result[3])
-    const assetsAfter = decodeAssets(result[4])
+    // result[2..2+preLen-1] are preCallData results
+    // result[2+preLen] is the target call result (dispatch)
+    const tickAfter = decodeTick(result[3 + preLen])
+    const assetsAfter = decodeAssets(result[4 + preLen])
+
+    const preCallResults = preLen > 0 ? (result.slice(2, 2 + preLen) as Hex[]) : undefined
+    const postCallResults =
+      postCallData && postCallData.length > 0 ? (result.slice(5 + preLen) as Hex[]) : undefined
 
     const delta0 = assetsAfter.assets0 - assetsBefore.assets0
     const delta1 = assetsAfter.assets1 - assetsBefore.assets1
@@ -243,6 +270,8 @@ export async function simulateWithTokenFlow(
         tickAfter,
       },
       gasEstimate,
+      postCallResults,
+      preCallResults,
     }
   } catch (error) {
     return {

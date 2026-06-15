@@ -9,7 +9,7 @@
 
 import type { Address, PublicClient } from 'viem'
 
-import { panopticPoolAbi, panopticQueryAbi } from '../../../generated'
+import { panopticPoolV2Abi, panopticQueryAbi } from '../../../generated'
 import { getBlockMeta } from '../clients/blockMeta'
 import { PanopticError } from '../errors'
 import type { BlockMeta } from '../types'
@@ -78,20 +78,12 @@ export interface PositionEnrichmentResult {
   /** Portfolio value in token1 at mint tick */
   portfolioValueAtMint1: bigint
   /**
-   * Cross-margined collateral data at pnlEndTick, from `checkCollateral(pool, account, [tokenId], pnlEndTick)`.
-   * All values are in the same denomination after cross-margining:
-   * token0 when atTick < 0, token1 when atTick >= 0.
-   * Slot 0/1 refer to the two collateral trackers, not token0/token1.
+   * Per-token collateral requirement from `getFullPositionsData.collateralRequirements[]`.
+   * These are NOT cross-margined — each is in its own token denomination.
+   * For closed positions these are 0n (collateral is moot).
    */
-  collateralEffectiveBal0: bigint
-  collateralEffectiveReq0: bigint
-  collateralEffectiveBal1: bigint
-  collateralEffectiveReq1: bigint
-  /** Cross-margined collateral data at mint tick (same denomination rules) */
-  collateralAtMintEffectiveBal0: bigint
-  collateralAtMintEffectiveReq0: bigint
-  collateralAtMintEffectiveBal1: bigint
-  collateralAtMintEffectiveReq1: bigint
+  collateralReqToken0: bigint
+  collateralReqToken1: bigint
 }
 
 /**
@@ -126,17 +118,13 @@ export interface GetPositionEnrichmentDataResult {
  * Fetch enrichment data (premia, portfolio values, collateral requirements) for a set of positions.
  *
  * Batches all needed contract reads into efficient multicalls:
- * - **Open positions**: 5 calls per position in a single multicall at current block:
- *   1. `getAccumulatedFeesAndPositionsData` → per-position premia
+ * - **Open positions**: 3 calls per position in a single multicall at current block:
+ *   1. `getFullPositionsData` → premia + collateral requirements
  *   2. `getPortfolioValue` at currentTick → current portfolio value
  *   3. `getPortfolioValue` at mintTick → portfolio value at mint
- *   4. `checkCollateral` at currentTick → collateral requirement at current tick
- *   5. `checkCollateral` at mintTick → collateral requirement at mint tick
- * - **Closed positions**: 4 calls per position at `burnBlockNumber - 1`:
+ * - **Closed positions**: 2 calls per position at `burnBlockNumber - 1`:
  *   1. `getPortfolioValue` at burnTick → portfolio value at close
  *   2. `getPortfolioValue` at mintTick → portfolio value at mint
- *   3. `checkCollateral` at burnTick → collateral requirement at burn tick
- *   4. `checkCollateral` at mintTick → collateral requirement at mint tick
  *   (premia come from subgraph `burnPremium0/1`)
  *
  * ## Same-Block Guarantee
@@ -181,9 +169,9 @@ export async function getPositionEnrichmentData(
 }
 
 /** Number of multicall contracts per open position */
-const OPEN_CALLS_PER_POSITION = 5
+const OPEN_CALLS_PER_POSITION = 3
 /** Number of multicall contracts per closed position */
-const CLOSED_CALLS_PER_POSITION = 4
+const CLOSED_CALLS_PER_POSITION = 2
 
 /**
  * Process open positions: single multicall with 5 calls per position.
@@ -202,13 +190,13 @@ async function processOpenPositions(
 
   const targetBlockNumber = blockNumber ?? _meta.blockNumber
 
-  // Build multicall contracts: 5 calls per position
+  // Build multicall contracts: 3 calls per position
   const contracts = positions.flatMap((p) => [
-    // 1. getAccumulatedFeesAndPositionsData → premia
+    // 1. getFullPositionsData → premia + collateral requirements
     {
       address: p.poolAddress,
-      abi: panopticPoolAbi,
-      functionName: 'getAccumulatedFeesAndPositionsData' as const,
+      abi: panopticPoolV2Abi,
+      functionName: 'getFullPositionsData' as const,
       args: [p.account, true, [p.tokenId]] as const,
     },
     // 2. getPortfolioValue at currentTick
@@ -224,20 +212,6 @@ async function processOpenPositions(
       abi: panopticQueryAbi,
       functionName: 'getPortfolioValue' as const,
       args: [p.poolAddress, p.account, p.tickAtMint, [p.tokenId]] as const,
-    },
-    // 4. checkCollateral at currentTick
-    {
-      address: queryAddress,
-      abi: panopticQueryAbi,
-      functionName: 'checkCollateral' as const,
-      args: [p.poolAddress, p.account, [p.tokenId], currentTick] as const,
-    },
-    // 5. checkCollateral at mintTick
-    {
-      address: queryAddress,
-      abi: panopticQueryAbi,
-      functionName: 'checkCollateral' as const,
-      args: [p.poolAddress, p.account, [p.tokenId], p.tickAtMint] as const,
     },
   ])
 
@@ -256,15 +230,9 @@ async function processOpenPositions(
     const premiaResult = multicallResults[baseIdx]
     const portfolioResult = multicallResults[baseIdx + 1]
     const portfolioAtMintResult = multicallResults[baseIdx + 2]
-    const collateralResult = multicallResults[baseIdx + 3]
-    const collateralAtMintResult = multicallResults[baseIdx + 4]
 
     if (premiaResult.status !== 'success') {
-      throw new EnrichmentCallError(
-        position.tokenId,
-        'getAccumulatedFeesAndPositionsData',
-        premiaResult.error,
-      )
+      throw new EnrichmentCallError(position.tokenId, 'getFullPositionsData', premiaResult.error)
     }
     if (portfolioResult.status !== 'success') {
       throw new EnrichmentCallError(
@@ -281,10 +249,12 @@ async function processOpenPositions(
       )
     }
 
-    // Decode premia: shortPremium - longPremium
-    const [shortPremiumPacked, longPremiumPacked] = premiaResult.result as [
+    // Decode getFullPositionsData: [shortPremium, longPremium, balances[], collateralReqs[], netPremia[]]
+    const [shortPremiumPacked, longPremiumPacked, , collateralReqsPacked] = premiaResult.result as [
       bigint,
       bigint,
+      bigint[],
+      bigint[],
       bigint[],
     ]
     const shortPremium = decodeLeftRightUnsigned(shortPremiumPacked)
@@ -293,16 +263,15 @@ async function processOpenPositions(
     const premiaOwed0 = shortPremium.right - longPremium.right // token0
     const premiaOwed1 = shortPremium.left - longPremium.left // token1
 
+    // Decode per-token collateral requirements from collateralReqs[0] (LeftRightUnsigned)
+    const collateralReq = decodeLeftRightUnsigned(collateralReqsPacked[0] ?? 0n)
+
     // Decode portfolio values
     const [portfolioValue0, portfolioValue1] = portfolioResult.result as [bigint, bigint]
     const [portfolioValueAtMint0, portfolioValueAtMint1] = portfolioAtMintResult.result as [
       bigint,
       bigint,
     ]
-
-    // Decode collateral requirements (graceful fallback to 0 if call failed)
-    const collateral = decodeCollateralResult(collateralResult)
-    const collateralAtMint = decodeCollateralResult(collateralAtMintResult)
 
     entries.push([
       position.tokenId.toString(),
@@ -313,49 +282,13 @@ async function processOpenPositions(
         portfolioValue1,
         portfolioValueAtMint0,
         portfolioValueAtMint1,
-        collateralEffectiveBal0: collateral.effectiveBal0,
-        collateralEffectiveReq0: collateral.effectiveReq0,
-        collateralEffectiveBal1: collateral.effectiveBal1,
-        collateralEffectiveReq1: collateral.effectiveReq1,
-        collateralAtMintEffectiveBal0: collateralAtMint.effectiveBal0,
-        collateralAtMintEffectiveReq0: collateralAtMint.effectiveReq0,
-        collateralAtMintEffectiveBal1: collateralAtMint.effectiveBal1,
-        collateralAtMintEffectiveReq1: collateralAtMint.effectiveReq1,
+        collateralReqToken0: collateralReq.right,
+        collateralReqToken1: collateralReq.left,
       },
     ])
   }
 
   return { entries }
-}
-
-/**
- * Decode a checkCollateral(pool, account, positionIdList, atTick) result.
- *
- * The contract returns uint256[4]: [effectiveBal0, effectiveReq0, effectiveBal1, effectiveReq1].
- * All values are in the same denomination after cross-margining:
- * - token0 units when atTick < 0 (sqrtPriceX96 < FP96)
- * - token1 units when atTick >= 0 (sqrtPriceX96 >= FP96)
- *
- * Slot 0 and slot 1 refer to the two collateral trackers, not token0/token1 directly.
- */
-function decodeCollateralResult(result: { status: string; result?: unknown }): {
-  effectiveBal0: bigint
-  effectiveReq0: bigint
-  effectiveBal1: bigint
-  effectiveReq1: bigint
-} {
-  if (result.status !== 'success') {
-    return { effectiveBal0: 0n, effectiveReq0: 0n, effectiveBal1: 0n, effectiveReq1: 0n }
-  }
-
-  const [effectiveBal0, effectiveReq0, effectiveBal1, effectiveReq1] = result.result as readonly [
-    bigint,
-    bigint,
-    bigint,
-    bigint,
-  ]
-
-  return { effectiveBal0, effectiveReq0, effectiveBal1, effectiveReq1 }
 }
 
 /**
@@ -385,7 +318,7 @@ async function processClosedPositions(
   // Process each block group
   await Promise.all(
     Array.from(byBlock.entries()).map(async ([readBlock, blockPositions]) => {
-      // Build multicall contracts: 4 calls per position
+      // Build multicall contracts: 2 calls per position
       const contracts = blockPositions.flatMap((p) => [
         // 1. getPortfolioValue at burnTick
         {
@@ -401,20 +334,6 @@ async function processClosedPositions(
           functionName: 'getPortfolioValue' as const,
           args: [p.poolAddress, p.account, p.tickAtMint, [p.tokenId]] as const,
         },
-        // 3. checkCollateral at burnTick
-        {
-          address: queryAddress,
-          abi: panopticQueryAbi,
-          functionName: 'checkCollateral' as const,
-          args: [p.poolAddress, p.account, [p.tokenId], p.tickAtBurn ?? 0] as const,
-        },
-        // 4. checkCollateral at mintTick
-        {
-          address: queryAddress,
-          abi: panopticQueryAbi,
-          functionName: 'checkCollateral' as const,
-          args: [p.poolAddress, p.account, [p.tokenId], p.tickAtMint] as const,
-        },
       ])
 
       const multicallResults = await client.multicall({
@@ -429,32 +348,17 @@ async function processClosedPositions(
 
         const portfolioAtBurnResult = multicallResults[baseIdx]
         const portfolioAtMintResult = multicallResults[baseIdx + 1]
-        const collateralResult = multicallResults[baseIdx + 2]
-        const collateralAtMintResult = multicallResults[baseIdx + 3]
 
-        if (portfolioAtBurnResult.status !== 'success') {
-          throw new EnrichmentCallError(
-            position.tokenId,
-            'getPortfolioValue (burnTick)',
-            portfolioAtBurnResult.error,
-          )
-        }
-        if (portfolioAtMintResult.status !== 'success') {
-          throw new EnrichmentCallError(
-            position.tokenId,
-            'getPortfolioValue (mintTick)',
-            portfolioAtMintResult.error,
-          )
-        }
-
-        const [portfolioValue0, portfolioValue1] = portfolioAtBurnResult.result as [bigint, bigint]
-        const [portfolioValueAtMint0, portfolioValueAtMint1] = portfolioAtMintResult.result as [
-          bigint,
-          bigint,
-        ]
-
-        const collateral = decodeCollateralResult(collateralResult)
-        const collateralAtMint = decodeCollateralResult(collateralAtMintResult)
+        // Closed position reads can fail legitimately (e.g. position minted and burned
+        // in the same block — at burnBlock-1 it doesn't exist yet). Fall back to zeros.
+        const [portfolioValue0, portfolioValue1] =
+          portfolioAtBurnResult.status === 'success'
+            ? (portfolioAtBurnResult.result as [bigint, bigint])
+            : [0n, 0n]
+        const [portfolioValueAtMint0, portfolioValueAtMint1] =
+          portfolioAtMintResult.status === 'success'
+            ? (portfolioAtMintResult.result as [bigint, bigint])
+            : [0n, 0n]
 
         entries.push([
           position.tokenId.toString(),
@@ -465,14 +369,8 @@ async function processClosedPositions(
             portfolioValue1,
             portfolioValueAtMint0,
             portfolioValueAtMint1,
-            collateralEffectiveBal0: collateral.effectiveBal0,
-            collateralEffectiveReq0: collateral.effectiveReq0,
-            collateralEffectiveBal1: collateral.effectiveBal1,
-            collateralEffectiveReq1: collateral.effectiveReq1,
-            collateralAtMintEffectiveBal0: collateralAtMint.effectiveBal0,
-            collateralAtMintEffectiveReq0: collateralAtMint.effectiveReq0,
-            collateralAtMintEffectiveBal1: collateralAtMint.effectiveBal1,
-            collateralAtMintEffectiveReq1: collateralAtMint.effectiveReq1,
+            collateralReqToken0: 0n,
+            collateralReqToken1: 0n,
           },
         ])
       }

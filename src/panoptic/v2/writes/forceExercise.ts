@@ -5,7 +5,9 @@
 
 import type { Address, PublicClient, WalletClient } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
+import type { StorageAdapter } from '../storage'
+import { syncPositions } from '../sync/syncPositions'
 import type { TxOverrides, TxReceipt, TxResult } from '../types'
 import { submitWrite } from './utils'
 
@@ -33,6 +35,10 @@ export interface ForceExerciseParams {
   usePremiaAsCollateral?: bigint
   /** Gas and transaction overrides */
   txOverrides?: TxOverrides
+  /** Storage adapter for auto-syncing positions after confirmation */
+  storage?: StorageAdapter
+  /** Chain ID (required when storage is provided) */
+  chainId?: bigint
 }
 
 /**
@@ -78,7 +84,7 @@ export async function forceExercise(params: ForceExerciseParams): Promise<TxResu
     walletClient,
     account,
     address: poolAddress,
-    abi: panopticPoolAbi,
+    abi: panopticPoolV2Abi,
     functionName: 'dispatchFrom',
     args: [
       positionIdListFrom,
@@ -93,8 +99,24 @@ export async function forceExercise(params: ForceExerciseParams): Promise<TxResu
 
 /**
  * Force exercise and wait for confirmation.
+ *
+ * When `storage` and `chainId` are provided, automatically syncs the
+ * exercisor's positions after the transaction confirms.
  */
 export async function forceExerciseAndWait(params: ForceExerciseParams): Promise<TxReceipt> {
   const result = await forceExercise(params)
-  return result.wait()
+  const receipt = await result.wait()
+
+  const { storage, chainId, client, poolAddress, account } = params
+  if (storage && chainId !== undefined) {
+    await syncPositions({
+      client,
+      chainId,
+      poolAddress,
+      account,
+      storage,
+    })
+  }
+
+  return receipt
 }

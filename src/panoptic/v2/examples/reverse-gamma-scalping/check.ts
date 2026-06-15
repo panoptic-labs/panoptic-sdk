@@ -47,7 +47,7 @@ async function main() {
   const wadToBps = (wad: bigint) => wad / 10n ** 14n
 
   console.log(`Collateral Tracker 0 (${ct0.symbol}):`)
-  console.log(`  depositedAssets: ${formatTokenAmount(ct0.totalAssets, ct0.decimals, 6n)}`)
+  console.log(`  totalAssets:     ${formatTokenAmount(ct0.totalAssets, ct0.decimals, 6n)}`)
   console.log(`  insideAMM:       ${formatTokenAmount(ct0.insideAMM, ct0.decimals, 6n)}`)
   console.log(`  creditedShares:  ${ct0.creditedShares}`)
   console.log(`  totalShares:     ${ct0.totalShares}`)
@@ -56,7 +56,7 @@ async function main() {
   console.log(`  supplyRate:      ${formatBps(wadToBps(ct0.supplyRate), 2n)}/yr`)
 
   console.log(`Collateral Tracker 1 (${ct1.symbol}):`)
-  console.log(`  depositedAssets: ${formatTokenAmount(ct1.totalAssets, ct1.decimals, 2n)}`)
+  console.log(`  totalAssets:     ${formatTokenAmount(ct1.totalAssets, ct1.decimals, 2n)}`)
   console.log(`  insideAMM:       ${formatTokenAmount(ct1.insideAMM, ct1.decimals, 2n)}`)
   console.log(`  creditedShares:  ${ct1.creditedShares}`)
   console.log(`  totalShares:     ${ct1.totalShares}`)
@@ -117,7 +117,7 @@ async function main() {
         currentTick: pool.currentTick,
         mintTick: pos.tickAtMint,
         positionSize: pos.positionSize,
-        poolTickSpacing: pool.poolKey.tickSpacing,
+        poolTickSpacing: pool.tickSpacing,
       })
       portfolioDelta += greeks.delta
       portfolioGamma += greeks.gamma
@@ -139,7 +139,7 @@ async function main() {
 
       // Per-leg chunk details
       for (const leg of pos.legs) {
-        const widthTicks = leg.width * pool.poolKey.tickSpacing
+        const widthTicks = leg.width * pool.tickSpacing
         console.log(
           `    leg[${leg.index}]: ${leg.isLong ? 'long' : 'short'} tokenType=${leg.tokenType} ratio=${leg.optionRatio}` +
             `  strike=${leg.strike} width=${leg.width} (${widthTicks} ticks)` +

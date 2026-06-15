@@ -25,7 +25,7 @@ import {
 import { privateKeyToAccount } from 'viem/accounts'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { panopticPoolAbi, riskEngineAbi } from '../../../../../generated'
+import { panopticPoolV2Abi, riskEngineAbi } from '../../../../../generated'
 import { parsePanopticError } from '../../../errors'
 import { calculatePositionGreeks } from '../../../greeks'
 import { getAccountCollateral } from '../../../reads/account'
@@ -127,7 +127,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
         chainId: config.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
 
       console.log(`Current tick: ${currentTick}`)
@@ -171,7 +171,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
         chainId: config.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
 
       // Call strike above current price
@@ -259,7 +259,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
       })
 
       // Use tickSpacing from pool
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
       const strike = (currentTick / tickSpacing) * tickSpacing
 
@@ -447,7 +447,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
         chainId: config.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
       const strike = (currentTick / tickSpacing) * tickSpacing
 
@@ -514,7 +514,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
           chainId: config.chainId,
         })
 
-        const tickSpacing = pool.poolKey.tickSpacing
+        const tickSpacing = pool.tickSpacing
         const currentTick = pool.currentTick
         // Use a strike slightly OTM (above current for calls) to reduce collateral burden
         const strike = (currentTick / tickSpacing + 5n) * tickSpacing
@@ -632,7 +632,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
           return
         }
 
-        const tickSpacing = pool.poolKey.tickSpacing
+        const tickSpacing = pool.tickSpacing
         const currentTick = pool.currentTick
         const strike = (currentTick / tickSpacing) * tickSpacing
 
@@ -711,7 +711,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
           poolAddress: config.contracts.pool.address,
           chainId: config.chainId,
         })
-        const tickSpacing = pool.poolKey.tickSpacing
+        const tickSpacing = pool.tickSpacing
         const currentTick = pool.currentTick
         const premiaStrike = (currentTick / tickSpacing + 3n) * tickSpacing
 
@@ -889,7 +889,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
           poolAddress: config.contracts.pool.address,
           chainId: config.chainId,
         })
-        const tickSpacing = pool.poolKey.tickSpacing
+        const tickSpacing = pool.tickSpacing
         const currentTick = pool.currentTick
         const newStrike = (currentTick / tickSpacing - 10n) * tickSpacing
 
@@ -952,7 +952,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
         // Read BP_DECREASE_BUFFER from risk engine to calculate safe mint size
         const riskEngineAddress = await client.readContract({
           address: config.contracts.pool.address,
-          abi: panopticPoolAbi,
+          abi: panopticPoolV2Abi,
           functionName: 'riskEngine',
         })
         const bpDecreaseBuffer = await client.readContract({
@@ -1016,7 +1016,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
           chainId: config.chainId,
         })
 
-        const tickSpacing = pool.poolKey.tickSpacing
+        const tickSpacing = pool.tickSpacing
         const currentTick = pool.currentTick
         const strike = (currentTick / tickSpacing + 5n) * tickSpacing
 
@@ -1066,7 +1066,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
         chainId: config.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
       // Strike near current tick for credit
       const strike = (currentTick / tickSpacing + 2n) * tickSpacing
@@ -1165,7 +1165,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
         chainId: config.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
       // Strike near current tick for loan
       const strike = (currentTick / tickSpacing - 2n) * tickSpacing
@@ -1332,7 +1332,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
         chainId: config.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
       const strike = (currentTick / tickSpacing + 4n) * tickSpacing
 
@@ -1446,7 +1446,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
         chainId: config.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
       const strike = (currentTick / tickSpacing - 4n) * tickSpacing
 
@@ -1562,7 +1562,7 @@ describe('Basic Example 02: Open Position (Fork Test)', () => {
         chainId: config.chainId,
       })
 
-      const tickSpacing = pool.poolKey.tickSpacing
+      const tickSpacing = pool.tickSpacing
       const currentTick = pool.currentTick
       const strike = (currentTick / tickSpacing) * tickSpacing
 

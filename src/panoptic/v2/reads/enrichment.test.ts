@@ -22,10 +22,9 @@ const MOCK_BLOCK = {
 const TOKEN_ID_1 = 1000n
 const TOKEN_ID_2 = 2000n
 
-// Mock checkCollateral result: [effectiveBal0, effectiveReq0, effectiveBal1, effectiveReq1]
-const MOCK_COLLATERAL = [10000n, 5000n, 20000n, 8000n] as const
-const MOCK_COLLATERAL_AT_MINT = [9000n, 4000n, 18000n, 7000n] as const
-const ZERO_COLLATERAL = [0n, 0n, 0n, 0n] as const
+// Mock collateral requirement as LeftRightUnsigned: right=token0, left=token1
+// packLeftRight(token0=5000n, token1=8000n)
+const MOCK_COLLATERAL_REQ_PACKED = 5000n + (8000n << 128n)
 
 // --- Helpers ---
 
@@ -47,39 +46,35 @@ function packLeftRight(right: bigint, left: bigint): bigint {
 }
 
 /**
- * Build the 5 multicall results for a single open position.
+ * Build the 3 multicall results for a single open position.
  */
 function openPositionResults(
   shortPremium: bigint,
   longPremium: bigint,
   portfolio: [bigint, bigint],
   portfolioAtMint: [bigint, bigint],
-  collateral: readonly [bigint, bigint, bigint, bigint] = MOCK_COLLATERAL,
-  collateralAtMint: readonly [bigint, bigint, bigint, bigint] = MOCK_COLLATERAL_AT_MINT,
+  collateralReqPacked: bigint = MOCK_COLLATERAL_REQ_PACKED,
 ) {
   return [
-    { status: 'success', result: [shortPremium, longPremium, [100n]] },
+    {
+      status: 'success',
+      result: [shortPremium, longPremium, [100n], [collateralReqPacked], [0n]],
+    },
     { status: 'success', result: portfolio },
     { status: 'success', result: portfolioAtMint },
-    { status: 'success', result: collateral },
-    { status: 'success', result: collateralAtMint },
   ]
 }
 
 /**
- * Build the 4 multicall results for a single closed position.
+ * Build the 2 multicall results for a single closed position.
  */
 function closedPositionResults(
   portfolioAtBurn: [bigint, bigint],
   portfolioAtMint: [bigint, bigint],
-  collateral: readonly [bigint, bigint, bigint, bigint] = MOCK_COLLATERAL,
-  collateralAtMint: readonly [bigint, bigint, bigint, bigint] = MOCK_COLLATERAL_AT_MINT,
 ) {
   return [
     { status: 'success', result: portfolioAtBurn },
     { status: 'success', result: portfolioAtMint },
-    { status: 'success', result: collateral },
-    { status: 'success', result: collateralAtMint },
   ]
 }
 
@@ -140,16 +135,9 @@ describe('getPositionEnrichmentData', () => {
       expect(e.portfolioValue1).toBe(6000n)
       expect(e.portfolioValueAtMint0).toBe(3000n)
       expect(e.portfolioValueAtMint1).toBe(4000n)
-      // Collateral at pnlEndTick
-      expect(e.collateralEffectiveBal0).toBe(10000n)
-      expect(e.collateralEffectiveReq0).toBe(5000n)
-      expect(e.collateralEffectiveBal1).toBe(20000n)
-      expect(e.collateralEffectiveReq1).toBe(8000n)
-      // Collateral at mintTick
-      expect(e.collateralAtMintEffectiveBal0).toBe(9000n)
-      expect(e.collateralAtMintEffectiveReq0).toBe(4000n)
-      expect(e.collateralAtMintEffectiveBal1).toBe(18000n)
-      expect(e.collateralAtMintEffectiveReq1).toBe(7000n)
+      // Per-token collateral requirements from getFullPositionsData
+      expect(e.collateralReqToken0).toBe(5000n)
+      expect(e.collateralReqToken1).toBe(8000n)
       expect(result._meta.blockNumber).toBe(MOCK_BLOCK.number)
     })
 
@@ -161,7 +149,7 @@ describe('getPositionEnrichmentData', () => {
       const sp2 = packLeftRight(300n, 400n)
       const lp2 = packLeftRight(30n, 40n)
 
-      // 10 results total: 5 per position
+      // 6 results total: 3 per position
       vi.mocked(client.multicall).mockResolvedValueOnce([
         ...openPositionResults(sp1, lp1, [1000n, 2000n], [500n, 600n]),
         ...openPositionResults(sp2, lp2, [3000n, 4000n], [700n, 800n]),
@@ -215,8 +203,6 @@ describe('getPositionEnrichmentData', () => {
         { status: 'failure', error: new Error('Position not found') },
         { status: 'success', result: [3000n, 4000n] },
         { status: 'success', result: [700n, 800n] },
-        { status: 'success', result: MOCK_COLLATERAL },
-        { status: 'success', result: MOCK_COLLATERAL_AT_MINT },
       ])
 
       await expect(
@@ -241,22 +227,20 @@ describe('getPositionEnrichmentData', () => {
           ],
           currentTick: 100,
         }),
-      ).rejects.toThrow('Enrichment call "getAccumulatedFeesAndPositionsData" failed')
+      ).rejects.toThrow('Enrichment call "getFullPositionsData" failed')
     })
 
-    it('should gracefully handle collateral call failure with zero values', async () => {
+    it('should extract collateral requirements from getFullPositionsData result', async () => {
       const client = createMockClient()
 
       const sp = packLeftRight(100n, 200n)
       const lp = packLeftRight(10n, 20n)
+      // Custom collateral: token0=3000n, token1=7000n
+      const customCollateralReq = packLeftRight(3000n, 7000n)
 
-      vi.mocked(client.multicall).mockResolvedValueOnce([
-        { status: 'success', result: [sp, lp, [100n]] },
-        { status: 'success', result: [1000n, 2000n] },
-        { status: 'success', result: [500n, 600n] },
-        { status: 'failure', error: new Error('checkCollateral reverted') },
-        { status: 'success', result: MOCK_COLLATERAL_AT_MINT },
-      ])
+      vi.mocked(client.multicall).mockResolvedValueOnce(
+        openPositionResults(sp, lp, [1000n, 2000n], [500n, 600n], customCollateralReq),
+      )
 
       const result = await getPositionEnrichmentData({
         client,
@@ -274,14 +258,10 @@ describe('getPositionEnrichmentData', () => {
       })
 
       const e = result.byTokenId.get(TOKEN_ID_1.toString())!
-      // Core data still present
       expect(e.premiaOwed0).toBe(90n)
       expect(e.portfolioValue0).toBe(1000n)
-      // Failed collateral defaults to 0
-      expect(e.collateralEffectiveBal0).toBe(0n)
-      expect(e.collateralEffectiveReq0).toBe(0n)
-      // Mint collateral succeeded
-      expect(e.collateralAtMintEffectiveReq0).toBe(4000n)
+      expect(e.collateralReqToken0).toBe(3000n)
+      expect(e.collateralReqToken1).toBe(7000n)
     })
 
     it('should pass correct block number to multicall', async () => {
@@ -291,7 +271,7 @@ describe('getPositionEnrichmentData', () => {
       const lp = packLeftRight(0n, 0n)
 
       vi.mocked(client.multicall).mockResolvedValueOnce(
-        openPositionResults(sp, lp, [0n, 0n], [0n, 0n], ZERO_COLLATERAL, ZERO_COLLATERAL),
+        openPositionResults(sp, lp, [0n, 0n], [0n, 0n], 0n),
       )
 
       const customBlock = 99999n
@@ -354,16 +334,14 @@ describe('getPositionEnrichmentData', () => {
       expect(e.portfolioValue1).toBe(8000n)
       expect(e.portfolioValueAtMint0).toBe(5000n)
       expect(e.portfolioValueAtMint1).toBe(6000n)
-      expect(e.collateralEffectiveReq0).toBe(5000n)
-      expect(e.collateralAtMintEffectiveReq0).toBe(4000n)
+      expect(e.collateralReqToken0).toBe(0n)
+      expect(e.collateralReqToken1).toBe(0n)
     })
 
     it('should use burnBlockNumber - 1 as the read block', async () => {
       const client = createMockClient()
 
-      vi.mocked(client.multicall).mockResolvedValueOnce(
-        closedPositionResults([0n, 0n], [0n, 0n], ZERO_COLLATERAL, ZERO_COLLATERAL),
-      )
+      vi.mocked(client.multicall).mockResolvedValueOnce(closedPositionResults([0n, 0n], [0n, 0n]))
 
       const burnBlock = 10000000n
 
@@ -446,7 +424,7 @@ describe('getPositionEnrichmentData', () => {
       const client = createMockClient()
       const burnBlock = 10000000n
 
-      // Both positions share the same burnBlockNumber → one multicall with 8 results (4 per position)
+      // Both positions share the same burnBlockNumber → one multicall with 4 results (2 per position)
       vi.mocked(client.multicall).mockResolvedValueOnce([
         ...closedPositionResults([1000n, 2000n], [500n, 600n]),
         ...closedPositionResults([3000n, 4000n], [700n, 800n]),
@@ -494,18 +472,18 @@ describe('getPositionEnrichmentData', () => {
       const shortPremium = packLeftRight(1000n, 2000n)
       const longPremium = packLeftRight(100n, 200n)
 
-      // Open: 5 calls, Closed: 4 calls — run in parallel, use dynamic mock
+      // Open: 3 calls, Closed: 2 calls — run in parallel, use dynamic mock
       vi.mocked(client.multicall).mockImplementation(
         async (args: Parameters<typeof client.multicall>[0]) => {
           const contractsLen = args.contracts.length
-          if (contractsLen === 5) {
+          if (contractsLen === 3) {
             return openPositionResults(
               shortPremium,
               longPremium,
               [5000n, 6000n],
               [3000n, 4000n],
             ) as Awaited<ReturnType<typeof client.multicall>>
-          } else if (contractsLen === 4) {
+          } else if (contractsLen === 2) {
             return closedPositionResults([7000n, 8000n], [1000n, 2000n]) as Awaited<
               ReturnType<typeof client.multicall>
             >
@@ -545,12 +523,14 @@ describe('getPositionEnrichmentData', () => {
       const openE = result.byTokenId.get(TOKEN_ID_1.toString())!
       expect(openE.premiaOwed0).toBe(900n)
       expect(openE.portfolioValue0).toBe(5000n)
-      expect(openE.collateralEffectiveReq0).toBe(5000n)
+      expect(openE.collateralReqToken0).toBe(5000n)
+      expect(openE.collateralReqToken1).toBe(8000n)
 
       const closedE = result.byTokenId.get(TOKEN_ID_2.toString())!
       expect(closedE.premiaOwed0).toBe(500n)
       expect(closedE.portfolioValue0).toBe(7000n)
-      expect(closedE.collateralEffectiveReq0).toBe(5000n)
+      expect(closedE.collateralReqToken0).toBe(0n)
+      expect(closedE.collateralReqToken1).toBe(0n)
     })
   })
 

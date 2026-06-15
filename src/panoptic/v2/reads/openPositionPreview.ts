@@ -66,6 +66,18 @@ export interface OpenPositionPreview {
   postCollateral0: bigint | null
   /** Collateral balance in token 1 after mint. Null if simulation failed. */
   postCollateral1: bigint | null
+  /** Post-mint collateral requirement in token0 (per-token, not cross-margined). Null if sim failed. */
+  postMintCollateralReqToken0: bigint | null
+  /** Post-mint collateral requirement in token1 (per-token, not cross-margined). Null if sim failed. */
+  postMintCollateralReqToken1: bigint | null
+  /**
+   * Collateral requirement for the new position only (last entry of perPositionCollateralReqs).
+   * Use this for "Margin Used" display — postMintCollateralReqToken0/1 includes existing positions too.
+   * Null if simulation failed or perPositionCollateralReqs is empty.
+   */
+  newPositionCollateralReqToken0: bigint | null
+  /** Collateral requirement for the new position only, token1. Null if sim failed. */
+  newPositionCollateralReqToken1: bigint | null
 }
 
 /**
@@ -144,5 +156,17 @@ export async function getOpenPositionPreview(
     amount1Required: data?.amount1Required ?? null,
     postCollateral0: data?.postCollateral0 ?? null,
     postCollateral1: data?.postCollateral1 ?? null,
+    postMintCollateralReqToken0: data?.postMintCollateralReqToken0 ?? null,
+    postMintCollateralReqToken1: data?.postMintCollateralReqToken1 ?? null,
+    newPositionCollateralReqToken0:
+      data?.perPositionCollateralReqs && data.perPositionCollateralReqs.length > 0
+        ? (data.perPositionCollateralReqs[data.perPositionCollateralReqs.length - 1]?.token0 ??
+          null)
+        : null,
+    newPositionCollateralReqToken1:
+      data?.perPositionCollateralReqs && data.perPositionCollateralReqs.length > 0
+        ? (data.perPositionCollateralReqs[data.perPositionCollateralReqs.length - 1]?.token1 ??
+          null)
+        : null,
   }
 }

@@ -9,7 +9,7 @@
 
 import type { Address, PublicClient } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients/blockMeta'
 import type { BlockMeta, SafeModeState as OracleSafeModeState } from '../types'
 
@@ -68,7 +68,7 @@ export async function getSafeMode(params: GetSafeModeParams): Promise<SafeModeSt
   const [safeModeRaw, _meta] = await Promise.all([
     client.readContract({
       address: poolAddress,
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       functionName: 'isSafeMode',
       blockNumber: targetBlockNumber,
     }),
@@ -83,11 +83,12 @@ export async function getSafeMode(params: GetSafeModeParams): Promise<SafeModeSt
     case SafeModeStatus.NO_LEVERAGE:
       return {
         mode: 'restricted',
-        canMint: false,
+        canMint: true,
         canBurn: true,
         canForceExercise: true,
         canLiquidate: true,
-        reason: 'No new leveraged positions allowed',
+        canSwapAtMint: true,
+        reason: 'All positions require 100% collateral',
         _meta,
       }
     case SafeModeStatus.NO_SWAP:
@@ -97,6 +98,7 @@ export async function getSafeMode(params: GetSafeModeParams): Promise<SafeModeSt
         canBurn: true,
         canForceExercise: true,
         canLiquidate: true,
+        canSwapAtMint: false,
         reason: 'Swaps are disabled',
         _meta,
       }
@@ -107,6 +109,7 @@ export async function getSafeMode(params: GetSafeModeParams): Promise<SafeModeSt
         canBurn: true,
         canForceExercise: true,
         canLiquidate: true,
+        canSwapAtMint: false,
         reason: 'Pool is in close-only mode',
         _meta,
       }
@@ -117,6 +120,7 @@ export async function getSafeMode(params: GetSafeModeParams): Promise<SafeModeSt
         canBurn: true,
         canForceExercise: true,
         canLiquidate: true,
+        canSwapAtMint: true,
         _meta,
       }
   }

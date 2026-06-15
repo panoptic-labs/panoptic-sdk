@@ -60,6 +60,7 @@ export {
   type PositionStorageParams,
   type RollPositionParams,
   type TickAndSpreadLimits,
+  buildOpenPositionCalldata,
   closePosition,
   closePositionAndWait,
   openPosition,
@@ -70,6 +71,13 @@ export {
 
 // Raw dispatch
 export { type DispatchParams, dispatch, dispatchAndWait } from './dispatch'
+
+// Item-based batch dispatch
+export {
+  type ExecuteBatchDispatchParams,
+  executeBatchDispatch,
+  executeBatchDispatchAndWait,
+} from './executeBatchDispatch'
 
 // Liquidation
 export { type LiquidateParams, liquidate, liquidateAndWait } from './liquidate'
@@ -88,7 +96,13 @@ export {
 export { type PokeOracleParams, pokeOracle, pokeOracleAndWait } from './pokeOracle'
 
 // Factory deployment
-export { type DeployNewPoolParams, deployNewPool, deployNewPoolAndWait } from './factory'
+export {
+  type DeployNewPoolParams,
+  type DeployNewPoolV3Params,
+  type DeployNewPoolV4Params,
+  deployNewPool,
+  deployNewPoolAndWait,
+} from './factory'
 
 // Transaction management
 export {
@@ -97,3 +111,52 @@ export {
   cancelTransaction,
   speedUpTransaction,
 } from './txManagement'
+
+// Swap operations
+export {
+  type SwapExactInParams,
+  type SwapExactOutParams,
+  swapExactIn,
+  swapExactInAndWait,
+  swapExactOut,
+  swapExactOutAndWait,
+} from './swap'
+
+// xStock wrap / unwrap (ERC4626 wrapper) operations
+export {
+  type PreviewWrapParams,
+  type UnwrapXstockParams,
+  type WrapXstockParams,
+  previewUnwrap,
+  previewWrap,
+  unwrapXstock,
+  unwrapXstockAndWait,
+  wrapXstock,
+  wrapXstockAndWait,
+  xstockWrapperAbi,
+} from './wrap'
+
+// Loan utilities
+export { buildUniqueLoan, isInputListFailError, resolveTokenIndex } from './loanUtils'
+
+// Lending operations
+export {
+  type BorrowParams,
+  type PreviewBorrowParams,
+  type PreviewBorrowResult,
+  type RepayParams,
+  type SmartRepayParams,
+  type SupplyParams,
+  type UnsupplyParams,
+  borrow,
+  borrowAndWait,
+  previewBorrow,
+  repay,
+  repayAndWait,
+  smartRepay,
+  smartRepayAndWait,
+  supply,
+  supplyAndWait,
+  unsupply,
+  unsupplyAndWait,
+} from './lending'

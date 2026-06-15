@@ -5,7 +5,7 @@
 
 import type { Address, PublicClient } from 'viem'
 
-import { collateralTrackerAbi } from '../../../generated'
+import { collateralTrackerV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients'
 import { PanopticError } from '../errors'
 import type { DepositSimulation, SimulationResult, WithdrawSimulation } from '../types'
@@ -50,19 +50,19 @@ export async function simulateDeposit(
           contracts: [
             {
               address: collateralTrackerAddress,
-              abi: collateralTrackerAbi,
+              abi: collateralTrackerV2Abi,
               functionName: 'balanceOf',
               args: [account],
             },
             {
               address: collateralTrackerAddress,
-              abi: collateralTrackerAbi,
+              abi: collateralTrackerV2Abi,
               functionName: 'assetsOf',
               args: [account],
             },
             {
               address: collateralTrackerAddress,
-              abi: collateralTrackerAbi,
+              abi: collateralTrackerV2Abi,
               functionName: 'previewDeposit',
               args: [assets],
             },
@@ -72,7 +72,7 @@ export async function simulateDeposit(
         }),
         client.estimateContractGas({
           address: collateralTrackerAddress,
-          abi: collateralTrackerAbi,
+          abi: collateralTrackerV2Abi,
           functionName: 'deposit',
           args: [assets, account],
           account,
@@ -148,25 +148,25 @@ export async function simulateWithdraw(
         contracts: [
           {
             address: collateralTrackerAddress,
-            abi: collateralTrackerAbi,
+            abi: collateralTrackerV2Abi,
             functionName: 'balanceOf',
             args: [account],
           },
           {
             address: collateralTrackerAddress,
-            abi: collateralTrackerAbi,
+            abi: collateralTrackerV2Abi,
             functionName: 'assetsOf',
             args: [account],
           },
           {
             address: collateralTrackerAddress,
-            abi: collateralTrackerAbi,
+            abi: collateralTrackerV2Abi,
             functionName: 'maxWithdraw',
             args: [account],
           },
           {
             address: collateralTrackerAddress,
-            abi: collateralTrackerAbi,
+            abi: collateralTrackerV2Abi,
             functionName: 'previewWithdraw',
             args: [assets],
           },
@@ -201,7 +201,7 @@ export async function simulateWithdraw(
 
     const gasEstimate = await client.estimateContractGas({
       address: collateralTrackerAddress,
-      abi: collateralTrackerAbi,
+      abi: collateralTrackerV2Abi,
       functionName: 'withdraw',
       args: [assets, account, account],
       account,

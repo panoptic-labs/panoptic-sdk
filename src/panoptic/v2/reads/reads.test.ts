@@ -194,15 +194,21 @@ describe('Position Read Functions', () => {
     it('should return position data', async () => {
       const client = createMockClient()
 
-      // positionData returns: [swapAtMint, blockAtMint, timestampAtMint, tickAtMint, utilization0AtMint, utilization1AtMint, positionSize]
+      // getFullPositionsData returns: [shortPremium, longPremium, positionBalances[], collateralRequirements[], netPremiaPerPosition[]]
+      // positionBalances is packed: positionSize | (util0 << 128) | (util1 << 144) | (tickAtMint << 160) | (timestamp << 184) | (block << 216) | (swap << 255)
+      const packedBalance =
+        1000000n |
+        (5000n << 128n) |
+        (6000n << 144n) |
+        (100n << 160n) |
+        (1700000000n << 184n) |
+        (12345678n << 216n)
       vi.mocked(client.readContract).mockResolvedValue([
-        false, // swapAtMint
-        12345678n, // blockAtMint
-        1700000000n, // timestampAtMint
-        100, // tickAtMint
-        5000n, // utilization0AtMint
-        6000n, // utilization1AtMint
-        1000000n, // positionSize
+        0n, // shortPremium
+        0n, // longPremium
+        [packedBalance], // positionBalances
+        [0n], // collateralRequirements
+        [0n], // netPremiaPerPosition
       ])
 
       const result = await getPosition({
@@ -241,16 +247,28 @@ describe('Position Read Functions', () => {
       const tokenId1 = SAMPLE_TOKEN_ID
       const tokenId2 = SAMPLE_TOKEN_ID + 1n
 
-      // positionData returns: [swapAtMint, blockAtMint, timestampAtMint, tickAtMint, utilization0AtMint, utilization1AtMint, positionSize]
-      vi.mocked(client.multicall).mockResolvedValue([
-        {
-          status: 'success',
-          result: [false, 12345678n, 1700000000n, 100, 5000n, 6000n, 1000000n],
-        },
-        {
-          status: 'success',
-          result: [true, 12345679n, 1700000001n, 200, 5500n, 6500n, 2000000n],
-        },
+      // getFullPositionsData returns: [shortPremium, longPremium, positionBalances[], collateralRequirements[], netPremiaPerPosition[]]
+      const packed1 =
+        1000000n |
+        (5000n << 128n) |
+        (6000n << 144n) |
+        (100n << 160n) |
+        (1700000000n << 184n) |
+        (12345678n << 216n)
+      const packed2 =
+        2000000n |
+        (5500n << 128n) |
+        (6500n << 144n) |
+        (200n << 160n) |
+        (1700000001n << 184n) |
+        (12345679n << 216n) |
+        (1n << 255n)
+      vi.mocked(client.readContract).mockResolvedValue([
+        0n,
+        0n,
+        [packed1, packed2],
+        [0n, 0n],
+        [0n, 0n],
       ])
 
       const result = await getPositions({
@@ -268,17 +286,15 @@ describe('Position Read Functions', () => {
     it('should skip failed calls', async () => {
       const client = createMockClient()
 
-      // positionData returns: [swapAtMint, blockAtMint, timestampAtMint, tickAtMint, utilization0AtMint, utilization1AtMint, positionSize]
-      vi.mocked(client.multicall).mockResolvedValue([
-        {
-          status: 'success',
-          result: [false, 12345678n, 1700000000n, 100, 5000n, 6000n, 1000000n],
-        },
-        {
-          status: 'failure',
-          error: new Error('Position not found'),
-        },
-      ])
+      // getFullPositionsData with one valid position and one with zero size (simulating failure)
+      const packed1 =
+        1000000n |
+        (5000n << 128n) |
+        (6000n << 144n) |
+        (100n << 160n) |
+        (1700000000n << 184n) |
+        (12345678n << 216n)
+      vi.mocked(client.readContract).mockResolvedValue([0n, 0n, [packed1, 0n], [0n, 0n], [0n, 0n]])
 
       const result = await getPositions({
         client,
@@ -293,13 +309,8 @@ describe('Position Read Functions', () => {
     it('should skip positions with zero size', async () => {
       const client = createMockClient()
 
-      // positionData returns: [swapAtMint, blockAtMint, timestampAtMint, tickAtMint, utilization0AtMint, utilization1AtMint, positionSize]
-      vi.mocked(client.multicall).mockResolvedValue([
-        {
-          status: 'success',
-          result: [false, 12345678n, 1700000000n, 100, 5000n, 6000n, 0n], // zero size
-        },
-      ])
+      // getFullPositionsData with zero-size position (only upper bits set, lower 128 bits = 0)
+      vi.mocked(client.readContract).mockResolvedValue([0n, 0n, [0n], [0n], [0n]])
 
       const result = await getPositions({
         client,
@@ -316,9 +327,16 @@ describe('Position Read Functions', () => {
     it('should calculate greeks using client-side implementation', async () => {
       const client = createMockClient()
 
-      // Mock positionData (swapAtMint, blockAtMint, timestampAtMint, tickAtMint, util0, util1, positionSize)
+      // getFullPositionsData returns: [shortPremium, longPremium, positionBalances[], collateralRequirements[], netPremiaPerPosition[]]
+      const packedGreeks =
+        1000n |
+        (5000n << 128n) |
+        (5000n << 144n) |
+        (0n << 160n) |
+        (1700000000n << 184n) |
+        (1000n << 216n)
       vi.mocked(client.readContract)
-        .mockResolvedValueOnce([false, 1000n, 1700000000n, 0, 5000n, 5000n, 1000n]) // positionData
+        .mockResolvedValueOnce([0n, 0n, [packedGreeks], [0n], [0n]]) // getFullPositionsData
         .mockResolvedValueOnce(0) // getCurrentTick
 
       const result = await getPositionGreeks({
@@ -338,16 +356,15 @@ describe('Position Read Functions', () => {
     it('should use provided atTick instead of fetching current tick', async () => {
       const client = createMockClient()
 
-      // Mock positionData only (no getCurrentTick call needed)
-      vi.mocked(client.readContract).mockResolvedValueOnce([
-        false,
-        1000n,
-        1700000000n,
-        0,
-        5000n,
-        5000n,
-        1000n,
-      ]) // positionData
+      // getFullPositionsData only (no getCurrentTick call needed)
+      const packedGreeks2 =
+        1000n |
+        (5000n << 128n) |
+        (5000n << 144n) |
+        (0n << 160n) |
+        (1700000000n << 184n) |
+        (1000n << 216n)
+      vi.mocked(client.readContract).mockResolvedValueOnce([0n, 0n, [packedGreeks2], [0n], [0n]]) // getFullPositionsData
 
       const result = await getPositionGreeks({
         client,
@@ -604,7 +621,7 @@ describe('Collateral Read Functions', () => {
       expect(result.token).toBe(TOKEN_0_ASSET)
       expect(result.symbol).toBe('USDC')
       expect(result.decimals).toBe(6n)
-      expect(result.totalAssets).toBe(1000000n)
+      expect(result.totalAssets).toBe(1100000n)
       expect(result.totalShares).toBe(900000n)
       expect(result.utilization).toBe(1000n)
       expect(result.borrowRate).toBe(5000n * 31_536_000n)
@@ -634,6 +651,7 @@ describe('Collateral Read Functions', () => {
       expect(result.address).toBe(COLLATERAL_TOKEN_1)
       expect(result.symbol).toBe('WETH')
       expect(result.decimals).toBe(18n)
+      expect(result.totalAssets).toBe(2200000n)
     })
   })
 
@@ -692,14 +710,20 @@ describe('Premia Read Functions', () => {
     it('should return premia from contract', async () => {
       const client = createMockClient()
 
-      // getAccumulatedFeesAndPositionsData returns:
-      // [shortPremiumPacked, longPremiumPacked, balances[]]
+      // getFullPositionsData returns:
+      // [shortPremiumPacked, longPremiumPacked, balances[], collateralRequirements[], netPremiaPerPosition[]]
       // LeftRightUnsigned: right (bits 0-127) = token0, left (bits 128-255) = token1
       const shortPremium = (2000n << 128n) | 1000n // token1=2000, token0=1000
       const longPremium = (400n << 128n) | 300n // token1=400, token0=300
       const balances = [0n] // dummy balance
 
-      vi.mocked(client.readContract).mockResolvedValue([shortPremium, longPremium, balances])
+      vi.mocked(client.readContract).mockResolvedValue([
+        shortPremium,
+        longPremium,
+        balances,
+        [],
+        [],
+      ])
 
       const result = await getAccountPremia({
         client,
@@ -719,7 +743,7 @@ describe('Premia Read Functions', () => {
     it('should pass includePendingPremium=false to contract', async () => {
       const client = createMockClient()
 
-      vi.mocked(client.readContract).mockResolvedValue([0n, 0n, []])
+      vi.mocked(client.readContract).mockResolvedValue([0n, 0n, [], [], []])
 
       const result = await getAccountPremia({
         client,
@@ -734,7 +758,7 @@ describe('Premia Read Functions', () => {
       // Verify includePendingPremium=false was passed
       expect(vi.mocked(client.readContract)).toHaveBeenCalledWith(
         expect.objectContaining({
-          functionName: 'getAccumulatedFeesAndPositionsData',
+          functionName: 'getFullPositionsData',
           args: [ACCOUNT_ADDRESS, false, [SAMPLE_TOKEN_ID]],
         }),
       )
@@ -984,6 +1008,8 @@ describe('Delta Hedge Functions', () => {
         COLLATERAL_TOKEN_0,
         COLLATERAL_TOKEN_1,
         RISK_ENGINE_ADDRESS,
+        '0x0000000000000000000000000000000000000000', // poolManager (zero = V3)
+        60, // panopticTickSpacing
       ])
       // 2. getPoolMetadata: asset addresses from collateral trackers
       .mockResolvedValueOnce([TOKEN_0_ASSET, TOKEN_1_ASSET])
@@ -996,19 +1022,26 @@ describe('Delta Hedge Functions', () => {
         6, // token1Decimals
         'USD Coin', // token1Name
       ])
-      // 4. getPool: dynamic data (11 values)
+
+    // V3 pool fee() call via readContract
+    vi.mocked(client.readContract).mockResolvedValueOnce(500)
+
+    vi.mocked(client.multicall)
+      // 4. getPool: dynamic data (11 core values, allowFailure: true returns {status, result})
       .mockResolvedValueOnce([
-        currentTick, // getCurrentTick
-        0, // isSafeMode (0 = active)
-        [1000000n, 100000n, 900000n, 1000n], // token0 poolData
-        1000000n, // token0TotalSupply
-        100n, // token0InterestRate
-        [2000000n, 200000n, 1800000n, 2000n], // token1 poolData
-        2000000n, // token1TotalSupply
-        200n, // token1InterestRate
-        2000n, // sellerCollateralRatio
-        1000n, // maintMarginRate
-        10n, // notionalFee
+        { status: 'success', result: currentTick }, // getCurrentTick
+        { status: 'success', result: 0 }, // isSafeMode (0 = active)
+        { status: 'success', result: [1000000n, 100000n, 900000n, 1000n] }, // token0 poolData
+        { status: 'success', result: 1000000n }, // token0TotalSupply
+        { status: 'success', result: 100n }, // token0InterestRate
+        { status: 'success', result: [2000000n, 200000n, 1800000n, 2000n] }, // token1 poolData
+        { status: 'success', result: 2000000n }, // token1TotalSupply
+        { status: 'success', result: 200n }, // token1InterestRate
+        { status: 'success', result: 2000n }, // sellerCollateralRatio
+        { status: 'success', result: 1000n }, // maintMarginRate
+        { status: 'success', result: 10n }, // notionalFee
+        { status: 'success', result: 8n }, // vegoid
+        { status: 'success', result: 3250n }, // maxSpread (3.25x in bps-like encoding)
       ])
   }
 

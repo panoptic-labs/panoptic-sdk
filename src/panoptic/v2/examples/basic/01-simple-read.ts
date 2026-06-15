@@ -60,7 +60,7 @@ async function main() {
   console.log(`     Currency0: ${pool.poolKey.currency0}`)
   console.log(`     Currency1: ${pool.poolKey.currency1}`)
   console.log(`     Fee: ${pool.poolKey.fee}`)
-  console.log(`     Tick Spacing: ${pool.poolKey.tickSpacing}`)
+  console.log(`     Tick Spacing: ${pool.tickSpacing}`)
   console.log(`   Collateral Tracker 0: ${pool.collateralTracker0.address}`)
   console.log(`   Collateral Tracker 1: ${pool.collateralTracker1.address}`)
   console.log(`   Current Tick: ${pool.currentTick}`)

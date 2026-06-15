@@ -25,7 +25,7 @@ export interface CollateralTracker {
   symbol: string
   /** Token decimals */
   decimals: bigint
-  /** Total assets deposited */
+  /** Total assets accounted to the pool (deposited assets plus assets in the AMM) */
   totalAssets: bigint
   /** Assets currently inside the AMM (deployed as liquidity) */
   insideAMM: bigint
@@ -53,6 +53,10 @@ export interface RiskEngine {
   maintenanceMargin: bigint
   /** Commission rate (in bps) */
   commissionRate: bigint
+  /** VEGOID constant used in spread calculation */
+  vegoid: bigint
+  /** Maximum spread parameter (in bps) */
+  maxSpread: bigint
 }
 
 /**
@@ -81,8 +85,10 @@ export interface Pool {
   chainId: bigint
   /** Encoded pool ID (64-bit) */
   poolId: bigint
-  /** Uniswap V4 pool key */
+  /** Uniswap pool key (V4: full struct, V3: zeroed fields) */
   poolKey: PoolKey
+  /** Tick spacing (extracted from encoded poolId) */
+  tickSpacing: bigint
   /** Token 0 collateral tracker */
   collateralTracker0: CollateralTracker
   /** Token 1 collateral tracker */
@@ -93,6 +99,8 @@ export interface Pool {
   currentTick: bigint
   /** Current sqrt price (Q64.96) */
   sqrtPriceX96: bigint
+  /** Uniswap pool in-range liquidity (from V3 pool.liquidity() or V4 StateView.getLiquidity()) */
+  uniswapPoolLiquidity: bigint
   /** Pool health status */
   healthStatus: PoolHealthStatus
   /** Immutable pool metadata (addresses, symbols, decimals, names, underlyingPoolId) */

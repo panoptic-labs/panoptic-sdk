@@ -6,7 +6,7 @@
 import type { Address, PublicClient } from 'viem'
 import { encodeFunctionData } from 'viem'
 
-import { panopticPoolAbi } from '../../../generated'
+import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients'
 import { PanopticError } from '../errors'
 import type { ForceExerciseSimulation, SimulationResult, TokenFlow } from '../types'
@@ -72,7 +72,7 @@ export async function simulateForceExercise(
   try {
     // Encode dispatchFrom call data
     const callData = encodeFunctionData({
-      abi: panopticPoolAbi,
+      abi: panopticPoolV2Abi,
       functionName: 'dispatchFrom',
       args: [positionIdListFrom, user, positionIdListTo, positionIdListToFinal, 0n],
     })

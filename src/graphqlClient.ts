@@ -1,6 +1,7 @@
 import { GraphQLClient } from 'graphql-request'
 
 import { getSdk as getHypoVaultSdk } from './graphql/hypoVault-sdk.generated'
+import { CHAIN_DEPLOYMENTS } from './hypoVault/chainDeployments'
 
 // const chainToPanopticGraphQlAPI: Record<number, string> = {
 //   // mainnet
@@ -27,10 +28,10 @@ import { getSdk as getHypoVaultSdk } from './graphql/hypoVault-sdk.generated'
 //   10: 'https://api.goldsky.com/api/public/project_cl9gc21q105380hxuh8ks53k3/subgraphs/panoptic-subgraph-sepolia/beta7-dev/gn',
 // }
 
-export const chainToHypoVaultGraphQlAPI: Record<number, string> = {
-  // sepolia
-  11155111:
-    'https://api.goldsky.com/api/public/project_cl9gc21q105380hxuh8ks53k3/subgraphs/hypovault-subgraph-sepolia/prod/gn',
+export const chainToHypoVaultGraphQlAPI: Record<number, string> = {}
+
+for (const deployment of Object.values(CHAIN_DEPLOYMENTS)) {
+  chainToHypoVaultGraphQlAPI[deployment.chainId] = deployment.subgraphs.hypovault
 }
 
 // TODO: move Panoptic subgraph queries and sdk construction into SDK here
@@ -40,10 +41,11 @@ export const chainToHypoVaultGraphQlAPI: Record<number, string> = {
 //   return getPanopticSdk(client);
 // };
 
-export function getHypoVaultGraphQLClient(
-  chainId: keyof typeof chainToHypoVaultGraphQlAPI,
-): ReturnType<typeof getHypoVaultSdk> {
+export function getHypoVaultGraphQLClient(chainId: number): ReturnType<typeof getHypoVaultSdk> {
   const apiUrl = chainToHypoVaultGraphQlAPI[chainId]
+  if (apiUrl === undefined) {
+    throw new Error(`Unsupported HypoVault subgraph chainId: ${chainId}`)
+  }
   const client = new GraphQLClient(apiUrl)
   return getHypoVaultSdk(client)
 }
