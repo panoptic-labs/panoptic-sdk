@@ -6,6 +6,7 @@ const addressSchema = z.custom<`0x${string}`>((val) => {
 
 export const HypoVaultManagerConfigSchema = z.object({
   deployment: z.enum(['dev', 'prod']),
+  artifactSet: z.enum(['base', 'mainnet-prod', 'mainnet-legacy', 'sepolia']).optional(),
   vaultAssetIndex: z.union([z.literal(0n), z.literal(1n)]),
   manageCycleIntervalMs: z.number().positive().optional(), // can be optional if only running manage cycles in response to websocket events instead of polling
   vaultCapInUnderlying: z.bigint().positive(),

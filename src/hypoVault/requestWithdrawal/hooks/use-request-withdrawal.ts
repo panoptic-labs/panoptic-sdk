@@ -26,6 +26,7 @@ export const useRequestWithdrawal = ({
   queuedDeposits,
   depositEpochStates,
   currentDepositEpoch,
+  simulationAccount,
   onWaitSuccess,
 }: {
   chainId?: number
@@ -37,10 +38,12 @@ export const useRequestWithdrawal = ({
   queuedDeposits: QueuedDepositSnapshot[]
   depositEpochStates: DepositEpochStateSnapshot[]
   currentDepositEpoch: bigint
+  simulationAccount?: Address
   onWaitSuccess?: () => void
 }) => {
   const { address: account } = useAccount()
-  const user = account ?? zeroAddress
+  const simulatedAccount = simulationAccount ?? account
+  const user = simulatedAccount ?? zeroAddress
 
   const {
     claimableDepositShares,
@@ -75,13 +78,13 @@ export const useRequestWithdrawal = ({
   const canSimulate =
     multicallCalldatas.length > 0 &&
     vaultAddress !== zeroAddress &&
-    account != null &&
-    account !== zeroAddress
+    simulatedAccount != null &&
+    simulatedAccount !== zeroAddress
 
   const simulate = useSimulateContract({
     chainId,
     ...getRequestWithdrawalMulticallContractConfig({ vaultAddress, multicallCalldatas }),
-    account,
+    account: simulatedAccount,
     query: {
       enabled: canSimulate,
       retry: false,

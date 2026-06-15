@@ -5,9 +5,14 @@ const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
 const MAINNET_HYPOVAULT_ADDRESSES = MAINNET_DEPLOYMENT.hypovault.vaults
 const MAINNET_HYPOVAULT_MANAGER_ADDRESSES = MAINNET_DEPLOYMENT.hypovault.managers
 const MAINNET_PANOPTIC_POOL_ADDRESSES = MAINNET_DEPLOYMENT.panoptic.pool
+const MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES = {
+  panopticPool: '0x000000007588B488d180899cDEa2080a886D2441',
+  collateralTracker0: '0x6cd0186Fb4c32B6fD23279bBE0022506958216f9',
+} as const
 
 export const WethPlpVaultMainnetProdConfig: HypoVaultManagerConfig = {
   deployment: 'prod',
+  artifactSet: 'mainnet-prod',
   vaultAssetIndex: 1n,
   manageCycleIntervalMs: 600000,
   vaultCapInUnderlying: 9_500_000_000_000_000_000n, // Fallback cap: 9.5 WETH if share-price-derived cap is unavailable
@@ -36,5 +41,27 @@ export const WethPlpVaultMainnetProdConfig: HypoVaultManagerConfig = {
   },
   alerts: {
     outOfRangeEnabled: true,
+  },
+}
+
+export const WethPlpVaultMainnetLegacyConfig: HypoVaultManagerConfig = {
+  ...WethPlpVaultMainnetProdConfig,
+  artifactSet: 'mainnet-legacy',
+  manageCycleIntervalMs: 3600000,
+  hypoVaultAddress: '0x779a2aa634A004b3a3f3b322083744869BBC6D66',
+  addresses: {
+    ...WethPlpVaultMainnetProdConfig.addresses,
+    ethUsdc500bpsV4Collateral0: MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES.collateralTracker0,
+    ethUsdc500bpsV4PanopticPool: MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES.panopticPool,
+    hypoVaultManagerWithMerkleVerification: '0xcc80f113298DdF9D399323D5288aE5Eeaed20D44',
+    hypoVault: '0x779a2aa634A004b3a3f3b322083744869BBC6D66',
+  },
+  manualTxDefaults: {
+    collateralAllocations: [
+      {
+        trackerAddress: MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES.collateralTracker0,
+        allocationBps: 10000,
+      },
+    ],
   },
 }

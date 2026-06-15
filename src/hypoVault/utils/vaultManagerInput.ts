@@ -10,8 +10,14 @@ import {
 } from '../chainDeployments'
 import { BaseUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/BaseUSDCPLPVaultPoolInfos'
 import { BaseWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/BaseWETHPLPVaultPoolInfos'
-import { MainnetUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/MainnetUSDCPLPVaultPoolInfos'
-import { MainnetWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
+import {
+  MainnetUSDCPLPLegacyVaultPoolInfos,
+  MainnetUSDCPLPVaultPoolInfos,
+} from '../hypoVaultManagerArtifacts/MainnetUSDCPLPVaultPoolInfos'
+import {
+  MainnetWETHPLPLegacyVaultPoolInfos,
+  MainnetWETHPLPVaultPoolInfos,
+} from '../hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
 import { SepoliaUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 import { SepoliaWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaWETHPLPVaultPoolInfos'
 import { type PoolInfo, buildManagerInput } from './buildManagerInput'
@@ -28,7 +34,12 @@ type VaultPoolInfoArtifact = {
 }
 
 const VAULT_POOL_INFOS_BY_CHAIN: Record<number, readonly VaultPoolInfoArtifact[]> = {
-  [MAINNET_CHAIN_ID]: [MainnetUSDCPLPVaultPoolInfos, MainnetWETHPLPVaultPoolInfos],
+  [MAINNET_CHAIN_ID]: [
+    MainnetUSDCPLPVaultPoolInfos,
+    MainnetWETHPLPVaultPoolInfos,
+    MainnetUSDCPLPLegacyVaultPoolInfos,
+    MainnetWETHPLPLegacyVaultPoolInfos,
+  ],
   [SEPOLIA_CHAIN_ID]: [SepoliaUSDCPLPVaultPoolInfos, SepoliaWETHPLPVaultPoolInfos],
   [BASE_CHAIN_ID]: [BaseUSDCPLPVaultPoolInfos, BaseWETHPLPVaultPoolInfos],
 }

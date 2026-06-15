@@ -65,6 +65,7 @@ export const useExecuteWithdrawal = ({
   queuedWithdrawals,
   withdrawalEpochStates,
   currentWithdrawalEpoch,
+  simulationAccount,
   onWaitSuccess,
 }: {
   chainId?: number
@@ -74,10 +75,12 @@ export const useExecuteWithdrawal = ({
   queuedWithdrawals: QueuedWithdrawalSnapshot[]
   withdrawalEpochStates: WithdrawalEpochStateSnapshot[]
   currentWithdrawalEpoch: bigint
+  simulationAccount?: Address
   onWaitSuccess?: () => void
 }) => {
   const { address: account } = useAccount()
-  const user = account ?? zeroAddress
+  const simulatedAccount = simulationAccount ?? account
+  const user = simulatedAccount ?? zeroAddress
 
   const claimableWithdrawals = useMemo(
     () =>
@@ -122,13 +125,13 @@ export const useExecuteWithdrawal = ({
   const canSimulate =
     multicallCalldatas.length > 0 &&
     vaultAddress !== zeroAddress &&
-    account != null &&
-    account !== zeroAddress
+    simulatedAccount != null &&
+    simulatedAccount !== zeroAddress
 
   const simulate = useSimulateContract({
     chainId,
     ...getExecuteWithdrawalMulticallContractConfig({ vaultAddress, multicallCalldatas }),
-    account,
+    account: simulatedAccount,
     query: {
       enabled: canSimulate,
       retry: false,

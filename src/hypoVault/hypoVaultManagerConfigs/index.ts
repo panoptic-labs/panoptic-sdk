@@ -1,9 +1,15 @@
 export { type HypoVaultManagerConfig, HypoVaultManagerConfigSchema } from './schema'
 export { UsdcPlpVaultBaseProdConfig } from './usdcPlpVaultBaseProdConfig'
-export { UsdcPlpVaultMainnetProdConfig } from './usdcPlpVaultMainnetProdConfig'
+export {
+  UsdcPlpVaultMainnetLegacyConfig,
+  UsdcPlpVaultMainnetProdConfig,
+} from './usdcPlpVaultMainnetProdConfig'
 export { UsdcPlpVaultSepoliaDevConfig } from './usdcPlpVaultSepoliaDevConfig'
 export { UsdcPlpVaultSepoliaProdConfig } from './usdcPlpVaultSepoliaProdConfig'
 export { WethPlpVaultBaseProdConfig } from './wethPlpVaultBaseProdConfig'
-export { WethPlpVaultMainnetProdConfig } from './wethPlpVaultMainnetProdConfig'
+export {
+  WethPlpVaultMainnetLegacyConfig,
+  WethPlpVaultMainnetProdConfig,
+} from './wethPlpVaultMainnetProdConfig'
 export { WethPlpVaultSepoliaDevConfig } from './wethPlpVaultSepoliaDevConfig'
 export { WethPlpVaultSepoliaProdConfig } from './wethPlpVaultSepoliaProdConfig'

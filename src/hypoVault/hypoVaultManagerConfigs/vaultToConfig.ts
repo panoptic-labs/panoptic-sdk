@@ -2,11 +2,17 @@ import type { Address } from 'viem'
 
 import type { HypoVaultManagerConfig } from './schema'
 import { UsdcPlpVaultBaseProdConfig } from './usdcPlpVaultBaseProdConfig'
-import { UsdcPlpVaultMainnetProdConfig } from './usdcPlpVaultMainnetProdConfig'
+import {
+  UsdcPlpVaultMainnetLegacyConfig,
+  UsdcPlpVaultMainnetProdConfig,
+} from './usdcPlpVaultMainnetProdConfig'
 import { UsdcPlpVaultSepoliaDevConfig } from './usdcPlpVaultSepoliaDevConfig'
 import { UsdcPlpVaultSepoliaProdConfig } from './usdcPlpVaultSepoliaProdConfig'
 import { WethPlpVaultBaseProdConfig } from './wethPlpVaultBaseProdConfig'
-import { WethPlpVaultMainnetProdConfig } from './wethPlpVaultMainnetProdConfig'
+import {
+  WethPlpVaultMainnetLegacyConfig,
+  WethPlpVaultMainnetProdConfig,
+} from './wethPlpVaultMainnetProdConfig'
 import { WethPlpVaultSepoliaDevConfig } from './wethPlpVaultSepoliaDevConfig'
 import { WethPlpVaultSepoliaProdConfig } from './wethPlpVaultSepoliaProdConfig'
 
@@ -19,6 +25,8 @@ const ALL_HYPO_VAULT_CONFIGS: HypoVaultManagerConfig[] = [
   UsdcPlpVaultSepoliaProdConfig,
   WethPlpVaultMainnetProdConfig,
   UsdcPlpVaultMainnetProdConfig,
+  WethPlpVaultMainnetLegacyConfig,
+  UsdcPlpVaultMainnetLegacyConfig,
 ]
 
 type GetHypoVaultConfigOptions = {

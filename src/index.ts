@@ -110,10 +110,18 @@ export { BaseUSDCPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifac
 export { BaseUSDCPLPVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts/BaseUSDCPLPVaultPoolInfos'
 export { BaseWETHPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/BaseWETHPLPStrategistLeaves'
 export { BaseWETHPLPVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts/BaseWETHPLPVaultPoolInfos'
+export { MainnetLegacyUSDCPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/MainnetLegacyUSDCPLPStrategistLeaves'
+export { MainnetLegacyWETHPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/MainnetLegacyWETHPLPStrategistLeaves'
 export { MainnetUSDCPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/MainnetUSDCPLPStrategistLeaves'
-export { MainnetUSDCPLPVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts/MainnetUSDCPLPVaultPoolInfos'
+export {
+  MainnetUSDCPLPLegacyVaultPoolInfos,
+  MainnetUSDCPLPVaultPoolInfos,
+} from './hypoVault/hypoVaultManagerArtifacts/MainnetUSDCPLPVaultPoolInfos'
 export { MainnetWETHPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/MainnetWETHPLPStrategistLeaves'
-export { MainnetWETHPLPVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
+export {
+  MainnetWETHPLPLegacyVaultPoolInfos,
+  MainnetWETHPLPVaultPoolInfos,
+} from './hypoVault/hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
 export { SepoliaUSDCPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/SepoliaUSDCPLPStrategistLeaves'
 export { SepoliaUSDCPLPVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 export { SepoliaWETHPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/SepoliaWETHPLPStrategistLeaves'
@@ -122,10 +130,12 @@ export {
   type HypoVaultManagerConfig,
   HypoVaultManagerConfigSchema,
   UsdcPlpVaultBaseProdConfig,
+  UsdcPlpVaultMainnetLegacyConfig,
   UsdcPlpVaultMainnetProdConfig,
   UsdcPlpVaultSepoliaDevConfig,
   UsdcPlpVaultSepoliaProdConfig,
   WethPlpVaultBaseProdConfig,
+  WethPlpVaultMainnetLegacyConfig,
   WethPlpVaultMainnetProdConfig,
   WethPlpVaultSepoliaDevConfig,
   WethPlpVaultSepoliaProdConfig,

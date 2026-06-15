@@ -44,5 +44,18 @@ export const MAINNET_DEFAULT_POOL_INFOS = [
   },
 ] as const
 
+export const MAINNET_LEGACY_DEFAULT_POOL_INFOS = [
+  {
+    maxPriceDeviation: MAX_PRICE_DEVIATION,
+    pool: '0x000000007588B488d180899cDEa2080a886D2441',
+    token0: getEthUsdcMarket(MAINNET_DEPLOYMENT).currency0,
+    token1: getEthUsdcMarket(MAINNET_DEPLOYMENT).currency1,
+  },
+] as const
+
 export const MAINNET_VAULT_ADDRESSES = MAINNET_DEPLOYMENT.hypovault.vaults
+export const MAINNET_LEGACY_VAULT_ADDRESSES = {
+  wethPlpVault: '0x779a2aa634A004b3a3f3b322083744869BBC6D66',
+  usdcPlpVault: '0x963Fe9c93bc353602656ee4051A75114bA74d6c5',
+} as const
 export { MAINNET_CHAIN_ID }
