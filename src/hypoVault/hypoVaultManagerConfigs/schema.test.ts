@@ -145,7 +145,7 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
       '0x14c4c96cc3730452ce71a447bdde6132f81acec862098a9ddd5e086805046a07',
     )
     expect(MainnetUSDCPLPStrategistLeaves.metadata.ManageRoot).toBe(
-      '0x215542d18c9cf442c62bc3a06dbe8d8d9bc893e5d97e70b675e5c8b1721c6e29',
+      '0xed7d4ae055fd62c6edc93bd676456748f52fe4f4b78f60ab3ef6394bacc31b5d',
     )
     expect(MainnetWETHPLPVaultPoolInfos.vaultAddress).toBe(deployment.hypovault.vaults.wethPlpVault)
     expect(MainnetUSDCPLPVaultPoolInfos.vaultAddress).toBe(deployment.hypovault.vaults.usdcPlpVault)
@@ -154,6 +154,9 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     )
     expect(MainnetUSDCPLPVaultPoolInfos.poolInfos[0]?.pool).toBe(
       deployment.panoptic.pool.panopticPool,
+    )
+    expect(MainnetUSDCPLPVaultPoolInfos.poolInfos[1]?.pool).toBe(
+      '0x0f34e6fCda264349Db10d445BD95f529cbe88090',
     )
   })
 

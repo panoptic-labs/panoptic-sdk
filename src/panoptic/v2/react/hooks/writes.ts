@@ -29,9 +29,11 @@ import {
   type SwapExactInParams,
   type SwapExactOutParams,
   type UnsupplyParams,
+  type UnwrapWethParams,
   type UnwrapXstockParams,
   type WithdrawParams,
   type WithdrawWithPositionsParams,
+  type WrapEthParams,
   type WrapXstockParams,
   approve,
   approvePool,
@@ -55,9 +57,11 @@ import {
   swapExactIn,
   swapExactOut,
   unsupply,
+  unwrapWeth,
   unwrapXstock,
   withdraw,
   withdrawWithPositions,
+  wrapEth,
   wrapXstock,
 } from '../../writes'
 import { mutationEffects } from '../mutationEffects'
@@ -236,6 +240,46 @@ export function useUnwrapXstock() {
     mutationFn: (params: OmitInjected<UnwrapXstockParams>) => {
       const wallet = requireWallet({ walletClient, account })
       return unwrapXstock({ client: publicClient, ...wallet, ...params })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...queryKeys.all] })
+    },
+  })
+}
+
+/**
+ * Wrap native ETH into WETH (`deposit` payable). No approval needed.
+ * Invalidates SDK queries so balances refetch.
+ */
+export function useWrapEth() {
+  const { publicClient, walletClient, account } = usePanopticContext()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    onMutate: () => createWalletMutationContext({ walletClient, account }),
+    mutationFn: (params: OmitInjected<WrapEthParams>) => {
+      const wallet = requireWallet({ walletClient, account })
+      return wrapEth({ client: publicClient, ...wallet, ...params })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...queryKeys.all] })
+    },
+  })
+}
+
+/**
+ * Unwrap WETH back into native ETH (`withdraw`). Burns the caller's own WETH —
+ * no approval needed. Invalidates SDK queries so balances refetch.
+ */
+export function useUnwrapWeth() {
+  const { publicClient, walletClient, account } = usePanopticContext()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    onMutate: () => createWalletMutationContext({ walletClient, account }),
+    mutationFn: (params: OmitInjected<UnwrapWethParams>) => {
+      const wallet = requireWallet({ walletClient, account })
+      return unwrapWeth({ client: publicClient, ...wallet, ...params })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [...queryKeys.all] })

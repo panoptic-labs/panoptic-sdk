@@ -124,4 +124,85 @@ describe('useRequestDeposit allowance guards', () => {
       }),
     )
   })
+
+  it('uses the simulation account for allowance and deposit request simulation', () => {
+    const tokenAddress = '0x3333333333333333333333333333333333333333' as Address
+    const vaultAddress = '0x2222222222222222222222222222222222222222' as Address
+    const connectedAccount = '0x1111111111111111111111111111111111111111' as Address
+    const simulationAccount = '0x4444444444444444444444444444444444444444' as Address
+
+    mockUseAccount.mockReturnValue({
+      address: connectedAccount,
+    })
+
+    renderHook(() =>
+      useRequestDeposit({
+        vaultAddress,
+        assets: 10n,
+        tokenAddress,
+        simulationAccount,
+      }),
+    )
+
+    expect(mockUseReadContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: tokenAddress,
+        args: [simulationAccount, vaultAddress],
+        query: expect.objectContaining({ enabled: true }),
+      }),
+    )
+
+    const simulateCalls = mockUseSimulateContract.mock.calls as [unknown][]
+    const approveSimulateArgs = simulateCalls[0]?.[0]
+    const requestSimulateArgs = simulateCalls[1]?.[0]
+
+    expect(approveSimulateArgs).toEqual(
+      expect.objectContaining({
+        account: connectedAccount,
+        query: expect.objectContaining({ enabled: false }),
+      }),
+    )
+    expect(requestSimulateArgs).toEqual(
+      expect.objectContaining({
+        account: simulationAccount,
+        query: expect.objectContaining({ enabled: true }),
+      }),
+    )
+  })
+
+  it('treats differently cased connected and simulation account addresses as the same account', () => {
+    const tokenAddress = '0x3333333333333333333333333333333333333333' as Address
+    const vaultAddress = '0x2222222222222222222222222222222222222222' as Address
+    const connectedAccount = '0xAbC0000000000000000000000000000000000000' as Address
+    const simulationAccount = '0xabc0000000000000000000000000000000000000' as Address
+
+    mockUseAccount.mockReturnValue({
+      address: connectedAccount,
+    })
+
+    mockUseReadContract.mockReturnValue({
+      isFetching: false,
+      data: 0n,
+      refetch: vi.fn(),
+    })
+
+    renderHook(() =>
+      useRequestDeposit({
+        vaultAddress,
+        assets: 10n,
+        tokenAddress,
+        simulationAccount,
+      }),
+    )
+
+    const simulateCalls = mockUseSimulateContract.mock.calls as [unknown][]
+    const approveSimulateArgs = simulateCalls[0]?.[0]
+
+    expect(approveSimulateArgs).toEqual(
+      expect.objectContaining({
+        account: connectedAccount,
+        query: expect.objectContaining({ enabled: true }),
+      }),
+    )
+  })
 })

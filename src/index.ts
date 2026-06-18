@@ -205,10 +205,13 @@ export {
   getProofsUsingTree,
 } from './hypoVault/utils/merkleTreeHelper'
 export {
+  type VaultPoolCandidateTokenIds,
   buildVaultManagerInput,
   buildVaultManagerInputAtBlock,
   getVaultPoolInfos,
+  resolveVaultHistoricalCandidatesByPool,
   resolveVaultTokenIdsByPool,
+  verifyVaultOpenTokenIdsAtBlock,
 } from './hypoVault/utils/vaultManagerInput'
 export {
   type VaultDisplayNameResolver,

@@ -55,6 +55,11 @@ export interface UniswapV3PoolInfo {
   currentTick: number
   sqrtPriceX96: bigint
   liquidity: bigint
+  /**
+   * Packed protocol fee from slot0: `feeProtocol1 << 4 | feeProtocol0`. Each
+   * nibble `n` denotes a protocol fee of `1/n` of the swap fee (`0` = off).
+   */
+  feeProtocol: bigint
   _meta: BlockMeta
 }
 
@@ -124,6 +129,7 @@ export async function getUniswapV3PoolInfo(
     currentTick: Number(slot0[1]),
     sqrtPriceX96: slot0[0],
     liquidity,
+    feeProtocol: BigInt(slot0[5]),
     _meta,
   }
 }

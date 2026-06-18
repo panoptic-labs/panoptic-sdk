@@ -22,18 +22,21 @@ export const useRequestDeposit = ({
   vaultAddress,
   assets,
   tokenAddress,
+  simulationAccount,
   onWaitSuccess,
 }: {
   chainId?: number
   vaultAddress: Address
   assets: bigint
   tokenAddress: Address
+  simulationAccount?: Address
   onWaitSuccess?: () => void
 }) => {
   const { address: account } = useAccount()
+  const simulatedAccount = simulationAccount ?? account
   const canReadAllowance =
-    account != null &&
-    account !== zeroAddress &&
+    simulatedAccount != null &&
+    simulatedAccount !== zeroAddress &&
     tokenAddress !== zeroAddress &&
     vaultAddress !== zeroAddress
 
@@ -42,7 +45,7 @@ export const useRequestDeposit = ({
     address: canReadAllowance ? tokenAddress : undefined,
     abi: Erc20Abi,
     functionName: 'allowance',
-    args: canReadAllowance ? [account, vaultAddress] : undefined,
+    args: canReadAllowance ? [simulatedAccount, vaultAddress] : undefined,
     query: {
       enabled: canReadAllowance,
     },
@@ -51,6 +54,12 @@ export const useRequestDeposit = ({
   const allowanceKnown = allowanceRead.data !== undefined
 
   const tokenNeedsApproval = canReadAllowance && allowanceKnown && allowanceRead.data < assets
+  const normalizedAccount = account?.toLowerCase()
+  const normalizedSimulationAccount = simulationAccount?.toLowerCase()
+  const canApproveForSimulatedAccount =
+    normalizedAccount != null &&
+    normalizedAccount !== zeroAddress &&
+    (normalizedSimulationAccount === undefined || normalizedSimulationAccount === normalizedAccount)
 
   const refetchAllowance = allowanceRead.refetch
 
@@ -62,7 +71,12 @@ export const useRequestDeposit = ({
     args: [vaultAddress, maxUint256],
     account,
     query: {
-      enabled: allowanceKnown && tokenNeedsApproval && assets > 0n && account != null,
+      enabled:
+        allowanceKnown &&
+        tokenNeedsApproval &&
+        assets > 0n &&
+        account != null &&
+        canApproveForSimulatedAccount,
       retry: false,
     },
   })
@@ -81,15 +95,15 @@ export const useRequestDeposit = ({
   const simulate = useSimulateContract({
     chainId,
     ...getRequestDepositContractConfig({ vaultAddress, assets }),
-    account,
+    account: simulatedAccount,
     query: {
       enabled:
         allowanceKnown &&
         !tokenNeedsApproval &&
         assets > 0n &&
         vaultAddress !== zeroAddress &&
-        account != null &&
-        account !== zeroAddress,
+        simulatedAccount != null &&
+        simulatedAccount !== zeroAddress,
       retry: false,
     },
   })
@@ -185,6 +199,9 @@ export const useRequestDeposit = ({
       return 'Approval confirmed. Syncing allowance...'
     }
     if (tokenNeedsApproval) {
+      if (!canApproveForSimulatedAccount) {
+        return 'Approval Required'
+      }
       if (approveSimulate.isLoading) {
         return 'Simulating approval...'
       }
@@ -203,6 +220,7 @@ export const useRequestDeposit = ({
   }, [
     isApprovalSyncing,
     tokenNeedsApproval,
+    canApproveForSimulatedAccount,
     approveSimulate.isLoading,
     approveWrite.isPending,
     approveWait.isLoading,

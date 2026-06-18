@@ -122,15 +122,22 @@ export {
   swapExactOutAndWait,
 } from './swap'
 
-// xStock wrap / unwrap (ERC4626 wrapper) operations
+// xStock wrap / unwrap (ERC4626 wrapper) + ETH/WETH wrap / unwrap operations
 export {
   type PreviewWrapParams,
+  type UnwrapWethParams,
   type UnwrapXstockParams,
+  type WrapEthParams,
   type WrapXstockParams,
   previewUnwrap,
   previewWrap,
+  unwrapWeth,
+  unwrapWethAndWait,
   unwrapXstock,
   unwrapXstockAndWait,
+  wethWrapAbi,
+  wrapEth,
+  wrapEthAndWait,
   wrapXstock,
   wrapXstockAndWait,
   xstockWrapperAbi,

@@ -11,6 +11,7 @@ const BASE_DEPLOYMENT = requireChainDeployment(BASE_CHAIN_ID)
 const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
 
 export const MAX_PRICE_DEVIATION = 100 as const
+export const WSPCXX_USDC_MAX_PRICE_DEVIATION = 10000 as const
 export const DEFAULT_TRIGGER_TICK = 150 as const
 
 export const SEPOLIA_DEFAULT_POOL_INFOS = [
@@ -41,6 +42,16 @@ export const MAINNET_DEFAULT_POOL_INFOS = [
     pool: MAINNET_DEPLOYMENT.panoptic.pool.panopticPool,
     token0: getEthUsdcMarket(MAINNET_DEPLOYMENT).currency0,
     token1: getEthUsdcMarket(MAINNET_DEPLOYMENT).currency1,
+  },
+] as const
+
+export const MAINNET_USDC_PLP_POOL_INFOS = [
+  ...MAINNET_DEFAULT_POOL_INFOS,
+  {
+    maxPriceDeviation: WSPCXX_USDC_MAX_PRICE_DEVIATION,
+    pool: '0x0f34e6fCda264349Db10d445BD95f529cbe88090',
+    token0: '0x8e2eeD8b8B5E13Ea7BF38e50d7821d2C57309072',
+    token1: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   },
 ] as const
 

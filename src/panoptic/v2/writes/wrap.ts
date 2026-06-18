@@ -208,3 +208,109 @@ export async function previewUnwrap(params: PreviewWrapParams): Promise<bigint> 
     args: [amount],
   })
 }
+
+/**
+ * Minimal canonical WETH9 surface used for ETH<->WETH wrapping. Unlike the
+ * ERC4626 xStock wrapper, WETH is a 1:1 wrapper: `deposit` is payable and wraps
+ * `msg.value`, `withdraw` unwraps an exact amount back to native ETH.
+ */
+export const wethWrapAbi = [
+  {
+    type: 'function',
+    name: 'deposit',
+    stateMutability: 'payable',
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'withdraw',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'wad', type: 'uint256' }],
+    outputs: [],
+  },
+] as const
+
+/** Parameters for {@link wrapEth}. */
+export interface WrapEthParams {
+  /** Public client */
+  client: PublicClient
+  /** Wallet client */
+  walletClient: WalletClient
+  /** Account address */
+  account: Address
+  /** Canonical WETH9 address for the chain. */
+  weth: Address
+  /** Amount of native ETH to wrap (sent as msg.value). */
+  amount: bigint
+  /** Gas and transaction overrides */
+  txOverrides?: TxOverrides
+}
+
+/**
+ * Wrap native ETH into WETH (`deposit` payable). No approval needed.
+ *
+ * @returns TxResult with hash and wait function
+ */
+export async function wrapEth(params: WrapEthParams): Promise<TxResult> {
+  const { client, walletClient, account, weth, amount, txOverrides } = params
+  return submitWrite({
+    client,
+    walletClient,
+    account,
+    address: weth,
+    abi: wethWrapAbi,
+    functionName: 'deposit',
+    args: [],
+    value: amount,
+    txOverrides,
+  })
+}
+
+/** Wrap ETH and wait for confirmation. */
+export async function wrapEthAndWait(params: WrapEthParams): Promise<TxReceipt> {
+  const result = await wrapEth(params)
+  return result.wait()
+}
+
+/** Parameters for {@link unwrapWeth}. */
+export interface UnwrapWethParams {
+  /** Public client */
+  client: PublicClient
+  /** Wallet client */
+  walletClient: WalletClient
+  /** Account address */
+  account: Address
+  /** Canonical WETH9 address for the chain. */
+  weth: Address
+  /** Amount of WETH to unwrap back to native ETH. */
+  amount: bigint
+  /** Gas and transaction overrides */
+  txOverrides?: TxOverrides
+}
+
+/**
+ * Unwrap WETH back into native ETH (`withdraw`). Burns the caller's own WETH —
+ * no approval needed.
+ *
+ * @returns TxResult with hash and wait function
+ */
+export async function unwrapWeth(params: UnwrapWethParams): Promise<TxResult> {
+  const { client, walletClient, account, weth, amount, txOverrides } = params
+  return submitWrite({
+    client,
+    walletClient,
+    account,
+    address: weth,
+    abi: wethWrapAbi,
+    functionName: 'withdraw',
+    args: [amount],
+    txOverrides,
+  })
+}
+
+/** Unwrap WETH and wait for confirmation. */
+export async function unwrapWethAndWait(params: UnwrapWethParams): Promise<TxReceipt> {
+  const result = await unwrapWeth(params)
+  return result.wait()
+}

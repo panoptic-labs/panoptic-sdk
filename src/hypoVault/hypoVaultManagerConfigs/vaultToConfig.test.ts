@@ -8,6 +8,7 @@ const MAINNET_PRODUCTION_WETH_VAULT = '0xd4e2c720a760049cc4151bcf61e3a9348db9cd9
 const MAINNET_PRODUCTION_USDC_VAULT = '0x236d0558f06cd60780b232d4Ec4c92d2cb7e4D18'
 const MAINNET_LEGACY_WETH_VAULT = '0x779a2aa634A004b3a3f3b322083744869BBC6D66'
 const MAINNET_LEGACY_USDC_VAULT = '0x963Fe9c93bc353602656ee4051A75114bA74d6c5'
+const MAINNET_SPCX_USDC_PANOPTIC_POOL = '0x0f34e6fCda264349Db10d445BD95f529cbe88090'
 
 describe('getHypoVaultConfigForVault', () => {
   it('resolves mainnet production and legacy HypoVault manager configs', () => {
@@ -45,7 +46,14 @@ describe('getHypoVaultConfigForVault', () => {
   it('resolves mainnet production and legacy HypoVault pool infos', () => {
     expect(getVaultPoolInfos(MAINNET_PRODUCTION_WETH_VAULT, MAINNET_CHAIN_ID)).toHaveLength(1)
     expect(getVaultPoolInfos(MAINNET_LEGACY_WETH_VAULT, MAINNET_CHAIN_ID)).toHaveLength(1)
-    expect(getVaultPoolInfos(MAINNET_PRODUCTION_USDC_VAULT, MAINNET_CHAIN_ID)).toHaveLength(1)
+    const productionUsdcPoolInfos = getVaultPoolInfos(
+      MAINNET_PRODUCTION_USDC_VAULT,
+      MAINNET_CHAIN_ID,
+    )
+    expect(productionUsdcPoolInfos).toHaveLength(2)
+    expect(productionUsdcPoolInfos.map((poolInfo) => poolInfo.pool.toLowerCase())).toContain(
+      MAINNET_SPCX_USDC_PANOPTIC_POOL.toLowerCase(),
+    )
     expect(getVaultPoolInfos(MAINNET_LEGACY_USDC_VAULT, MAINNET_CHAIN_ID)).toHaveLength(1)
   })
 })

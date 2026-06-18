@@ -436,6 +436,119 @@ export function getVaultPoolInfos(vaultAddress: Address, chainId?: number): read
   return artifact?.poolInfos ?? []
 }
 
+export type VaultPoolCandidateTokenIds = {
+  poolAddress: Address
+  /**
+   * All-time candidate tokenIds (subgraph balances ∪ option events), sorted
+   * ascending. Block-INDEPENDENT: a superset valid for any historical block.
+   */
+  candidates: bigint[]
+}
+
+/**
+ * Resolve the block-INDEPENDENT candidate tokenIds per pool for a vault — i.e. the
+ * two subgraph paging queries only, with no on-chain verification. Pair with
+ * {@link verifyVaultOpenTokenIdsAtBlock} to narrow to positions open at a given
+ * block. Splitting these out lets a timeseries fetch the candidate set ONCE per
+ * vault instead of re-running the subgraph paging for every anchor block. The
+ * combined {@link resolveVaultTokenIdsByPool} remains for one-shot callers.
+ */
+export async function resolveVaultHistoricalCandidatesByPool({
+  chainId,
+  vaultAddress,
+  managerAddress,
+  poolInfos,
+  panopticSubgraphUrl,
+  fetchFn = fetch,
+}: {
+  chainId: number
+  vaultAddress: Address
+  managerAddress?: Address | null
+  poolInfos?: readonly PoolInfo[]
+  panopticSubgraphUrl?: string
+  fetchFn?: FetchLike
+}): Promise<VaultPoolCandidateTokenIds[]> {
+  const resolvedPoolInfos = poolInfos ?? getVaultPoolInfos(vaultAddress, chainId)
+  if (resolvedPoolInfos.length === 0) {
+    return []
+  }
+
+  const configuredEndpoint =
+    panopticSubgraphUrl ?? requireChainDeployment(chainId).subgraphs.panoptic
+  if (configuredEndpoint === undefined) {
+    return resolvedPoolInfos.map((poolInfo) => ({ poolAddress: poolInfo.pool, candidates: [] }))
+  }
+
+  const vaultAddressLower = toLowerAddress(vaultAddress)
+  const recipientAddresses = Array.from(
+    new Set(
+      [vaultAddressLower, managerAddress?.toLowerCase()]
+        .filter((value): value is string => value !== undefined && value.length > 0)
+        .map((value) => value.toLowerCase()),
+    ),
+  )
+  const poolIds = Array.from(
+    new Set(resolvedPoolInfos.map((poolInfo) => toLowerAddress(poolInfo.pool))),
+  )
+
+  const balanceCandidatesByPool: CandidateTokenIdsByPool = new Map()
+  const eventCandidatesByPool: CandidateTokenIdsByPool = new Map()
+
+  await collectPoolAccountBalanceCandidates({
+    endpoint: configuredEndpoint,
+    poolIds,
+    vaultAddress: vaultAddressLower,
+    candidatesByPool: balanceCandidatesByPool,
+    fetchFn,
+  })
+
+  await collectOptionEventCandidates({
+    endpoint: configuredEndpoint,
+    poolIds,
+    recipientAddresses,
+    candidatesByPool: eventCandidatesByPool,
+    fetchFn,
+  })
+
+  return resolvedPoolInfos.map((poolInfo) => {
+    const poolAddressLower = toLowerAddress(poolInfo.pool)
+    const openBalances = balanceCandidatesByPool.get(poolAddressLower) ?? new Set<bigint>()
+    const eventCandidates = eventCandidatesByPool.get(poolAddressLower) ?? new Set<bigint>()
+    const candidates = sortBigintsAscending(new Set<bigint>([...openBalances, ...eventCandidates]))
+    return { poolAddress: poolInfo.pool, candidates }
+  })
+}
+
+/**
+ * Narrow pre-resolved {@link VaultPoolCandidateTokenIds} to the tokenIds actually
+ * open at `blockNumber`, per pool, via on-chain `getFullPositionsData` (bisecting
+ * on stale candidates). This is the per-block half of the candidate/verify split.
+ */
+export async function verifyVaultOpenTokenIdsAtBlock({
+  viemClient,
+  vaultAddress,
+  candidatesByPool,
+  blockNumber,
+}: {
+  viemClient: Client
+  vaultAddress: Address
+  candidatesByPool: readonly VaultPoolCandidateTokenIds[]
+  blockNumber: bigint
+}): Promise<bigint[][]> {
+  const tokenIdsByPool: bigint[][] = []
+  for (const { poolAddress, candidates } of candidatesByPool) {
+    const openTokenIds = await filterOpenTokenIdsAtBlock({
+      viemClient,
+      poolAddress,
+      account: vaultAddress,
+      candidates,
+      blockNumber,
+    })
+    tokenIdsByPool.push(openTokenIds)
+  }
+  return tokenIdsByPool
+}
+
 export async function resolveVaultTokenIdsByPool({
   viemClient,
   chainId,
