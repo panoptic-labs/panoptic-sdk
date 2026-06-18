@@ -12,6 +12,7 @@ export const WethPlpVaultBaseProdConfig: HypoVaultManagerConfig = {
   manageCycleIntervalMs: 1200000,
   vaultCapInUnderlying: 1_000_000_000_000_000_000n, // 1 WETH
   vaultCapInShares: 1_000_000_000_000_000_000_000_000n, // ~1 WETH (verify share scaling on-chain)
+  allowUnlimitedDepositRequestIfCapNotReached: true,
   maxBuyingPowerUsageBps: 6600,
   chainId: BASE_CHAIN_ID,
   poolDeploymentBlock: 43_000_000,

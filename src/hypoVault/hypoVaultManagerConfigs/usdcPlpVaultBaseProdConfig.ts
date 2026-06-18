@@ -13,6 +13,7 @@ export const UsdcPlpVaultBaseProdConfig: HypoVaultManagerConfig = {
   manageCycleIntervalMs: 1200000,
   vaultCapInUnderlying: 300_000_000n, // 300 USDC
   vaultCapInShares: 3_000_000_000_000_000n, // ~300 USDC (verify share scaling on-chain)
+  allowUnlimitedDepositRequestIfCapNotReached: true,
   maxBuyingPowerUsageBps: 2000,
   chainId: BASE_CHAIN_ID,
   poolDeploymentBlock: 43_000_000,

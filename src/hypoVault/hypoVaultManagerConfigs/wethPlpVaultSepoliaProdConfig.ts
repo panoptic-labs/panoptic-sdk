@@ -11,6 +11,7 @@ export const WethPlpVaultSepoliaProdConfig: HypoVaultManagerConfig = {
   vaultAssetIndex: 1n,
   manageCycleIntervalMs: 600000,
   vaultCapInUnderlying: 1_000_000_000_000_000_000n, // 1 WETH
+  allowUnlimitedDepositRequestIfCapNotReached: true,
   maxBuyingPowerUsageBps: 6600,
   chainId: SEPOLIA_CHAIN_ID,
   hypoVaultAddress: SEPOLIA_HYPOVAULT_ADDRESSES.wethPlpVault,

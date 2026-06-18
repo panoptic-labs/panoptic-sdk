@@ -47,6 +47,12 @@ const SEPOLIA_MANUAL_TX_CONFIGS = [
   WethPlpVaultSepoliaProdConfig,
 ]
 
+const ALL_HYPOVAULT_CONFIGS = [
+  ...BASE_MANUAL_TX_CONFIGS,
+  ...MAINNET_MANUAL_TX_CONFIGS,
+  ...SEPOLIA_MANUAL_TX_CONFIGS,
+]
+
 describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
   it('accepts manual collateral allocation defaults', () => {
     const parsed = HypoVaultManagerConfigSchema.parse(UsdcPlpVaultSepoliaDevConfig)
@@ -82,6 +88,13 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
       expect(allocations.length).toBe(1)
       expect(allocations[0]?.allocationBps).toBe(10000)
       expect(allocations[0]?.trackerAddress.startsWith('0x')).toBe(true)
+    }
+  })
+
+  it('enables unlimited below-cap deposit requests for every vault config', () => {
+    for (const config of ALL_HYPOVAULT_CONFIGS) {
+      const parsed = HypoVaultManagerConfigSchema.parse(config)
+      expect(parsed.allowUnlimitedDepositRequestIfCapNotReached).toBe(true)
     }
   })
 

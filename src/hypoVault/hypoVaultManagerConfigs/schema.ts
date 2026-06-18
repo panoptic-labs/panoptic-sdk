@@ -11,6 +11,7 @@ export const HypoVaultManagerConfigSchema = z.object({
   manageCycleIntervalMs: z.number().positive().optional(), // can be optional if only running manage cycles in response to websocket events instead of polling
   vaultCapInUnderlying: z.bigint().positive(),
   vaultCapInShares: z.bigint().positive().optional(), // when set, manager caps by totalSupply instead of totalAssets
+  allowUnlimitedDepositRequestIfCapNotReached: z.boolean().optional(),
   maxBuyingPowerUsageBps: z.number().int().positive().max(10000), // skip auto-fulfilling a withdrawal if it would push requiredCollateral / collateralBalance past this, on the vault's asset side
   chainId: z.number().int().positive().optional(),
   poolDeploymentBlock: z.number().int().nonnegative().optional(),

@@ -17,6 +17,7 @@ export const WethPlpVaultMainnetProdConfig: HypoVaultManagerConfig = {
   manageCycleIntervalMs: 600000,
   vaultCapInUnderlying: 9_500_000_000_000_000_000n, // Fallback cap: 9.5 WETH if share-price-derived cap is unavailable
   vaultCapInShares: 9_500_000_000_000_000_000_000_000n, // Active cap target: 9.5 WETH in share-cap mode
+  allowUnlimitedDepositRequestIfCapNotReached: true,
   maxBuyingPowerUsageBps: 6600,
   chainId: MAINNET_CHAIN_ID,
   hypoVaultAddress: MAINNET_HYPOVAULT_ADDRESSES.wethPlpVault,

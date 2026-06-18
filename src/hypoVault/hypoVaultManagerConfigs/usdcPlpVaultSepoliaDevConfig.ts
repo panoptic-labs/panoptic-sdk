@@ -12,6 +12,7 @@ export const UsdcPlpVaultSepoliaDevConfig: HypoVaultManagerConfig = {
   vaultAssetIndex: 0n,
   manageCycleIntervalMs: 600000,
   vaultCapInUnderlying: 300_000_000n, // 300 USDC
+  allowUnlimitedDepositRequestIfCapNotReached: true,
   maxBuyingPowerUsageBps: 2000,
   chainId: SEPOLIA_CHAIN_ID,
   hypoVaultAddress: SEPOLIA_HYPOVAULT_ADDRESSES.usdcPlpVault,
