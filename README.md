@@ -128,6 +128,7 @@ await openPositionAndWait({
 | [`examples/liquidation-bot/`](./src/panoptic/v2/examples/liquidation-bot/) | Monitors accounts, detects undercollateralized positions, and executes liquidations |
 | [`examples/oracle-poker/`](./src/panoptic/v2/examples/oracle-poker/) | Keeps Panoptic oracle observations fresh by poking within epoch constraints |
 | [`examples/reverse-gamma-scalping/`](./src/panoptic/v2/examples/reverse-gamma-scalping/) | Delta-hedged strategy using loans, credits, and swap-aware greeks |
+| [`examples/intermediate/17-risk-guardrails.ts`](./src/panoptic/v2/examples/intermediate/17-risk-guardrails.ts) | Preflight checks for bot freshness, pool health, safe mode, utilization limits, and retry policy |
 
 ---
 
