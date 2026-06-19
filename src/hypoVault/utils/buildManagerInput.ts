@@ -48,6 +48,33 @@ export function isUnderlyingEquivalentToken({
   return tokenIsNativeAlias && underlyingLower === wethLower
 }
 
+export function assertValidManagerInputTokenIds({
+  tokenIds,
+  expectedPoolCount,
+}: {
+  tokenIds: readonly (readonly bigint[])[]
+  expectedPoolCount: number
+}): void {
+  if (tokenIds.length !== expectedPoolCount) {
+    throw new Error(
+      `Invalid managerInput tokenIds length: expected ${expectedPoolCount}, received ${tokenIds.length}`,
+    )
+  }
+
+  for (let poolIndex = 0; poolIndex < tokenIds.length; poolIndex += 1) {
+    const poolTokenIds = tokenIds[poolIndex]
+    const seen = new Set<bigint>()
+    for (const tokenId of poolTokenIds) {
+      if (seen.has(tokenId)) {
+        throw new Error(
+          `Invalid managerInput tokenIds: duplicate tokenId ${tokenId.toString()} in pool index ${poolIndex}`,
+        )
+      }
+      seen.add(tokenId)
+    }
+  }
+}
+
 /**
  * Builds the encoded managerInput for HypoVault operations like fulfillDeposits and fulfillWithdrawals.
  *
@@ -70,11 +97,7 @@ export async function buildManagerInput({
   wethAddress,
   erc4626Vaults = [],
 }: BuildManagerInputParams): Promise<Hex> {
-  if (tokenIds.length !== poolInfos.length) {
-    throw new Error(
-      `Invalid managerInput tokenIds length: expected ${poolInfos.length}, received ${tokenIds.length}`,
-    )
-  }
+  assertValidManagerInputTokenIds({ tokenIds, expectedPoolCount: poolInfos.length })
 
   // Fetch TWAP ticks for all pools in parallel
   const twapTicks = await Promise.all(
