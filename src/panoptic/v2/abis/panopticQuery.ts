@@ -144,22 +144,6 @@ export const panopticQueryAbi = [
   },
   {
     type: 'function',
-    name: 'getNetLiquidationValue',
-    inputs: [
-      { name: 'pool', type: 'address', internalType: 'contract PanopticPool' },
-      { name: 'account', type: 'address', internalType: 'address' },
-      { name: 'includePendingPremium', type: 'bool', internalType: 'bool' },
-      { name: 'positionIdList', type: 'uint256[]', internalType: 'TokenId[]' },
-      { name: 'atTick', type: 'int24', internalType: 'int24' },
-    ],
-    outputs: [
-      { name: 'value0', type: 'int256', internalType: 'int256' },
-      { name: 'value1', type: 'int256', internalType: 'int256' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
     name: 'getPortfolioValue',
     inputs: [
       { name: 'pool', type: 'address', internalType: 'contract PanopticPool' },

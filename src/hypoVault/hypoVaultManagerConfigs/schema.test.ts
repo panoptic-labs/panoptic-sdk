@@ -194,14 +194,32 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     expect(WethPlpVaultMainnetLegacyConfig.addresses?.ethUsdc500bpsV4Collateral0).toBe(
       '0x6cd0186Fb4c32B6fD23279bBE0022506958216f9',
     )
+    expect(WethPlpVaultMainnetLegacyConfig.addresses?.ethUsdc500bpsV4Collateral1).toBe(
+      '0x6778d652A0BCe658C9a0E27D506eA20D179140e5',
+    )
+    expect(UsdcPlpVaultMainnetLegacyConfig.addresses?.ethUsdc500bpsV4Collateral0).toBe(
+      '0x6cd0186Fb4c32B6fD23279bBE0022506958216f9',
+    )
     expect(UsdcPlpVaultMainnetLegacyConfig.addresses?.ethUsdc500bpsV4Collateral1).toBe(
       '0x6778d652A0BCe658C9a0E27D506eA20D179140e5',
     )
+    expect(WethPlpVaultMainnetLegacyConfig.manualTxDefaults?.collateralAllocations).toEqual([
+      {
+        trackerAddress: '0x6778d652A0BCe658C9a0E27D506eA20D179140e5',
+        allocationBps: 10000,
+      },
+    ])
+    expect(UsdcPlpVaultMainnetLegacyConfig.manualTxDefaults?.collateralAllocations).toEqual([
+      {
+        trackerAddress: '0x6cd0186Fb4c32B6fD23279bBE0022506958216f9',
+        allocationBps: 10000,
+      },
+    ])
     expect(MainnetLegacyWETHPLPStrategistLeaves.metadata.ManageRoot).toBe(
-      '0xcb3f5429a543b40755e0b93c8d0bd9741a8ebe81c7ee537a03fc8a842c10592f',
+      '0xd097509d7b1fc6f899a47b8d06f8a5e2b3337ee8b98e77ef612a1c54a79370c8',
     )
     expect(MainnetLegacyUSDCPLPStrategistLeaves.metadata.ManageRoot).toBe(
-      '0xe4daaf6390188a7f4d786ef65148e555eb95f9b92a6e08990487519916135cd9',
+      '0x4df5c1b82729c2e070ab0923230e57bb0d0ee3a0f29159178c1315b4cb47d735',
     )
     expect(MainnetWETHPLPLegacyVaultPoolInfos.vaultAddress).toBe(
       '0x779a2aa634A004b3a3f3b322083744869BBC6D66',

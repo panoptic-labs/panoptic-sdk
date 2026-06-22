@@ -33,6 +33,7 @@ import {
   getFactoryConstructMetadata,
   getFactoryOwnerOf,
   getFactoryTokenURI,
+  getGuardianUnlockState,
   getInterestState,
   getLiquidationPrices,
   getMarginBuffer,
@@ -197,6 +198,32 @@ export function useSafeMode(poolAddress: Address, options?: QueryOptions) {
       getClientCacheScopeKey(publicClient, clientScope),
     ],
     queryFn: () => getSafeMode({ client: publicClient, poolAddress }),
+    enabled: options?.enabled,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+/**
+ * React hook for the Guardian pending-unlock state of a pool.
+ *
+ * Reads `unlockEta` + `isPoolUnlockReady` from the PanopticGuardian so the UI
+ * can surface the unlock timelock while a pool is locked (close-only). Gate it
+ * via `options.enabled` so it only runs when the pool is actually locked.
+ *
+ * @param poolAddress - The PanopticPool address
+ * @param options - Optional react-query settings (enabled, refetchInterval, staleTime, gcTime)
+ * @returns A react-query result whose `data` is a `GuardianUnlockState`
+ */
+export function useGuardianUnlockState(poolAddress: Address, options?: QueryOptions) {
+  const { publicClient, chainId, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.guardianUnlock(chainId, poolAddress),
+      getClientCacheScopeKey(publicClient, clientScope),
+    ],
+    queryFn: () => getGuardianUnlockState({ client: publicClient, poolAddress }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
     staleTime: options?.staleTime,

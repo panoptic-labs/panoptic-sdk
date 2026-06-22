@@ -8,6 +8,7 @@ const MAINNET_HYPOVAULT_MANAGER_ADDRESSES = MAINNET_DEPLOYMENT.hypovault.manager
 const MAINNET_PANOPTIC_POOL_ADDRESSES = MAINNET_DEPLOYMENT.panoptic.pool
 const MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES = {
   panopticPool: '0x000000007588B488d180899cDEa2080a886D2441',
+  collateralTracker0: '0x6cd0186Fb4c32B6fD23279bBE0022506958216f9',
   collateralTracker1: '0x6778d652A0BCe658C9a0E27D506eA20D179140e5',
 } as const
 
@@ -53,6 +54,7 @@ export const UsdcPlpVaultMainnetLegacyConfig: HypoVaultManagerConfig = {
   hypoVaultAddress: '0x963Fe9c93bc353602656ee4051A75114bA74d6c5',
   addresses: {
     ...UsdcPlpVaultMainnetProdConfig.addresses,
+    ethUsdc500bpsV4Collateral0: MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES.collateralTracker0,
     ethUsdc500bpsV4Collateral1: MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES.collateralTracker1,
     ethUsdc500bpsV4PanopticPool: MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES.panopticPool,
     hypoVaultManagerWithMerkleVerification: '0xf42EED8F0d3326ad59fc1f5d4c4009B5F6B4D87c',
@@ -61,7 +63,7 @@ export const UsdcPlpVaultMainnetLegacyConfig: HypoVaultManagerConfig = {
   manualTxDefaults: {
     collateralAllocations: [
       {
-        trackerAddress: MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES.collateralTracker1,
+        trackerAddress: MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES.collateralTracker0,
         allocationBps: 10000,
       },
     ],

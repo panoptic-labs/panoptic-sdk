@@ -55,6 +55,12 @@ export const queryKeys = {
     [...queryKeys.all, 'safeMode', chainId.toString(), poolAddress] as const,
 
   /**
+   * Key for Guardian pool-unlock state.
+   */
+  guardianUnlock: (chainId: bigint, poolAddress: Address) =>
+    [...queryKeys.all, 'guardianUnlock', chainId.toString(), poolAddress] as const,
+
+  /**
    * Key for risk parameters.
    */
   riskParameters: (chainId: bigint, poolAddress: Address) =>

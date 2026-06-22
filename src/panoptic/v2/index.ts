@@ -207,6 +207,7 @@ export {
   useFactoryTokenURI,
   useFailPendingPosition,
   useForceExercise as useForceExerciseHook,
+  useGuardianUnlockState,
   useInterestState,
   useIsLiquidatable,
   useLiquidate as useLiquidateHook,
@@ -410,6 +411,8 @@ export type {
   // Delta hedge params
   GetDeltaHedgeParamsInput,
   GetEnforcedTickLimitsParams,
+  // Guardian unlock params + state
+  GetGuardianUnlockStateParams,
   GetInterestStateParams,
   GetLiquidationPricesParams,
   // Margin buffer params
@@ -441,6 +444,7 @@ export type {
   // Safe mode params
   GetSafeModeParams,
   GetUtilizationParams,
+  GuardianUnlockState,
   InterestState,
   IrmCurrent,
   IrmMarketStateInputs,
@@ -513,6 +517,8 @@ export {
   getDeltaHedgeParams,
   // Pool reads
   getEnforcedTickLimits,
+  // Guardian unlock state
+  getGuardianUnlockState,
   getInterestState,
   getIrmCurrent,
   getIrmCurve,

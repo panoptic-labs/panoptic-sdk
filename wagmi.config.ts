@@ -9,6 +9,7 @@ export default defineConfig({
       forge: { build: false },
       include: [
         'PanopticPool.sol/PanopticPoolV2.json',
+        'PanopticGuardian.sol/PanopticGuardian.json',
         'RiskEngine.sol/RiskEngine.json',
         'CollateralTracker.sol/CollateralTrackerV2.json',
         'PanopticFactoryV3.sol/PanopticFactoryV3.json',

@@ -1356,6 +1356,333 @@ export const panopticFactoryV4Abi = [
 ] as const
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// PanopticGuardian
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+export const panopticGuardianAbi = [
+  {
+    type: 'constructor',
+    inputs: [
+      { name: 'guardianAdmin', internalType: 'address', type: 'address' },
+      { name: 'treasurer', internalType: 'address', type: 'address' },
+    ],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'GUARDIAN_ADMIN',
+    outputs: [{ name: '', internalType: 'address', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'TREASURER',
+    outputs: [{ name: '', internalType: 'address', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'UNLOCK_DELAY',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: '', internalType: 'address', type: 'address' }],
+    name: 'builderAdminRevoked',
+    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
+    ],
+    name: 'cancelUnlock',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'riskEngine',
+        internalType: 'contract IRiskEngine',
+        type: 'address',
+      },
+      { name: 'token', internalType: 'address', type: 'address' },
+      { name: 'recipient', internalType: 'address', type: 'address' },
+      { name: 'amount', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'collect',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'builderCode', internalType: 'uint256', type: 'uint256' },
+      { name: 'builderAdmin', internalType: 'address', type: 'address' },
+      {
+        name: 'builderFactory',
+        internalType: 'contract BuilderFactory',
+        type: 'address',
+      },
+    ],
+    name: 'deployBuilder',
+    outputs: [{ name: 'wallet', internalType: 'address', type: 'address' }],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
+    ],
+    name: 'executeUnlock',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'account', internalType: 'address', type: 'address' },
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
+      { name: 'builderCode', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'isBuilderAdmin',
+    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
+    ],
+    name: 'isPoolUnlockReady',
+    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
+    ],
+    name: 'lockPool',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
+      { name: 'builderCode', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'lockPoolAsBuilder',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
+    ],
+    name: 'requestUnlock',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'admin', internalType: 'address', type: 'address' },
+      { name: 'revoked', internalType: 'bool', type: 'bool' },
+    ],
+    name: 'setBuilderAdminRevoked',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: '', internalType: 'contract PanopticPoolV2', type: 'address' }],
+    name: 'unlockEta',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'admin',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+    ],
+    name: 'BuilderAdminRestored',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'admin',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+    ],
+    name: 'BuilderAdminRevoked',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'builderCode',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: true,
+      },
+      {
+        name: 'wallet',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+    ],
+    name: 'BuilderDeployed',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'locker',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+    ],
+    name: 'PoolLocked',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+        indexed: true,
+      },
+    ],
+    name: 'PoolUnlocked',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'token',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'recipient',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'amount',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+    ],
+    name: 'TokensCollected',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+        indexed: true,
+      },
+    ],
+    name: 'UnlockCancelled',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+        indexed: true,
+      },
+      { name: 'eta', internalType: 'uint256', type: 'uint256', indexed: false },
+    ],
+    name: 'UnlockRequested',
+  },
+  { type: 'error', inputs: [], name: 'InvalidBuilderCode' },
+  { type: 'error', inputs: [], name: 'NoPendingUnlock' },
+  { type: 'error', inputs: [], name: 'NotAuthorizedBuilder' },
+  { type: 'error', inputs: [], name: 'NotFactoryAdmin' },
+  { type: 'error', inputs: [], name: 'NotGuardianAdmin' },
+  { type: 'error', inputs: [], name: 'NotTreasurer' },
+  { type: 'error', inputs: [], name: 'UnlockAlreadyPending' },
+  {
+    type: 'error',
+    inputs: [{ name: 'eta', internalType: 'uint256', type: 'uint256' }],
+    name: 'UnlockNotReady',
+  },
+  { type: 'error', inputs: [], name: 'ZeroAddress' },
+] as const
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // PanopticPoolV2
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2138,6 +2465,13 @@ export const riskEngineAbi = [
   {
     type: 'function',
     inputs: [],
+    name: 'BUILDER_FACTORY',
+    outputs: [{ name: '', internalType: 'address', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [],
     name: 'BUILDER_SPLIT',
     outputs: [{ name: '', internalType: 'uint16', type: 'uint16' }],
     stateMutability: 'view',
@@ -2567,13 +2901,6 @@ export const riskEngineAbi = [
       { name: '', internalType: 'int24[]', type: 'int24[]' },
       { name: '', internalType: 'OraclePack', type: 'uint256' },
     ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'guardian',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
     stateMutability: 'view',
   },
   {

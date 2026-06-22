@@ -498,15 +498,18 @@ export async function getNetLiquidationValue(
 
   const effectiveTick = currentTickResult
 
+  // PanopticQuery only exposes the int24[] overload; query a single tick and unwrap.
   const result = await client.readContract({
     address: queryAddress,
     abi: panopticQueryAbi,
     functionName: 'getNetLiquidationValue',
-    args: [poolAddress, account, includePendingPremium, tokenIds, Number(effectiveTick)],
+    args: [poolAddress, account, includePendingPremium, tokenIds, [Number(effectiveTick)]],
     blockNumber: targetBlockNumber,
   })
 
-  const [value0, value1] = result
+  const [values0, values1] = result
+  const value0 = values0[0]
+  const value1 = values1[0]
 
   return {
     value0,

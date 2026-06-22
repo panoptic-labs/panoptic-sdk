@@ -176,6 +176,11 @@ export {
 
 // Safe mode
 export {
+  type GetGuardianUnlockStateParams,
+  type GuardianUnlockState,
+  getGuardianUnlockState,
+} from './guardian'
+export {
   type GetSafeModeParams,
   type SafeModeState,
   type SafeModeStatusValue,

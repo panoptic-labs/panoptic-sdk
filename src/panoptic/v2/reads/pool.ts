@@ -667,7 +667,11 @@ export async function getOracleState(params: GetOracleStateParams): Promise<Orac
   // OraclePack structure is protocol-specific, extracting what we can
   const epoch = (oraclePack >> 208n) & ((1n << 32n) - 1n)
   const lastUpdateTimestamp = (oraclePack >> 176n) & ((1n << 32n) - 1n)
-  const lockMode = (oraclePack >> 240n) & ((1n << 8n) - 1n)
+  // lockMode is the 2-bit guardian safe-mode override at bits 118-119 of the
+  // OraclePack (see OraclePack.sol `lockMode()`). A non-zero value means the
+  // Panoptic Guardian has explicitly locked the pool (close-only), as opposed
+  // to safe mode being triggered algorithmically by price action.
+  const lockMode = (oraclePack >> 118n) & 3n
 
   return {
     epoch,

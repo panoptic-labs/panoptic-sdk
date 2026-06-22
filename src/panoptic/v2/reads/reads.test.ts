@@ -448,7 +448,7 @@ describe('Account Read Functions', () => {
       const client = createMockClient()
       const queryAddress = '0x7777777777777777777777777777777777777777' as const
 
-      vi.mocked(client.readContract).mockResolvedValueOnce([123n, 456n])
+      vi.mocked(client.readContract).mockResolvedValueOnce([[123n], [456n]])
 
       const result = await getNetLiquidationValue({
         client,
@@ -553,7 +553,7 @@ describe('Account Read Functions', () => {
 
       vi.mocked(client.readContract)
         .mockResolvedValueOnce(100n) // getCurrentTick
-        .mockResolvedValueOnce([5000n, 10000n]) // getNetLiquidationValue
+        .mockResolvedValueOnce([[5000n], [10000n]]) // getNetLiquidationValue
 
       const result = await getNetLiquidationValue({
         client,
@@ -576,7 +576,7 @@ describe('Account Read Functions', () => {
 
       vi.mocked(client.readContract)
         .mockResolvedValueOnce(100) // getCurrentTick
-        .mockResolvedValueOnce([3000n, 6000n]) // getNetLiquidationValue
+        .mockResolvedValueOnce([[3000n], [6000n]]) // getNetLiquidationValue
 
       const result = await getNetLiquidationValue({
         client,

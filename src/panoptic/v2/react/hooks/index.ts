@@ -20,6 +20,7 @@ export {
   useFactoryConstructMetadata,
   useFactoryOwnerOf,
   useFactoryTokenURI,
+  useGuardianUnlockState,
   useInterestState,
   useIsLiquidatable,
   useLiquidationPrices,
