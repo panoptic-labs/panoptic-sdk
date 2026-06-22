@@ -59,9 +59,8 @@ export {
   simulateCancelDeposit,
 } from './hypoVault/cancelDeposit/cancelDeposit'
 export { useCancelDeposit } from './hypoVault/cancelDeposit/hooks/use-cancel-deposit'
+export type { ChainDeployment, HypoVaultManagerTurnkeySigners } from './hypoVault/chainDeployments'
 export {
-  type ChainDeployment,
-  type HypoVaultManagerTurnkeySigners,
   BASE_CHAIN_ID,
   BASE_DEPLOYMENT,
   BASE_ETH_USDC_5BPS_MARKET,
@@ -213,9 +212,11 @@ export {
   resolveVaultTokenIdsByPool,
   verifyVaultOpenTokenIdsAtBlock,
 } from './hypoVault/utils/vaultManagerInput'
+export type {
+  VaultDisplayNameResolver,
+  VaultDisplayNameResolverInput,
+} from './hypoVault/vaultDisplayNames'
 export {
-  type VaultDisplayNameResolver,
-  type VaultDisplayNameResolverInput,
   resolveVaultDisplayName,
   VAULT_DISPLAY_NAME_RESOLVERS_PER_CHAIN,
   VAULT_DISPLAY_NAMES_PER_CHAIN,

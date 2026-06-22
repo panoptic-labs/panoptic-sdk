@@ -1,6 +1,6 @@
 {
   "name": "@panoptic-eng/sdk",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "repository": {
     "type": "git",
     "url": "https://github.com/panoptic-labs/panoptic-sdk.git"
@@ -38,8 +38,9 @@
   "scripts": {
     "check:no-src-dts": "node ./scripts/check-no-src-dts.mjs",
     "clean:tsbuildinfo": "node -e \"require('fs').rmSync('tsconfig.tsbuildinfo',{force:true})\"",
-    "build": "pnpm run check:no-src-dts && pnpm run clean:tsbuildinfo && pnpm run codegen:graphql && node ./scripts/tsdown-with-retry.mjs",
-    "build:ci": "pnpm run check:no-src-dts && pnpm run clean:tsbuildinfo && pnpm run codegen && pnpm tsdown",
+    "build": "pnpm run check:no-src-dts && pnpm run clean:tsbuildinfo && pnpm run codegen:graphql && node ./scripts/tsdown-with-retry.mjs && pnpm run build:deployments-dts",
+    "build:ci": "pnpm run check:no-src-dts && pnpm run clean:tsbuildinfo && pnpm run codegen && pnpm tsdown && pnpm run build:deployments-dts",
+    "build:deployments-dts": "pnpm tsdown -c tsdown.deployments.config.ts && node ./scripts/inline-deployments-dts.mjs",
     "dev": "pnpm concurrently \"pnpm run codegen:graphql --watch\" \"pnpm tsdown --watch\"",
     "typecheck": "tsc --noEmit -p tsconfig.build.json",
     "lint": "eslint . --ext .ts,.tsx --ignore-pattern 'dist/**' --ignore-pattern 'graphql/**' --ignore-pattern 'src/graphql/**' --ignore-pattern 'lib/**' --max-warnings=0",
@@ -57,7 +58,6 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@panoptic-eng/deployments": "workspace:*",
     "graphql": "^16.12.0",
     "graphql-request": "^7.3.1",
     "graphql-tag": "^2.12.6",
@@ -73,6 +73,7 @@
     "@graphql-codegen/cli": "^6.0.1",
     "@graphql-codegen/import-types-preset": "^2.2.6",
     "@graphql-codegen/typescript-graphql-request": "^6.3.0",
+    "@panoptic-eng/deployments": "workspace:*",
     "@tanstack/react-query": "5.45.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",

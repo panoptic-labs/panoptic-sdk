@@ -28,7 +28,13 @@ export default defineConfig({
     'node:path',
     'node:child_process',
   ],
+  // Bundle the internal, unpublished `@panoptic-eng/deployments` workspace
+  // package into dist. tsdown/rolldown externalizes declared dependencies by
+  // default, which would otherwise leave a literal
+  // `import … from "@panoptic-eng/deployments"` in the output and ship an
+  // unresolvable `workspace:*` dep to npm consumers.
+  noExternal: ['@panoptic-eng/deployments'],
   platform: 'neutral',
-  dts: true, // Generate TypeScript declaration files
+  dts: true,
   clean: !process.argv.includes('--watch'), // Only clean on full builds, not watch mode
 })

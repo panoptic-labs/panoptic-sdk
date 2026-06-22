@@ -1,14 +1,16 @@
 // Re-export everything from the shared @panoptic-eng/deployments package.
 // Internal SDK files import from this module — this re-export keeps them working.
+export type {
+  ChainDeployment,
+  EthUsdc5BpsMarket,
+  HypoVaultCoreAddresses,
+  HypoVaultManagerAddresses,
+  HypoVaultManagerTurnkeySigners,
+  HypoVaultVaultAddresses,
+  PanopticPoolAddresses,
+  PanopticV2Addresses,
+} from '@panoptic-eng/deployments'
 export {
-  type ChainDeployment,
-  type EthUsdc5BpsMarket,
-  type HypoVaultCoreAddresses,
-  type HypoVaultManagerAddresses,
-  type HypoVaultManagerTurnkeySigners,
-  type HypoVaultVaultAddresses,
-  type PanopticPoolAddresses,
-  type PanopticV2Addresses,
   BASE_CHAIN_ID,
   BASE_DEPLOYMENT,
   BASE_ETH_USDC_5BPS_MARKET,
