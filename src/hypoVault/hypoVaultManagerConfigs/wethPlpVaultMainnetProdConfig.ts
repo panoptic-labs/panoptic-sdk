@@ -20,6 +20,7 @@ export const WethPlpVaultMainnetProdConfig: HypoVaultManagerConfig = {
   vaultCapInShares: 9_500_000_000_000_000_000_000_000n, // Active cap target: 9.5 WETH in share-cap mode
   allowUnlimitedDepositRequestIfCapNotReached: true,
   maxBuyingPowerUsageBps: 6600,
+  poolDeploymentBlock: 25_302_077,
   chainId: MAINNET_CHAIN_ID,
   hypoVaultAddress: MAINNET_HYPOVAULT_ADDRESSES.wethPlpVault,
   addresses: {
@@ -50,6 +51,7 @@ export const WethPlpVaultMainnetLegacyConfig: HypoVaultManagerConfig = {
   ...WethPlpVaultMainnetProdConfig,
   artifactSet: 'mainnet-legacy',
   manageCycleIntervalMs: 3600000,
+  poolDeploymentBlock: 24_822_309,
   hypoVaultAddress: '0x779a2aa634A004b3a3f3b322083744869BBC6D66',
   addresses: {
     ...WethPlpVaultMainnetProdConfig.addresses,

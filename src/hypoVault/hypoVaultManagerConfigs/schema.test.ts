@@ -154,6 +154,8 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     expect(UsdcPlpVaultMainnetProdConfig.addresses?.ethUsdc500bpsV4Collateral1).toBe(
       '0x12bF31955522BAC337D93e1bC0a39F68D8BDa216',
     )
+    expect(WethPlpVaultMainnetProdConfig.poolDeploymentBlock).toBe(25_302_077)
+    expect(UsdcPlpVaultMainnetProdConfig.poolDeploymentBlock).toBe(25_302_077)
     expect(MainnetWETHPLPStrategistLeaves.metadata.ManageRoot).toBe(
       '0x14c4c96cc3730452ce71a447bdde6132f81acec862098a9ddd5e086805046a07',
     )
@@ -215,6 +217,8 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
         allocationBps: 10000,
       },
     ])
+    expect(WethPlpVaultMainnetLegacyConfig.poolDeploymentBlock).toBe(24_822_309)
+    expect(UsdcPlpVaultMainnetLegacyConfig.poolDeploymentBlock).toBe(24_822_309)
     expect(MainnetLegacyWETHPLPStrategistLeaves.metadata.ManageRoot).toBe(
       '0xd097509d7b1fc6f899a47b8d06f8a5e2b3337ee8b98e77ef612a1c54a79370c8',
     )

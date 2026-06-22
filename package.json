@@ -1,6 +1,6 @@
 {
   "name": "@panoptic-eng/sdk",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "repository": {
     "type": "git",
     "url": "https://github.com/panoptic-labs/panoptic-sdk.git"
@@ -49,6 +49,7 @@
     "test:fork": "vitest run --config src/panoptic/v2/examples/__tests__/vitest.config.fork.ts",
     "test:fork:watch": "vitest watch --config src/panoptic/v2/examples/__tests__/vitest.config.fork.ts",
     "test:examples": "pnpm test && pnpm test:fork",
+    "test:pack": "node ./scripts/smoke-test.mjs",
     "codegen": "pnpm run codegen:graphql && pnpm run codegen:wagmi",
     "codegen:graphql": "node ./scripts/run-graphql-codegen.mjs",
     "codegen:wagmi": "wagmi generate && eslint src/generated.ts --fix",
@@ -64,10 +65,25 @@
     "zod": "^4.3.6"
   },
   "peerDependencies": {
-    "react": "18.3.0-canary-c3048aab4-20240326",
-    "react-dom": "18.3.0-canary-c3048aab4-20240326",
-    "viem": "2.41.2",
-    "wagmi": "2.14.11"
+    "@tanstack/react-query": "^5.45.0",
+    "react": "^18.2.0 || ^19.0.0",
+    "react-dom": "^18.2.0 || ^19.0.0",
+    "viem": "^2.41.0",
+    "wagmi": "^2.14.0"
+  },
+  "peerDependenciesMeta": {
+    "@tanstack/react-query": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "wagmi": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@graphql-codegen/cli": "^6.0.1",

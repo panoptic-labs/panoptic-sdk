@@ -2,11 +2,33 @@
 
 TypeScript SDK for interacting with the Panoptic v2 perpetual options protocol on EVM chains.
 
-## Quick Start
+## Installation
+
+Core install — everything you need for reads, writes, simulations, greeks and
+tick/price math:
 
 ```bash
 npm install @panoptic-eng/sdk viem
 ```
+
+This works with a default `npm install` (no `--force` / `--legacy-peer-deps`),
+as well as with Yarn v1 and pnpm.
+
+### Using the React hooks
+
+The SDK also ships React hooks (`PanopticProvider`, `usePool`, `useOpenPosition`,
+…) from `@panoptic-eng/sdk/v2`. These rely on React, Wagmi and TanStack Query,
+which are declared as **optional** peer dependencies — install them only if you
+use the hooks:
+
+```bash
+npm install @panoptic-eng/sdk viem react react-dom wagmi @tanstack/react-query
+```
+
+Supported peer ranges: `react`/`react-dom` `^18.2.0 || ^19.0.0`,
+`wagmi` `^2.14.0`, `@tanstack/react-query` `^5.45.0`, `viem` `^2.41.0`.
+
+## Quick Start
 
 ```typescript
 import { createPublicClient, createWalletClient, http, parseUnits } from 'viem'

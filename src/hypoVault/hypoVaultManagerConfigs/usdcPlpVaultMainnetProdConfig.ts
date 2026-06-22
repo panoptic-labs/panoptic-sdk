@@ -21,6 +21,7 @@ export const UsdcPlpVaultMainnetProdConfig: HypoVaultManagerConfig = {
   vaultCapInShares: 19_500_000_000_000_000n, // Active cap target: 19,500 USDC in share-cap mode
   allowUnlimitedDepositRequestIfCapNotReached: true,
   maxBuyingPowerUsageBps: 2000,
+  poolDeploymentBlock: 25_302_077,
   chainId: MAINNET_CHAIN_ID,
   hypoVaultAddress: MAINNET_HYPOVAULT_ADDRESSES.usdcPlpVault,
   addresses: {
@@ -51,6 +52,7 @@ export const UsdcPlpVaultMainnetLegacyConfig: HypoVaultManagerConfig = {
   ...UsdcPlpVaultMainnetProdConfig,
   artifactSet: 'mainnet-legacy',
   manageCycleIntervalMs: 3600000,
+  poolDeploymentBlock: 24_822_309,
   hypoVaultAddress: '0x963Fe9c93bc353602656ee4051A75114bA74d6c5',
   addresses: {
     ...UsdcPlpVaultMainnetProdConfig.addresses,

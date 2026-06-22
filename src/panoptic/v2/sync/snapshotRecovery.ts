@@ -8,6 +8,15 @@ import { decodeFunctionData, toFunctionSelector } from 'viem'
 
 import { panopticPoolV2Abi } from '../../../generated'
 
+const LOG_SCAN_WINDOW = 10_000n
+
+type SnapshotEventLog = Awaited<ReturnType<PublicClient['getLogs']>>[number]
+type SnapshotCandidateEvent = SnapshotEventLog & {
+  transactionHash: Hash
+  blockNumber: bigint
+  logIndex: number
+}
+
 /**
  * Parameters for recovering position snapshot from dispatch calldata.
  */
@@ -64,12 +73,46 @@ export async function recoverSnapshot(
   // Strategy: Look for OptionMinted or OptionBurnt events to find transactions,
   // then decode the transaction input to get the full position list
 
-  // Get recent events for this account.
+  const searchFromBlock = params.fromBlock ?? 0n
+  if (latestBlock < searchFromBlock) return null
+
+  let windowToBlock = latestBlock
+  while (true) {
+    const windowFromBlock =
+      windowToBlock - searchFromBlock + 1n > LOG_SCAN_WINDOW
+        ? windowToBlock - LOG_SCAN_WINDOW + 1n
+        : searchFromBlock
+
+    const events = await getSnapshotEventsForWindow({
+      client,
+      poolAddress,
+      account,
+      fromBlock: windowFromBlock,
+      toBlock: windowToBlock,
+    })
+    const snapshot = await recoverSnapshotFromEvents({ client, account, events })
+    if (snapshot) return snapshot
+
+    if (windowFromBlock === searchFromBlock) break
+    windowToBlock = windowFromBlock - 1n
+  }
+
+  // No snapshot found
+  return null
+}
+
+async function getSnapshotEventsForWindow(params: {
+  client: PublicClient
+  poolAddress: Address
+  account: Address
+  fromBlock: bigint
+  toBlock: bigint
+}): Promise<SnapshotEventLog[]> {
+  const { client, poolAddress, account, fromBlock, toBlock } = params
+
   // OptionMinted/OptionBurnt cover the account's own dispatches.
   // ForcedExercised/AccountLiquidated cover third-party dispatchFrom calls
-  // (liquidations and force exercises) where the tx sender is NOT the account
-  // but the calldata contains the account's positionIdListToFinal.
-  const searchFromBlock = params.fromBlock ?? 0n
+  // where the tx sender is not the account but calldata contains the final list.
   const [mintEvents, burnEvents, forceExerciseEvents, liquidationEvents] = await Promise.all([
     client.getLogs({
       address: poolAddress,
@@ -85,8 +128,8 @@ export async function recoverSnapshot(
       args: {
         recipient: account,
       },
-      fromBlock: searchFromBlock,
-      toBlock: latestBlock,
+      fromBlock,
+      toBlock,
     }),
     client.getLogs({
       address: poolAddress,
@@ -103,8 +146,8 @@ export async function recoverSnapshot(
       args: {
         recipient: account,
       },
-      fromBlock: searchFromBlock,
-      toBlock: latestBlock,
+      fromBlock,
+      toBlock,
     }),
     client.getLogs({
       address: poolAddress,
@@ -121,8 +164,8 @@ export async function recoverSnapshot(
       args: {
         user: account,
       },
-      fromBlock: searchFromBlock,
-      toBlock: latestBlock,
+      fromBlock,
+      toBlock,
     }),
     client.getLogs({
       address: poolAddress,
@@ -138,18 +181,23 @@ export async function recoverSnapshot(
       args: {
         liquidatee: account,
       },
-      fromBlock: searchFromBlock,
-      toBlock: latestBlock,
+      fromBlock,
+      toBlock,
     }),
   ])
 
+  return [...mintEvents, ...burnEvents, ...forceExerciseEvents, ...liquidationEvents]
+}
+
+async function recoverSnapshotFromEvents(params: {
+  client: PublicClient
+  account: Address
+  events: SnapshotEventLog[]
+}): Promise<SnapshotRecoveryResult | null> {
+  const { client, account, events } = params
+
   // Combine and sort by block number (descending) to get most recent first
-  const allEvents = [
-    ...mintEvents,
-    ...burnEvents,
-    ...forceExerciseEvents,
-    ...liquidationEvents,
-  ].sort((a, b) => {
+  const allEvents = events.filter(isSnapshotCandidateEvent).sort((a, b) => {
     const blockDiff = Number(b.blockNumber - a.blockNumber)
     if (blockDiff !== 0) return blockDiff
     return Number(b.logIndex - a.logIndex)
@@ -194,8 +242,11 @@ export async function recoverSnapshot(
     }
   }
 
-  // No snapshot found
   return null
+}
+
+function isSnapshotCandidateEvent(event: SnapshotEventLog): event is SnapshotCandidateEvent {
+  return event.transactionHash !== null && event.blockNumber !== null && event.logIndex !== null
 }
 
 /**
