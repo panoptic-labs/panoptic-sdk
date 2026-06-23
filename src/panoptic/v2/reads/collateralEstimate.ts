@@ -354,9 +354,19 @@ async function tryDispatchSimulation(params: {
     // Build tick limits based on swapAtMint flag:
     // - swapAtMint=true: descending order (high, low) triggers SFPM swap
     // - swapAtMint=false: ascending order (low, high) no swap
+    //
+    // The third element is the per-position `effectiveLiquidityLimit` (denominated
+    // X10_000 = removedLiquidity/netLiquidity ratio). For LONG legs the contract caps
+    // the allowed spread at `min(effectiveLiquidityLimit, maxSpread())`
+    // (PanopticPool._mintInSFPMAndUpdateCollateral / _checkLiquiditySpread). Passing 0
+    // here forces the limit to 0, so ANY long-leg removal reverts with
+    // EffectiveLiquidityAboveThreshold — which silently collapsed the max size for
+    // multi-leg positions containing a long leg (e.g. spreads). Use the max int24 so the
+    // contract clamps to its real on-chain `maxSpread()` ceiling, matching the live trade.
+    const MAX_EFFECTIVE_LIQUIDITY_LIMIT = 8388607 // max int24 (2^23 - 1)
     const tickLimits: readonly [number, number, number] = swapAtMint
-      ? [887272, -887272, 0]
-      : [-887272, 887272, 0]
+      ? [887272, -887272, MAX_EFFECTIVE_LIQUIDITY_LIMIT]
+      : [-887272, 887272, MAX_EFFECTIVE_LIQUIDITY_LIMIT]
 
     // Encode dispatch call
     const callData = encodeFunctionData({

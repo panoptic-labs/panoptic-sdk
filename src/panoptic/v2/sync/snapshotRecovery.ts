@@ -76,6 +76,30 @@ export async function recoverSnapshot(
   const searchFromBlock = params.fromBlock ?? 0n
   if (latestBlock < searchFromBlock) return null
 
+  // Fast path: a single getLogs per event type over the entire
+  // [searchFromBlock, latest] range. The queries are filtered by `address` and
+  // an indexed account topic, so providers like Alchemy impose no block-range
+  // cap on them (only a result-count cap) — one call per event type is enough
+  // and the returned set is already complete, so there are no older windows to
+  // scan. This avoids walking the whole chain in 10k-block chunks (4 getLogs
+  // per chunk), which for accounts with no history is thousands of empty calls.
+  try {
+    const events = await getSnapshotEventsForWindow({
+      client,
+      poolAddress,
+      account,
+      fromBlock: searchFromBlock,
+      toBlock: latestBlock,
+    })
+    return await recoverSnapshotFromEvents({ client, account, events })
+  } catch (error) {
+    // Only fall back to windowed scanning when the provider rejected the wide
+    // range. Any other error (e.g. transport failure) should propagate.
+    if (!isRangeLimitError(error)) throw error
+  }
+
+  // Fallback for providers that cap getLogs block range: scan newest-to-oldest
+  // in 10k-block windows and stop at the first window that yields a snapshot.
   let windowToBlock = latestBlock
   while (true) {
     const windowFromBlock =
@@ -99,6 +123,39 @@ export async function recoverSnapshot(
 
   // No snapshot found
   return null
+}
+
+/**
+ * Detect provider errors that indicate the requested getLogs block range was
+ * too wide (so the caller should retry with smaller windows). Covers the common
+ * phrasings used by Alchemy, Infura, and other JSON-RPC providers.
+ */
+function isRangeLimitError(error: unknown): boolean {
+  const parts: string[] = []
+  let current: unknown = error
+  let depth = 0
+  while (current && typeof current === 'object' && depth < 5) {
+    const obj = current as Record<string, unknown>
+    if (typeof obj.message === 'string') parts.push(obj.message)
+    if (typeof obj.details === 'string') parts.push(obj.details)
+    current = obj.cause
+    depth += 1
+  }
+  if (typeof error === 'string') parts.push(error)
+
+  const message = parts.join(' ').toLowerCase()
+  if (!message) return false
+
+  return (
+    message.includes('block range') ||
+    message.includes('range is too large') ||
+    message.includes('range too large') ||
+    message.includes('query returned more than') ||
+    message.includes('too many results') ||
+    message.includes('log response size exceeded') ||
+    message.includes('exceeds the limit') ||
+    (message.includes('range') && message.includes('limit'))
+  )
 }
 
 async function getSnapshotEventsForWindow(params: {

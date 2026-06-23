@@ -156,6 +156,8 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     )
     expect(WethPlpVaultMainnetProdConfig.poolDeploymentBlock).toBe(25_302_077)
     expect(UsdcPlpVaultMainnetProdConfig.poolDeploymentBlock).toBe(25_302_077)
+    expect(WethPlpVaultMainnetProdConfig.vaultCapInUnderlying).toBe(20_000_000_000_000_000_000n)
+    expect(WethPlpVaultMainnetProdConfig.vaultCapInShares).toBe(20_000_000_000_000_000_000_000_000n)
     expect(MainnetWETHPLPStrategistLeaves.metadata.ManageRoot).toBe(
       '0x14c4c96cc3730452ce71a447bdde6132f81acec862098a9ddd5e086805046a07',
     )
