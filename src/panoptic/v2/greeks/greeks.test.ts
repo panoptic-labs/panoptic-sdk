@@ -401,6 +401,28 @@ describe('greeks module', () => {
       expect(below).not.toBe(above)
     })
 
+    it('getLegValue for numeraire credit is flat zero (mint-relative)', () => {
+      // asset=1n, tokenType=0n → borrows numeraire (not asset). A constant numeraire
+      // obligation has zero price-PnL relative to mint, so value must be 0 at every tick.
+      const leg = createWidth0Leg({ strike: 1000n, tokenType: 0n, asset: 1n, isLong: true })
+      const atMint = getLegValue(leg, 0n, 0n, positionSize, poolTickSpacing, false)
+      const below = getLegValue(leg, -500n, 0n, positionSize, poolTickSpacing, false)
+      const above = getLegValue(leg, 500n, 0n, positionSize, poolTickSpacing, false)
+      expect(atMint).toBe(0n)
+      expect(below).toBe(0n)
+      expect(above).toBe(0n)
+    })
+
+    it('getLegValue for asset credit is price-dependent and zero at mint', () => {
+      // asset=1n, tokenType=1n → borrows asset. PnL = -notional*(P - Pm): 0 at mint,
+      // nonzero away from mint (keeps the sloped offset).
+      const leg = createWidth0Leg({ strike: 1000n, tokenType: 1n, asset: 1n, isLong: true })
+      const atMint = getLegValue(leg, 0n, 0n, positionSize, poolTickSpacing, false)
+      const above = getLegValue(leg, 500n, 0n, positionSize, poolTickSpacing, false)
+      expect(atMint).toBe(0n)
+      expect(above).not.toBe(0n)
+    })
+
     it('getLegDelta for loan borrowing numeraire → 0 (tick-independent)', () => {
       // asset=1n, tokenType=0n → borrows numeraire (not asset) → delta = 0
       const leg = createWidth0Leg({ strike: 1000n, tokenType: 0n, asset: 1n })

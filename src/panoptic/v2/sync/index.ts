@@ -100,7 +100,9 @@ export {
   type RecoverSnapshotFromTxParams,
   type RecoverSnapshotParams,
   type SnapshotRecoveryResult,
+  decodeAllDispatchCalldata,
   decodeDispatchCalldata,
   recoverSnapshot,
   recoverSnapshotFromTx,
+  selectDispatchForAccount,
 } from './snapshotRecovery'

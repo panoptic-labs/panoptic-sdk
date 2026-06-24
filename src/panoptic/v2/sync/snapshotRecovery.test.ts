@@ -212,6 +212,176 @@ describe('recoverSnapshot', () => {
     ).toEqual(new Set(['1-30000']))
   })
 
+  it('recovers a manager-mediated vault dispatch from an account-indexed event', async () => {
+    // Vault managers send the transaction, but the Panoptic event recipient is the vault.
+    // The event-filtered recovery path can therefore accept the wrapped plain dispatch.
+    const VAULT = '0xc42abe2d3195cda2a17524a59d79e2f2f2b11fa8' as Address
+    const MANAGER = '0x1111111111111111111111111111111111111111' as Address
+    const VAULT_FINAL = [51958442144067171519954205276045n]
+    const dispatchData = encodeDispatchSnapshot(VAULT_FINAL)
+    const multicallData = encodeFunctionData({
+      abi: [
+        {
+          type: 'function',
+          name: 'multicall',
+          stateMutability: 'payable',
+          inputs: [{ name: 'data', type: 'bytes[]' }],
+          outputs: [{ name: '', type: 'bytes[]' }],
+        },
+      ],
+      functionName: 'multicall',
+      args: [[dispatchData]],
+    })
+
+    const getLogsMock = vi.fn(async (params: GetLogsCall): Promise<SnapshotEventLog[]> => {
+      if (params.event.name === 'OptionMinted') return [snapshotLog()]
+      return []
+    })
+    const client = createClient({
+      getLogs: getLogsMock,
+      getTransaction: async (_params: HashCall): Promise<TransactionResult> =>
+        ({
+          blockNumber: 19_500n,
+          from: MANAGER,
+          to: POOL,
+          input: multicallData,
+        }) as TransactionResult,
+    })
+
+    const snapshot = await recoverSnapshot({
+      client: client as PublicClient,
+      poolAddress: POOL,
+      account: VAULT,
+      fromBlock: 1n,
+      toBlock: 30_000n,
+    })
+
+    expect(snapshot?.positionIds).toEqual(VAULT_FINAL)
+  })
+
+  it('selects the victim dispatchFrom (not the exercisor dispatch) from a force-exercise multicall', async () => {
+    // Reproduces mainnet tx 0x45a95f69…cdad6: a force-exercise submitted as
+    // multicall([ dispatchFrom(targetAccount=victim), dispatch(exercisor's own) ]).
+    // The exercisor's dispatch appears LAST in calldata; the old "take the last
+    // decode" logic wrongly returned its list (which has no targetAccount) for the
+    // victim, producing an InputListFail downstream.
+    const VICTIM = '0xc42abe2d3195cda2a17524a59d79e2f2f2b11fa8' as Address
+    const EXERCISOR = '0xfa1dfec1e8ed966c61c45797a3d58666cf2ae708' as Address
+    const VICTIM_FINAL = [51958442144067171519954205276045n]
+    const EXERCISOR_FINAL = [999n, 1000n]
+
+    const dispatchFromData = encodeFunctionData({
+      abi: panopticPoolV2Abi,
+      functionName: 'dispatchFrom',
+      args: [[], VICTIM, [], VICTIM_FINAL, 0n],
+    })
+    const dispatchData = encodeFunctionData({
+      abi: panopticPoolV2Abi,
+      functionName: 'dispatch',
+      args: [[], EXERCISOR_FINAL, [], [], false, 0n],
+    })
+    const multicallData = encodeFunctionData({
+      abi: [
+        {
+          type: 'function',
+          name: 'multicall',
+          stateMutability: 'payable',
+          inputs: [{ name: 'data', type: 'bytes[]' }],
+          outputs: [{ name: '', type: 'bytes[]' }],
+        },
+      ],
+      functionName: 'multicall',
+      // dispatchFrom first, exercisor's own dispatch last
+      args: [[dispatchFromData, dispatchData]],
+    })
+
+    const getLogsMock = vi.fn(async (params: GetLogsCall): Promise<SnapshotEventLog[]> => {
+      if (params.event.name === 'ForcedExercised') return [snapshotLog()]
+      return []
+    })
+    const client = createClient({
+      getLogs: getLogsMock,
+      // Third-party tx: sender is the exercisor, not the victim.
+      getTransaction: async (_params: HashCall): Promise<TransactionResult> =>
+        ({
+          blockNumber: 19_500n,
+          from: EXERCISOR,
+          to: POOL,
+          input: multicallData,
+        }) as TransactionResult,
+    })
+
+    const snapshot = await recoverSnapshot({
+      client: client as PublicClient,
+      poolAddress: POOL,
+      account: VICTIM,
+      fromBlock: 1n,
+      toBlock: 30_000n,
+    })
+
+    expect(snapshot?.positionIds).toEqual(VICTIM_FINAL)
+  })
+
+  it('uses the final dispatch when one multicall has multiple dispatches for the same account', async () => {
+    // A single tx the account sends as multicall([ dispatch(intermediate), dispatch(final) ]).
+    // Both are attributable to the account; the LAST in calldata order is the final
+    // post-tx state and must be the recovered snapshot.
+    const ACCOUNT = '0xc42abe2d3195cda2a17524a59d79e2f2f2b11fa8' as Address
+    const INTERMEDIATE_LIST = [111n, 222n]
+    const FINAL_LIST = [51958442144067171519954205276045n]
+
+    const firstDispatch = encodeFunctionData({
+      abi: panopticPoolV2Abi,
+      functionName: 'dispatch',
+      args: [[], INTERMEDIATE_LIST, [], [], false, 0n],
+    })
+    const finalDispatch = encodeFunctionData({
+      abi: panopticPoolV2Abi,
+      functionName: 'dispatch',
+      args: [[], FINAL_LIST, [], [], false, 0n],
+    })
+    const multicallData = encodeFunctionData({
+      abi: [
+        {
+          type: 'function',
+          name: 'multicall',
+          stateMutability: 'payable',
+          inputs: [{ name: 'data', type: 'bytes[]' }],
+          outputs: [{ name: '', type: 'bytes[]' }],
+        },
+      ],
+      functionName: 'multicall',
+      // intermediate dispatch first, final dispatch last
+      args: [[firstDispatch, finalDispatch]],
+    })
+
+    const getLogsMock = vi.fn(async (params: GetLogsCall): Promise<SnapshotEventLog[]> => {
+      if (params.event.name === 'OptionMinted') return [snapshotLog()]
+      return []
+    })
+    const client = createClient({
+      getLogs: getLogsMock,
+      // The account itself sends the multicall.
+      getTransaction: async (_params: HashCall): Promise<TransactionResult> =>
+        ({
+          blockNumber: 19_500n,
+          from: ACCOUNT,
+          to: POOL,
+          input: multicallData,
+        }) as TransactionResult,
+    })
+
+    const snapshot = await recoverSnapshot({
+      client: client as PublicClient,
+      poolAddress: POOL,
+      account: ACCOUNT,
+      fromBlock: 1n,
+      toBlock: 30_000n,
+    })
+
+    expect(snapshot?.positionIds).toEqual(FINAL_LIST)
+  })
+
   it('skips candidate transactions that fail to load', async () => {
     const getLogsMock = vi.fn(async (params: GetLogsCall): Promise<SnapshotEventLog[]> => {
       if (params.event.name === 'OptionMinted') return [snapshotLog()]

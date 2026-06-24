@@ -674,6 +674,7 @@ export {
   clearTrackedPositions,
   clearTradeHistory,
   confirmPendingPosition,
+  decodeAllDispatchCalldata,
   decodeDispatchCalldata,
   detectReorg,
   failPendingPosition,
@@ -697,6 +698,7 @@ export {
   saveCheckpoint,
   saveClosedPosition,
   scanChunks,
+  selectDispatchForAccount,
   syncPositions,
   verifyBlockContinuity,
 } from './sync'

@@ -277,13 +277,15 @@ async function recoverSnapshotFromEvents(params: {
         client.getBlock({ blockNumber: event.blockNumber }),
       ])
 
-      const decoded = decodeDispatchCalldata(tx.input)
+      // A single tx (e.g. a force-exercise multicall) can embed several
+      // dispatch/dispatchFrom calls — the exercisor's own dispatch alongside the
+      // victim's dispatchFrom. Select a strict account match first, then allow a
+      // plain dispatch only because this tx came from an account-indexed event.
+      const candidates = decodeAllDispatchCalldata(tx.input)
+      const decoded =
+        selectDispatchForAccount(candidates, account, tx.from) ??
+        selectDispatchProvenByAccountEvent(candidates)
       if (!decoded) {
-        continue
-      }
-
-      // For dispatchFrom, verify target account matches
-      if (decoded.targetAccount && decoded.targetAccount.toLowerCase() !== account.toLowerCase()) {
         continue
       }
 
@@ -357,23 +359,18 @@ export async function recoverSnapshotFromTx(
     return null
   }
 
-  const decoded = decodeDispatchCalldata(tx.input)
-  if (!decoded) return null
+  const candidates = decodeAllDispatchCalldata(tx.input)
+  if (candidates.length === 0) return null
 
   // Validate account context:
   // - dispatch: tx.from must be the account (msg.sender is the trader)
   // - dispatchFrom: decoded.targetAccount must be the account (builder sends on behalf of trader)
-  if (account) {
-    if (decoded.targetAccount) {
-      if (decoded.targetAccount.toLowerCase() !== account.toLowerCase()) {
-        return null
-      }
-    } else {
-      if (tx.from.toLowerCase() !== account.toLowerCase()) {
-        return null
-      }
-    }
-  }
+  // A tx may embed several dispatch calls (e.g. a force-exercise multicall carrying both
+  // the exercisor's dispatch and the victim's dispatchFrom); pick the one for `account`.
+  const decoded = account
+    ? selectDispatchForAccount(candidates, account, tx.from)
+    : candidates[candidates.length - 1]
+  if (!decoded) return null
 
   const blockNumber = tx.blockNumber
   const block = await client.getBlock({ blockNumber })
@@ -400,16 +397,80 @@ export interface DispatchCalldata {
 /**
  * Decode position IDs from dispatch calldata.
  *
+ * When the tx embeds multiple dispatch/dispatchFrom calls (e.g. a force-exercise
+ * multicall), this returns the last one — prefer {@link decodeAllDispatchCalldata}
+ * plus {@link selectDispatchForAccount} when the account context matters.
+ *
  * @param input - Transaction input data
  * @returns Decoded dispatch data or null if not a dispatch call
  */
 export function decodeDispatchCalldata(input: `0x${string}`): DispatchCalldata | null {
+  const all = decodeAllDispatchCalldata(input)
+  return all.length > 0 ? all[all.length - 1] : null
+}
+
+/**
+ * Decode every dispatch/dispatchFrom call embedded in transaction calldata.
+ *
+ * A single tx can carry more than one such call — most importantly a force-exercise
+ * `multicall` that bundles the exercisor's own `dispatch` together with the victim's
+ * `dispatchFrom`. Returning all candidates lets the caller select the one attributable
+ * to the relevant account ({@link selectDispatchForAccount}).
+ *
+ * @param input - Transaction input data
+ * @returns All decoded dispatch calls, in calldata order (may be empty)
+ */
+export function decodeAllDispatchCalldata(input: `0x${string}`): DispatchCalldata[] {
   // Try direct dispatch/dispatchFrom first
   const direct = decodeDirectDispatch(input)
-  if (direct) return direct
+  if (direct) return [direct]
 
-  // Try unwrapping smart contract wallet wrappers (executeBatch, execute)
+  // Try unwrapping smart contract wallet wrappers (executeBatch, execute, multicall)
   return decodeWrappedDispatch(input)
+}
+
+/**
+ * Select the dispatch call attributable to `account` from a set of candidates.
+ *
+ * - `dispatchFrom`: matches when `targetAccount === account` (builder/exercisor acting
+ *   on behalf of the account).
+ * - `dispatch` (no `targetAccount`): matches only when the tx sender is the account.
+ *
+ * Returns the LAST matching candidate (in calldata order), or null when none are
+ * attributable to `account`. The last dispatch reflects the final post-transaction
+ * state when a single tx contains multiple dispatches for the same account (e.g. a
+ * multicall). Matching also prevents accepting a third party's `dispatch` (e.g. the
+ * exercisor's own, bundled in a force-exercise multicall) as the account's snapshot.
+ *
+ * @param candidates - Decoded dispatch calls from a single tx, in calldata order
+ * @param account - Account whose position list we are recovering
+ * @param txFrom - The transaction sender (`tx.from`)
+ */
+export function selectDispatchForAccount(
+  candidates: DispatchCalldata[],
+  account: Address,
+  txFrom: Address,
+): DispatchCalldata | null {
+  const acct = account.toLowerCase()
+  let match: DispatchCalldata | null = null
+  for (const candidate of candidates) {
+    if (candidate.targetAccount) {
+      if (candidate.targetAccount.toLowerCase() === acct) match = candidate
+    } else if (txFrom.toLowerCase() === acct) {
+      match = candidate
+    }
+  }
+  return match
+}
+
+function selectDispatchProvenByAccountEvent(
+  candidates: DispatchCalldata[],
+): DispatchCalldata | null {
+  let match: DispatchCalldata | null = null
+  for (const candidate of candidates) {
+    if (candidate.targetAccount === undefined) match = candidate
+  }
+  return match
 }
 
 /**
@@ -470,12 +531,13 @@ const DISPATCH_FROM_SELECTOR = toFunctionSelector(
  *
  * This handles arbitrary nesting depth without knowing wrapper ABIs.
  */
-function decodeWrappedDispatch(input: `0x${string}`): DispatchCalldata | null {
+function decodeWrappedDispatch(input: `0x${string}`): DispatchCalldata[] {
   const hex = input.slice(2).toLowerCase()
   const selectors = [DISPATCH_SELECTOR, DISPATCH_FROM_SELECTOR]
 
-  // Single left-to-right pass: find the earliest selector match at each offset,
-  // collect all successful decodes, and return the last one (deepest nesting).
+  // Single left-to-right pass: find the earliest selector match at each offset and
+  // collect every successful decode, in calldata order. The caller selects the call
+  // attributable to the relevant account rather than blindly taking one.
   const results: DispatchCalldata[] = []
   let offset = 0
 
@@ -497,6 +559,5 @@ function decodeWrappedDispatch(input: `0x${string}`): DispatchCalldata | null {
     offset = earliestIdx + 8 // Move past this selector
   }
 
-  // Return the last successful decode (innermost / deepest nested call)
-  return results.length > 0 ? results[results.length - 1] : null
+  return results
 }

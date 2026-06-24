@@ -112,11 +112,13 @@ function getLegValueWidth0(
     const PmX192 = sqrtPm * sqrtPm
     return divTrunc(-notional * (PX192 - PmX192), Q192)
   } else {
-    // Numeraire loan/credit: debt is flat in price (constant numeraire obligation).
-    if (scaleByStrike) return -notional
-    const sqrtK = tickToSqrtPriceX96(qStrikeTick)
-    const KX192 = sqrtK * sqrtK
-    return divTrunc(-m * KX192, Q192)
+    // Numeraire loan/credit: the obligation is a constant amount of the numeraire token,
+    // so its value doesn't change with price. getLegValue is mint-relative PnL (option
+    // legs cancel the mint baseline via `itm`; the asset branch above returns
+    // -notional*(P - Pm), which is 0 at mint), so the numeraire branch's mint-relative PnL
+    // is value(P) - value(Pm) = const - const = 0. Returning a nonzero constant here would
+    // shift the whole PnL curve/baseline by the notional (double-counting the credit).
+    return 0n
   }
 }
 
