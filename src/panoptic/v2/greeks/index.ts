@@ -628,6 +628,60 @@ export function calculatePositionGreeks(input: PositionGreeksInput): PositionGre
   }
 }
 
+// --- Portfolio (Multi-Position) Aggregates ---
+
+/**
+ * Aggregate value across multiple independent positions.
+ *
+ * Each entry is valued with its OWN `positionSize`, `mintTick`, and legs, then
+ * summed. Do NOT collapse multiple positions into one synthetic `PositionGreeksInput`
+ * with a shared `positionSize` — `m = positionSize * optionRatio` is per-position, so a
+ * shared size double-counts (and integer `optionRatio` cannot encode fractional shares).
+ *
+ * @param positions - One `PositionGreeksInput` per open position
+ * @returns Total value in numeraire token smallest units
+ */
+export function calculatePortfolioValue(positions: PositionGreeksInput[]): bigint {
+  return positions.reduce((sum, input) => sum + calculatePositionValue(input), 0n)
+}
+
+/**
+ * Aggregate delta across multiple independent positions.
+ *
+ * See {@link calculatePortfolioValue} for why each position must keep its own
+ * `positionSize` rather than being merged into one synthetic position.
+ *
+ * @param positions - One `PositionGreeksInput` per open position
+ * @returns Total delta in asset token smallest units
+ */
+export function calculatePortfolioDelta(positions: PositionGreeksInput[]): bigint {
+  return positions.reduce((sum, input) => sum + calculatePositionDelta(input), 0n)
+}
+
+/**
+ * Aggregate gamma across multiple independent positions.
+ *
+ * See {@link calculatePortfolioValue} for why each position must keep its own
+ * `positionSize` rather than being merged into one synthetic position.
+ *
+ * @param positions - One `PositionGreeksInput` per open position
+ * @returns Total gamma in numeraire token smallest units
+ */
+export function calculatePortfolioGamma(positions: PositionGreeksInput[]): bigint {
+  return positions.reduce((sum, input) => sum + calculatePositionGamma(input), 0n)
+}
+
+/**
+ * Calculate all greeks aggregated across multiple independent positions.
+ */
+export function calculatePortfolioGreeks(positions: PositionGreeksInput[]): PositionGreeksResult {
+  return {
+    value: calculatePortfolioValue(positions),
+    delta: calculatePortfolioDelta(positions),
+    gamma: calculatePortfolioGamma(positions),
+  }
+}
+
 // --- Loan/Credit Swap-Aware Delta ---
 
 /**

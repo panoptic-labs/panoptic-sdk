@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import type { TokenIdLeg } from '../types'
 import {
+  calculatePortfolioDelta,
+  calculatePortfolioGamma,
+  calculatePortfolioGreeks,
+  calculatePortfolioValue,
   calculatePositionDelta,
   calculatePositionDeltaWithSwap,
   calculatePositionGamma,
@@ -295,6 +299,99 @@ describe('greeks module', () => {
       expect(greeks.value).toBe(value)
       expect(greeks.delta).toBe(delta)
       expect(greeks.gamma).toBe(gamma)
+    })
+  })
+
+  describe('portfolio (multi-position) aggregates', () => {
+    const poolTickSpacing = 10n
+    // Short put (asset=token0, tokenType=1n), strike well above currentTick=0 so the
+    // position sits below its range → asymptotic short-put delta = +positionSize.
+    const shortPut = (size: bigint) => ({
+      legs: [createLeg({ tokenType: 1n, strike: 1000n, width: 10n })],
+      currentTick: 0n,
+      mintTick: 0n,
+      positionSize: size,
+      poolTickSpacing,
+    })
+
+    it('sums delta/value/gamma across positions of unequal size', () => {
+      const sizeA = 1_000_000_000_000_000_000n // 1e18
+      const sizeB = 20_000_000_000_000_000_000n // 20e18
+      const posA = shortPut(sizeA)
+      const posB = shortPut(sizeB)
+
+      expect(calculatePortfolioDelta([posA, posB])).toBe(
+        calculatePositionDelta(posA) + calculatePositionDelta(posB),
+      )
+      expect(calculatePortfolioValue([posA, posB])).toBe(
+        calculatePositionValue(posA) + calculatePositionValue(posB),
+      )
+      expect(calculatePortfolioGamma([posA, posB])).toBe(
+        calculatePositionGamma(posA) + calculatePositionGamma(posB),
+      )
+    })
+
+    it('does NOT inflate small positions (the Risk-tab bug)', () => {
+      const sizeA = 1_000_000_000_000_000_000n // 1e18
+      const sizeB = 20_000_000_000_000_000_000n // 20e18
+      const posA = shortPut(sizeA)
+      const posB = shortPut(sizeB)
+
+      // Correct aggregate: short puts below their range contribute +positionSize each.
+      const portfolioDelta = calculatePortfolioDelta([posA, posB])
+      expect(portfolioDelta).toBe(sizeA + sizeB)
+
+      // The old UI collapsed both legs into one synthetic position sharing the SUMMED
+      // size, so each leg saw the full total → 2 * total. Guard that we beat that.
+      const collapsedDelta = calculatePositionDelta({
+        legs: [...posA.legs, ...posB.legs],
+        currentTick: 0n,
+        mintTick: 0n,
+        positionSize: sizeA + sizeB,
+        poolTickSpacing,
+      })
+      expect(collapsedDelta).toBe((sizeA + sizeB) * 2n)
+      expect(portfolioDelta).toBeLessThan(collapsedDelta)
+    })
+
+    it('calculatePortfolioGreeks matches the individual aggregators', () => {
+      const positions = [shortPut(3_000_000_000_000_000_000n), shortPut(7_000_000_000_000_000_000n)]
+      const greeks = calculatePortfolioGreeks(positions)
+      expect(greeks.value).toBe(calculatePortfolioValue(positions))
+      expect(greeks.delta).toBe(calculatePortfolioDelta(positions))
+      expect(greeks.gamma).toBe(calculatePortfolioGamma(positions))
+    })
+
+    it('returns zeros for an empty portfolio', () => {
+      expect(calculatePortfolioValue([])).toBe(0n)
+      expect(calculatePortfolioDelta([])).toBe(0n)
+      expect(calculatePortfolioGamma([])).toBe(0n)
+    })
+
+    it('aggregates non-zero gamma near strikes with correct sign', () => {
+      // In-range option (currentTick == strike, within strike ± halfWidth) → non-zero gamma.
+      // Short gamma is negative, long gamma is positive; the portfolio is their sum.
+      const size = 1_000_000_000_000_000_000n // 1e18
+      const inRange = (overrides: object) => ({
+        legs: [createLeg({ strike: 1000n, width: 10n, ...overrides })],
+        currentTick: 1000n,
+        mintTick: 0n,
+        positionSize: size,
+        poolTickSpacing,
+      })
+      const shortPos = inRange({ isLong: false })
+      const longPos = inRange({ isLong: true })
+
+      const shortGamma = calculatePositionGamma(shortPos)
+      const longGamma = calculatePositionGamma(longPos)
+      expect(shortGamma).toBeLessThan(0n)
+      expect(longGamma).toBeGreaterThan(0n)
+      expect(calculatePortfolioGamma([shortPos, longPos])).toBe(shortGamma + longGamma)
+    })
+
+    it('gamma is zero far from every strike', () => {
+      // currentTick=0 is far below strike 1000 (range [950,1050]) → out of range → 0 gamma.
+      expect(calculatePortfolioGamma([shortPut(1_000_000_000_000_000_000n)])).toBe(0n)
     })
   })
 

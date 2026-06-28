@@ -966,6 +966,11 @@ export {
 // ============================================================================
 export type { PositionGreeksInput, PositionGreeksResult } from './greeks'
 export {
+  // Portfolio (multi-position) aggregates
+  calculatePortfolioDelta,
+  calculatePortfolioGamma,
+  calculatePortfolioGreeks,
+  calculatePortfolioValue,
   calculatePositionDelta,
   calculatePositionDeltaWithSwap,
   calculatePositionGamma,
