@@ -48,6 +48,8 @@ export interface SwapExactOutParams {
   existingPositionIds?: bigint[]
   /** Storage adapter for position ID resolution */
   storage?: StorageAdapter
+  /** Builder code for referral fee attribution. Defaults to `0n`. */
+  builderCode?: bigint
   /** Gas and transaction overrides */
   txOverrides?: TxOverrides
 }
@@ -76,6 +78,8 @@ export interface SwapExactInParams {
   existingPositionIds?: bigint[]
   /** Storage adapter for position ID resolution */
   storage?: StorageAdapter
+  /** Builder code for referral fee attribution. Defaults to `0n`. */
+  builderCode?: bigint
   /** Gas and transaction overrides */
   txOverrides?: TxOverrides
 }
@@ -113,6 +117,7 @@ export async function swapExactOut(params: SwapExactOutParams): Promise<TxResult
     slippageBps,
     existingPositionIds: explicitIds,
     storage,
+    builderCode = 0n,
     txOverrides,
   } = params
 
@@ -180,7 +185,7 @@ export async function swapExactOut(params: SwapExactOutParams): Promise<TxResult
           positionSizes,
           [mintTickLimits, burnTickLimits],
           false, // usePremiaAsCollateral
-          0n, // builderCode
+          builderCode,
         ],
         txOverrides,
       })
@@ -237,6 +242,7 @@ export async function swapExactIn(params: SwapExactInParams): Promise<TxResult> 
     slippageBps,
     existingPositionIds: explicitIds,
     storage,
+    builderCode = 0n,
     txOverrides,
   } = params
 
@@ -301,7 +307,7 @@ export async function swapExactIn(params: SwapExactInParams): Promise<TxResult> 
           positionSizes,
           [mintTickLimits, burnTickLimits],
           false,
-          0n,
+          builderCode,
         ],
         txOverrides,
       })
