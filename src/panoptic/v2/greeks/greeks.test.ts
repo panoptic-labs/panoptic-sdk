@@ -13,6 +13,7 @@ import {
   calculatePositionValue,
   getLegDelta,
   getLegGamma,
+  getLegNetValueWidth0,
   getLegValue,
   getLoanEffectiveDelta,
   isCall,
@@ -553,6 +554,181 @@ describe('greeks module', () => {
       expect(typeof greeks.value).toBe('bigint')
       expect(typeof greeks.delta).toBe('bigint')
       expect(greeks.gamma).toBe(0n)
+    })
+  })
+
+  describe('width=0 net payoff (swapAtMint: Zap vs Cover)', () => {
+    // Mirrors the chart: ETH = asset = token0 (assetIndex = 0n), and width=0 legs follow the
+    // UI convention `asset = 1 - tokenType`. positionSize is in ETH units, strike = 0 (mint),
+    // so notional = positionSize. mintTick = 0; we probe above mint (higher ETH price).
+    const poolTickSpacing = 10n
+    const positionSize = 1_000_000n
+    const assetIndex = 0n // ETH is token0 → isAssetToken0 = true
+    const aboveMint = 5000n // currentTick > mintTick=0 → ETH price up
+
+    function width0Leg(overrides: Partial<TokenIdLeg>): TokenIdLeg {
+      return createLeg({ width: 0n, strike: 0n, tickLower: 0n, tickUpper: 0n, ...overrides })
+    }
+
+    // [name, tokenType, isLong, expected zap sign (+1 long ETH / -1 short ETH)]
+    const CASES: Array<[string, bigint, boolean, number]> = [
+      ['USDC loan', 1n, false, +1], // borrow USDC, zap → ETH: long ETH
+      ['ETH loan', 0n, false, -1], // borrow ETH, zap → USDC: short ETH
+      ['USDC credit', 1n, true, -1], // lend USDC via ETH: short ETH
+      ['ETH credit', 0n, true, +1], // lend ETH via USDC: long ETH
+    ]
+
+    for (const [name, tokenType, isLong, sign] of CASES) {
+      const leg = width0Leg({ tokenType, asset: 1n - tokenType, isLong })
+
+      it(`${name}: Cover (swapAtMint=false) is flat zero at every tick`, () => {
+        for (const tick of [-aboveMint, 0n, aboveMint]) {
+          expect(
+            getLegValue(leg, tick, 0n, positionSize, poolTickSpacing, false, assetIndex, false),
+          ).toBe(0n)
+        }
+      })
+
+      it(`${name}: Zap (swapAtMint=true) is zero at mint and ${sign > 0 ? '>0' : '<0'} above mint`, () => {
+        const atMint = getLegValue(
+          leg,
+          0n,
+          0n,
+          positionSize,
+          poolTickSpacing,
+          false,
+          assetIndex,
+          true,
+        )
+        const above = getLegValue(
+          leg,
+          aboveMint,
+          0n,
+          positionSize,
+          poolTickSpacing,
+          false,
+          assetIndex,
+          true,
+        )
+        expect(atMint).toBe(0n)
+        if (sign > 0) expect(above).toBeGreaterThan(0n)
+        else expect(above).toBeLessThan(0n)
+      })
+    }
+
+    it('swapAtMint undefined preserves debt-only behavior (unchanged)', () => {
+      const leg = width0Leg({ tokenType: 0n, asset: 1n, isLong: false }) // ETH loan
+      const debtOnly = getLegValue(
+        leg,
+        aboveMint,
+        0n,
+        positionSize,
+        poolTickSpacing,
+        false,
+        assetIndex,
+      )
+      const zap = getLegValue(
+        leg,
+        aboveMint,
+        0n,
+        positionSize,
+        poolTickSpacing,
+        false,
+        assetIndex,
+        true,
+      )
+      // For an asset-denominated leg, the zap net equals the debt-only line.
+      expect(zap).toBe(debtOnly)
+      // And it is non-zero (regression guard).
+      expect(debtOnly).not.toBe(0n)
+    })
+  })
+
+  describe('ITM-neutralizing credit nets against option ITM (calculatePositionValue)', () => {
+    // ETH = asset = token0 (assetIndex = 0n). A short PUT minted ITM (swapAtMint) returns the
+    // ITM cash; a paired width=0 USDC credit is sized to "tuck away" that ITM. On the payoff
+    // curve the credit must net against the put's mint-time ITM instead of adding a duplicate
+    // swap line — otherwise the combined value is dragged far below the plain short-put value.
+    const poolTickSpacing = 60n
+    const positionSize = 20n * 10n ** 18n // 20 ETH
+    const assetIndex = 0n
+    // Ticks derived from display prices (ETH 18 dec / USDC 6 dec → ratio × 1e-12).
+    const toTick = (disp: number) => BigInt(Math.round(Math.log(disp * 1e-12) / Math.log(1.0001)))
+    const mintTick = toTick(1569)
+    const currentTick = toTick(1735)
+
+    const mkLeg = (o: Partial<TokenIdLeg>): TokenIdLeg => {
+      const width = o.width ?? 0n
+      const strike = o.strike ?? 0n
+      const halfWidth = (width * poolTickSpacing) / 2n
+      return createLeg({
+        ...o,
+        width,
+        strike,
+        tickLower: strike - halfWidth,
+        tickUpper: strike + halfWidth,
+      })
+    }
+    // Decoded from the real tokenId 0xfcbad07020fafceed8202003c08ae4977f78d.
+    const put = mkLeg({
+      index: 0n,
+      asset: 0n,
+      isLong: false,
+      tokenType: 1n,
+      strike: -201000n,
+      width: 250n,
+    })
+    const credit = mkLeg({
+      index: 1n,
+      asset: 0n,
+      isLong: true,
+      tokenType: 1n,
+      strike: -214320n,
+      width: 0n,
+    })
+
+    const value = (legs: TokenIdLeg[], swapAtMint?: boolean) =>
+      calculatePositionValue({
+        legs,
+        currentTick,
+        mintTick,
+        positionSize,
+        poolTickSpacing,
+        assetIndex,
+        swapAtMint,
+      })
+
+    it('combined put+credit ≈ plain short-put value (credit netted, not dragging it down)', () => {
+      const putOnly = value([put], true)
+      const combined = value([put, credit], true)
+      // Without netting the credit would subtract ~1042 USDC (a full short-ETH line); with
+      // netting only the small over-sizing residual (~18 USDC) remains.
+      const diff = putOnly - combined
+      expect(diff).toBeGreaterThan(0n)
+      expect(diff).toBeLessThan(50n * 10n ** 6n) // < 50 USDC residual, not ~1042
+    })
+
+    it('exact-cancel invariant: itmOffset = -notional ⇒ net width=0 line is flat 0', () => {
+      // A numeraire credit (asset === tokenType ⇒ notional = m = -positionSize). When the ITM
+      // offset exactly opposes the notional, the netted line is zero at every tick.
+      const numeraireCredit = mkLeg({
+        index: 0n,
+        asset: 1n,
+        isLong: true,
+        tokenType: 1n,
+        width: 0n,
+      })
+      const m = -positionSize // isLong credit, optionRatio 1
+      const offset = positionSize // = -notional, exactly neutralizes
+      for (const tick of [mintTick - 5000n, mintTick, currentTick]) {
+        expect(getLegNetValueWidth0(numeraireCredit, m, tick, mintTick, true, true, offset)).toBe(
+          0n,
+        )
+      }
+    })
+
+    it('swapAtMint undefined is unaffected (credit contributes debt-only 0)', () => {
+      expect(value([put, credit], undefined)).toBe(value([put], undefined))
     })
   })
 

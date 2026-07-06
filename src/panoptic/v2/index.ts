@@ -980,6 +980,7 @@ export {
   getLegDelta,
   getLegGamma,
   // Leg-level greeks
+  getLegNetValueWidth0,
   getLegValue,
   // Helpers
   isCall,

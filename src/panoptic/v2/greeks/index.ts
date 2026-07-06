@@ -71,9 +71,37 @@ function resolveAssetDirection(leg: Pick<TokenIdLeg, 'asset'>, assetIndex?: bigi
 }
 
 /**
+ * Compute the tokenType-denominated notional of a width=0 (loan/credit) leg.
+ *
+ * When leg.asset !== leg.tokenType, positionSize is in leg.asset units and
+ * the borrowed notional is encoded via leg.strike: notional_tokenType_raw =
+ * positionSize_raw × 1.0001^strike (a raw-to-raw ratio, unquoted by pool direction).
+ * When leg.asset === leg.tokenType, m is already the notional (old convention).
+ *
+ * `m > 0` for loans (isLong=false), `m < 0` for credits (isLong=true), so the
+ * returned notional is signed the same way.
+ */
+function computeWidth0Notional(leg: TokenIdLeg, m: bigint): bigint {
+  const scaleByStrike = leg.asset !== leg.tokenType
+  if (!scaleByStrike) return m
+  // The UI stores strike with a sign that depends on leg.asset:
+  //   priceTokenTypePerAsset = 1.0001^(leg.asset === 0 ? strike : -strike)
+  // Mirror that here so K_raw matches the intended notional scaling.
+  const signedStrike = leg.asset === 0n ? leg.strike : -leg.strike
+  const sqrtKraw = tickToSqrtPriceX96(signedStrike)
+  const KrawX192 = sqrtKraw * sqrtKraw
+  return divTrunc(m * KrawX192, Q192)
+}
+
+/**
  * Calculate value for a width=0 (loan/credit) leg.
  * Width=0 means the range is a single tick (the strike), so there's no meaningful
  * "in range" — we use the below/above formulas which avoid division by (r-1)=0.
+ *
+ * This is the DEBT-ONLY value (the borrowed/lent obligation), used by delta/greeks
+ * aggregation where the held-collateral side lives in a separate wallet/CT term. For
+ * a standalone payoff chart that must reflect the net user-experienced payoff (which
+ * depends on Zap vs Cover-at-mint), use `getLegNetValueWidth0`.
  */
 function getLegValueWidth0(
   leg: TokenIdLeg,
@@ -88,21 +116,7 @@ function getLegValueWidth0(
   // m > 0 for loans (isLong=false), m < 0 for credits (isLong=true).
   const borrowsAsset = isCall(leg.tokenType, isAssetToken0)
 
-  // When leg.asset !== leg.tokenType, positionSize is in leg.asset units and
-  // the borrowed notional is encoded via leg.strike: notional_tokenType_raw =
-  // positionSize_raw × 1.0001^strike (a raw-to-raw ratio, unquoted by pool direction).
-  // When leg.asset === leg.tokenType, m is already the notional (old convention).
-  const scaleByStrike = leg.asset !== leg.tokenType
-  let notional = m
-  if (scaleByStrike) {
-    // The UI stores strike with a sign that depends on leg.asset:
-    //   priceTokenTypePerAsset = 1.0001^(leg.asset === 0 ? strike : -strike)
-    // Mirror that here so K_raw matches the intended notional scaling.
-    const signedStrike = leg.asset === 0n ? leg.strike : -leg.strike
-    const sqrtKraw = tickToSqrtPriceX96(signedStrike)
-    const KrawX192 = sqrtKraw * sqrtKraw
-    notional = divTrunc(m * KrawX192, Q192)
-  }
+  const notional = computeWidth0Notional(leg, m)
 
   if (borrowsAsset) {
     // Asset loan/credit: debt PnL = -notional*(P - Pm); crosses y=0 at mint price, delta=-notional.
@@ -120,6 +134,128 @@ function getLegValueWidth0(
     // shift the whole PnL curve/baseline by the notional (double-counting the credit).
     return 0n
   }
+}
+
+/**
+ * Calculate the NET (user-experienced) payoff value for a width=0 (loan/credit) leg.
+ *
+ * Unlike `getLegValueWidth0` (debt-only), this includes the collateral/holding side and
+ * therefore depends on how the position was opened:
+ *
+ * - **Cover at mint** (`swapAtMint = false`): the collateral is sourced in the SAME token as
+ *   the debt/credit, so the holding side exactly offsets it → net PnL is FLAT (0 everywhere,
+ *   mint-relative), regardless of which token the leg is denominated in.
+ * - **Zap** (`swapAtMint = true`): the collateral is sourced in the OTHER token, leaving a
+ *   ±1-delta line in the asset (ETH), anchored to 0 at the mint price:
+ *     - USDC loan  → zap to ETH:   +1 (long ETH)
+ *     - ETH  loan  → zap to USDC:  −1 (short ETH)
+ *     - USDC credit ← zap from ETH: −1 (short ETH)
+ *     - ETH  credit ← zap from USDC: +1 (long ETH)
+ *
+ * @returns Net leg value in numeraire token smallest units (mint-relative PnL).
+ */
+export function getLegNetValueWidth0(
+  leg: TokenIdLeg,
+  m: bigint,
+  qCurrentTick: bigint,
+  qMintTick: bigint,
+  isAssetToken0: boolean,
+  swapAtMint: boolean,
+  itmOffsetNotional: bigint = 0n,
+): bigint {
+  // Cover at mint: collateral in the same token as the debt/credit cancels it → flat.
+  if (!swapAtMint) return 0n
+
+  const borrowsAsset = isCall(leg.tokenType, isAssetToken0)
+
+  // ITM-neutralizing credits/loans are sized to offset an option leg's mint-time ITM,
+  // which was zapped into the other token under swapAtMint and therefore carries the same
+  // ±delta line this leg would otherwise add. Net the leg's notional against that ITM
+  // (`itmOffsetNotional`, same token side, opposite sign) so a correctly-sized credit
+  // cancels to flat and only the residual (over/under-sizing) contributes a swap line.
+  const notional = computeWidth0Notional(leg, m) + itmOffsetNotional
+
+  const sqrtP = tickToSqrtPriceX96(qCurrentTick)
+  const sqrtPm = tickToSqrtPriceX96(qMintTick)
+  const PX192 = sqrtP * sqrtP
+  const PmX192 = sqrtPm * sqrtPm
+
+  if (borrowsAsset) {
+    // Debt/credit is in the asset (ETH); zapping the collateral into the numeraire leaves the
+    // debt-only asset exposure -notional*(P - Pm). (Loan → short ETH; credit → long ETH.)
+    return divTrunc(-notional * (PX192 - PmX192), Q192)
+  }
+
+  // Debt/credit is in the numeraire (USDC); zapping sources/spends the asset (ETH). We hold
+  // notional/Pm units of ETH, worth (notional/Pm)*(P - Pm) = notional*(P/Pm) - notional in
+  // numeraire. (Loan → long ETH; credit → short ETH.) Zero at mint by construction.
+  return divTrunc(notional * PX192, PmX192) - notional
+}
+
+/**
+ * Compute the mint-time ITM (in-the-money) adjustment for an option leg.
+ *
+ * This is the `itm` baseline used by {@link getLegValue}: the amount by which the
+ * position was already ITM at mint, expressed in the leg's natural units:
+ * - Puts: numeraire units (added directly to the put's `debt*K + v` value).
+ * - Calls: asset-ratio units (the call value multiplies it by price: `itm*P`/`itm*Pm`).
+ *
+ * Extracted so callers (e.g. {@link calculatePositionValue}) can build a per-side ITM
+ * notional pool to net width=0 credit/loan legs against — an ITM-neutralizing credit
+ * was sized to offset exactly this amount, so it should not add a spurious swap line.
+ */
+function computeOptionItm(
+  m: bigint,
+  qStrikeTick: bigint,
+  qMintTick: bigint,
+  halfWidthTick: bigint,
+  isPut: boolean,
+): bigint {
+  if (isPut) {
+    // Put ITM adjustment
+    if (qMintTick < qStrikeTick - halfWidthTick) {
+      // Below range: itm = (K - Pm) * m
+      const sqrtK = tickToSqrtPriceX96(qStrikeTick)
+      const sqrtPm = tickToSqrtPriceX96(qMintTick)
+      const KX192 = sqrtK * sqrtK
+      const PmX192 = sqrtPm * sqrtPm
+      return divTrunc(m * (KX192 - PmX192), Q192)
+    } else if (qMintTick > qStrikeTick + halfWidthTick) {
+      // Above range: itm = 0
+      return 0n
+    }
+    // In range: itm = m * (sqrt(K*r) - sqrt(Pm))^2 / (r - 1)
+    const sqrtKR = tickToSqrtPriceX96(qStrikeTick + halfWidthTick)
+    const sqrtPm = tickToSqrtPriceX96(qMintTick)
+    const sqrtR = tickToSqrtPriceX96(halfWidthTick)
+    const rX192 = sqrtR * sqrtR
+    const diff = sqrtKR - sqrtPm // X96
+    const diffSqX192 = diff * diff // X192
+    return divTrunc(m * diffSqX192, rX192 - Q192)
+  }
+
+  // Call ITM adjustment
+  if (qMintTick < qStrikeTick - halfWidthTick) {
+    // Below range: itm = 0
+    return 0n
+  } else if (qMintTick > qStrikeTick + halfWidthTick) {
+    // Above range: itm = (1 - K/Pm) * m
+    const sqrtK = tickToSqrtPriceX96(qStrikeTick)
+    const sqrtPm = tickToSqrtPriceX96(qMintTick)
+    const KX192 = sqrtK * sqrtK
+    const PmX192 = sqrtPm * sqrtPm
+    return divTrunc(m * (PmX192 - KX192), PmX192)
+  }
+  // In range: itm = m * (sqrt(r) - sqrt(K/Pm))^2 / (r - 1)
+  const sqrtR = tickToSqrtPriceX96(halfWidthTick)
+  const sqrtK = tickToSqrtPriceX96(qStrikeTick)
+  const sqrtPm = tickToSqrtPriceX96(qMintTick)
+  const rX192 = sqrtR * sqrtR
+  // sqrt(K/Pm) in X96 = sqrtK * 2^96 / sqrtPm
+  const sqrtKPmX96 = divTrunc(sqrtK * Q96, sqrtPm)
+  const diff = sqrtR - sqrtKPmX96 // X96
+  const diffSqX192 = diff * diff // X192
+  return divTrunc(m * diffSqX192, rX192 - Q192)
 }
 
 // --- Public Helpers ---
@@ -180,6 +316,7 @@ export function getLegValue(
   poolTickSpacing: bigint,
   definedRisk: boolean,
   assetIndex?: bigint,
+  swapAtMint?: boolean,
 ): bigint {
   const isAssetToken0 = resolveAssetDirection(leg, assetIndex)
   const qCurrentTick = quoteTick(currentTick, isAssetToken0)
@@ -188,6 +325,13 @@ export function getLegValue(
   const halfWidthTick = (leg.width * poolTickSpacing) / 2n
 
   const m = leg.isLong ? -(positionSize * leg.optionRatio) : positionSize * leg.optionRatio
+
+  // True loan/credit (leg.width === 0n): when the caller specifies how the position was
+  // opened (swapAtMint), return the NET user-experienced payoff (Zap vs Cover) instead of
+  // the debt-only value. Narrow options whose halfWidth rounds to 0 are excluded.
+  if (leg.width === 0n && swapAtMint !== undefined) {
+    return getLegNetValueWidth0(leg, m, qCurrentTick, qMintTick, isAssetToken0, swapAtMint)
+  }
 
   // Width=0 (loans/credits): single-tick position, no range to integrate over.
   if (halfWidthTick === 0n) {
@@ -237,57 +381,7 @@ export function getLegValue(
   const isPut = !isCall(leg.tokenType, isAssetToken0)
 
   // Compute ITM adjustment (differs for puts vs calls)
-  let itm: bigint
-
-  if (isPut) {
-    // Put ITM adjustment
-    if (qMintTick < qStrikeTick - halfWidthTick) {
-      // Below range: itm = (K - Pm) * m
-      const sqrtK = tickToSqrtPriceX96(qStrikeTick)
-      const sqrtPm = tickToSqrtPriceX96(qMintTick)
-      const KX192 = sqrtK * sqrtK
-      const PmX192 = sqrtPm * sqrtPm
-      itm = divTrunc(m * (KX192 - PmX192), Q192)
-    } else if (qMintTick > qStrikeTick + halfWidthTick) {
-      // Above range: itm = 0
-      itm = 0n
-    } else {
-      // In range: itm = m * (sqrt(K*r) - sqrt(Pm))^2 / (r - 1)
-      const sqrtKR = tickToSqrtPriceX96(qStrikeTick + halfWidthTick)
-      const sqrtPm = tickToSqrtPriceX96(qMintTick)
-      const sqrtR = tickToSqrtPriceX96(halfWidthTick)
-      const rX192 = sqrtR * sqrtR
-
-      const diff = sqrtKR - sqrtPm // X96
-      const diffSqX192 = diff * diff // X192
-      itm = divTrunc(m * diffSqX192, rX192 - Q192)
-    }
-  } else {
-    // Call ITM adjustment
-    if (qMintTick < qStrikeTick - halfWidthTick) {
-      // Below range: itm = 0
-      itm = 0n
-    } else if (qMintTick > qStrikeTick + halfWidthTick) {
-      // Above range: itm = (1 - K/Pm) * m
-      const sqrtK = tickToSqrtPriceX96(qStrikeTick)
-      const sqrtPm = tickToSqrtPriceX96(qMintTick)
-      const KX192 = sqrtK * sqrtK
-      const PmX192 = sqrtPm * sqrtPm
-      itm = divTrunc(m * (PmX192 - KX192), PmX192)
-    } else {
-      // In range: itm = m * (sqrt(r) - sqrt(K/Pm))^2 / (r - 1)
-      const sqrtR = tickToSqrtPriceX96(halfWidthTick)
-      const sqrtK = tickToSqrtPriceX96(qStrikeTick)
-      const sqrtPm = tickToSqrtPriceX96(qMintTick)
-      const rX192 = sqrtR * sqrtR
-
-      // sqrt(K/Pm) in X96 = sqrtK * 2^96 / sqrtPm
-      const sqrtKPmX96 = divTrunc(sqrtK * Q96, sqrtPm)
-      const diff = sqrtR - sqrtKPmX96 // X96
-      const diffSqX192 = diff * diff // X192
-      itm = divTrunc(m * diffSqX192, rX192 - Q192)
-    }
-  }
+  const itm = computeOptionItm(m, qStrikeTick, qMintTick, halfWidthTick, isPut)
 
   // Compute final result based on option type
   if (isPut) {
@@ -545,19 +639,85 @@ export interface PositionGreeksInput {
   poolTickSpacing: bigint
   /** Optional override for leg.asset on all legs (0n = token0 is asset, 1n = token1) */
   assetIndex?: bigint
+  /**
+   * How width=0 (loan/credit) legs were opened. When provided, `calculatePositionValue`
+   * returns the NET user-experienced payoff for those legs (Zap = ±1 line, Cover = flat)
+   * instead of the debt-only value. Leave undefined for delta/greeks aggregation, which
+   * accounts for the held collateral separately.
+   */
+  swapAtMint?: boolean
 }
 
 /**
  * Calculate total value across all legs.
  */
 export function calculatePositionValue(input: PositionGreeksInput): bigint {
-  const { legs, currentTick, mintTick, positionSize, poolTickSpacing, assetIndex } = input
+  const { legs, currentTick, mintTick, positionSize, poolTickSpacing, assetIndex, swapAtMint } =
+    input
   const definedRisk = isDefinedRisk(legs)
 
-  return legs.reduce(
-    (sum, leg) =>
-      sum +
-      getLegValue(
+  // Fast path: without swapAtMint there is no width=0 net-payoff (delta/greeks aggregation),
+  // so no ITM netting is needed — value each leg independently.
+  if (swapAtMint === undefined) {
+    return legs.reduce(
+      (sum, leg) =>
+        sum +
+        getLegValue(
+          leg,
+          currentTick,
+          mintTick,
+          positionSize,
+          poolTickSpacing,
+          definedRisk,
+          assetIndex,
+          swapAtMint,
+        ),
+      0n,
+    )
+  }
+
+  // Pass 1: accumulate each option leg's mint-time ITM into a per-side notional pool. Under
+  // swapAtMint the ITM was zapped into the other token, so a width=0 credit/loan that was
+  // created to neutralize it (see getLegNetValueWidth0) should net against this pool instead
+  // of adding a duplicate swap line. Puts contribute numeraire ITM; calls contribute asset ITM.
+  let numeraireItmPool = 0n
+  let assetItmPool = 0n
+  for (const leg of legs) {
+    const halfWidthTick = (leg.width * poolTickSpacing) / 2n
+    if (leg.width === 0n || halfWidthTick === 0n) continue // not a valued option leg
+    const isAssetToken0 = resolveAssetDirection(leg, assetIndex)
+    const qStrikeTick = quoteTick(leg.strike, isAssetToken0)
+    const qMintTick = quoteTick(mintTick, isAssetToken0)
+    const m = leg.isLong ? -(positionSize * leg.optionRatio) : positionSize * leg.optionRatio
+    const isPut = !isCall(leg.tokenType, isAssetToken0)
+    const itm = computeOptionItm(m, qStrikeTick, qMintTick, halfWidthTick, isPut)
+    if (isPut) numeraireItmPool += itm
+    else assetItmPool += itm
+  }
+
+  // Pass 2: sum leg values, netting width=0 legs against the matching ITM pool (consumed once).
+  let sum = 0n
+  for (const leg of legs) {
+    if (leg.width === 0n) {
+      const isAssetToken0 = resolveAssetDirection(leg, assetIndex)
+      const borrowsAsset = isCall(leg.tokenType, isAssetToken0)
+      const offset = borrowsAsset ? assetItmPool : numeraireItmPool
+      if (borrowsAsset) assetItmPool = 0n
+      else numeraireItmPool = 0n
+      const qCurrentTick = quoteTick(currentTick, isAssetToken0)
+      const qMintTick = quoteTick(mintTick, isAssetToken0)
+      const m = leg.isLong ? -(positionSize * leg.optionRatio) : positionSize * leg.optionRatio
+      sum += getLegNetValueWidth0(
+        leg,
+        m,
+        qCurrentTick,
+        qMintTick,
+        isAssetToken0,
+        swapAtMint,
+        offset,
+      )
+    } else {
+      sum += getLegValue(
         leg,
         currentTick,
         mintTick,
@@ -565,9 +725,11 @@ export function calculatePositionValue(input: PositionGreeksInput): bigint {
         poolTickSpacing,
         definedRisk,
         assetIndex,
-      ),
-    0n,
-  )
+        swapAtMint,
+      )
+    }
+  }
+  return sum
 }
 
 /**
