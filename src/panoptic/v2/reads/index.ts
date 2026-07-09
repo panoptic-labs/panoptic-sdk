@@ -157,6 +157,7 @@ export {
   getMaxPositionSize,
   getMaxWithdrawable,
   getRequiredCreditForITM,
+  REQUIRED_BASE_ERROR_SENTINEL,
 } from './collateralEstimate'
 
 // Checks (liquidation)

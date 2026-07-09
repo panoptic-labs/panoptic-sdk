@@ -564,6 +564,7 @@ export {
   previewWithdraw,
   RATE_AT_TARGET_BITS,
   ratePerSecWadToAprPct,
+  REQUIRED_BASE_ERROR_SENTINEL,
   SECONDS_PER_YEAR,
   UNREALIZED_INTEREST_BITS,
   utilizationBpsToWad,
