@@ -13,6 +13,7 @@ export default defineConfig({
     // it, rolldown's parallel dts generation can race and fail to load
     // src/cow/types.d.ts on multi-core CI (mirrors the v2/types entry above).
     './src/cow/types.ts',
+    './src/zodiac/index.ts',
   ],
   format: ['esm'],
   external: [

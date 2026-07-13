@@ -1093,3 +1093,18 @@ export type {
   WithdrawEvent,
   WithdrawSimulation,
 } from './types/index'
+
+// ============================================================================
+// Node-safe re-exports for bots
+// ============================================================================
+// The root entry ('.') eagerly re-exports wagmi/react hooks, so Node-only
+// consumers (bots) importing it need wagmi installed. Re-export the handful of
+// non-React symbols bots need here so they can stay on '@panoptic-eng/sdk/v2'.
+
+export { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../generated'
+export type { ChainDeployment } from '../../hypoVault/chainDeployments'
+export {
+  getChainDeployment,
+  isSupportedChain,
+  requireChainDeployment,
+} from '../../hypoVault/chainDeployments'

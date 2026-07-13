@@ -33,6 +33,11 @@ export {
 } from './permit2'
 export { quoteSwapExactInViaRouter, quoteSwapExactOutViaRouter } from './quote'
 export {
+  type QuoteV4ExactInByPoolKeyParams,
+  type V4ExactInQuote,
+  quoteV4ExactInByPoolKey,
+} from './quoteByPoolKey'
+export {
   type ResolvedSwapRoute,
   type ResolveSwapRouteParams,
   resolveSwapRoute,

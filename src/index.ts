@@ -53,6 +53,16 @@ export {
   getLendingAllocationRows,
 } from './hypoVault/analytics/lendingAllocation'
 export {
+  type VaultLendingAllocationRow,
+  type VaultNetLendingApyTrackerInput,
+  adjustUnderlyingIdleBalance,
+  calculateVaultNetLendingApyPctFromTrackerInputs,
+  calculateVaultNetLendingYieldUnderlyingFromTrackerInputs,
+  fetchVaultLendingAllocation,
+  fetchVaultNetLendingApyPct,
+  fetchVaultNetLendingYieldUnderlying,
+} from './hypoVault/analytics/vaultLendingAllocation'
+export {
   cancelDeposit,
   encodeCancelDepositFunctionData,
   getCancelDepositContractConfig,
@@ -173,6 +183,44 @@ export {
   calculateSharesFromAssets,
   getMinQueuedDepositEpoch,
 } from './hypoVault/requestWithdrawal/utils'
+export {
+  getVaultApyErrorMessage,
+  isExpectedHistoricalReadMiss,
+  isStaleOraclePriceError,
+  isStaleOraclePriceReadError,
+  VaultApyPreInceptionBlockError,
+} from './hypoVault/sharePrice/errors'
+export { fetchFirstDepositTimestampByVaultId } from './hypoVault/sharePrice/firstDeposit'
+export {
+  calculateAnnualizedApyPct,
+  computeSharePriceFromNavSnapshot,
+} from './hypoVault/sharePrice/math'
+export {
+  type ReadContractFn,
+  type ReadContractParams,
+  fetchVaultSharePriceSnapshot,
+} from './hypoVault/sharePrice/snapshot'
+export { getVaultApyStrategy, setVaultApyStrategyOverride } from './hypoVault/sharePrice/strategies'
+export { deriveVaultApyTimeseriesFromSharePrices } from './hypoVault/sharePrice/timeseries'
+export type {
+  BorrowRateApyConfig,
+  CandidateResolverContext,
+  ManagerInputProviderContext,
+  ManagerInputProviderDiagnostics,
+  ManagerInputProviderResult,
+  PremiumApyConfig,
+  VaultApyAnchor,
+  VaultApyAnchors,
+  VaultApyAnchorWindowDays,
+  VaultApyMetricKind,
+  VaultApyMetrics,
+  VaultApySeriesPoint,
+  VaultApyStrategy,
+  VaultApyTimescale,
+  VaultApyVaultLike,
+  VaultSharePriceSeriesPoint,
+  VaultSharePriceSnapshot,
+} from './hypoVault/sharePrice/types'
 export {
   getStaleOracleOverrideBytecodeForAccountant,
   getStaleOracleStateOverrideForAccountant,

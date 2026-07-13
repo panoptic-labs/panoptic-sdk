@@ -1,6 +1,6 @@
 {
   "name": "@panoptic-eng/sdk",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "repository": {
     "type": "git",
     "url": "https://github.com/panoptic-labs/panoptic-sdk.git"
@@ -26,6 +26,10 @@
     "./cow": {
       "types": "./dist/cow/index.d.ts",
       "import": "./dist/cow/index.js"
+    },
+    "./zodiac": {
+      "types": "./dist/zodiac/index.d.ts",
+      "import": "./dist/zodiac/index.js"
     },
     "./test": {
       "types": "./dist/test/index.d.ts",
@@ -59,6 +63,7 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
+    "decimal.js": "^10.6.0",
     "graphql": "^16.12.0",
     "graphql-request": "^7.3.1",
     "graphql-tag": "^2.12.6",

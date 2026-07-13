@@ -3,4 +3,5 @@
  * @module uniswap
  */
 
+export * from './v3'
 export * from './v4'
