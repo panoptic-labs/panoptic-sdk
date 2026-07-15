@@ -2,6 +2,7 @@ import type { Address } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildClaimVaultShareCalldatas,
   buildRequestWithdrawalCalldatas,
   encodeExecuteDepositFunctionData,
   encodeRequestWithdrawalFunctionData,
@@ -179,5 +180,58 @@ describe('buildRequestWithdrawalCalldatas', () => {
       encodeExecuteDepositFunctionData({ user: USER, epoch: 1n }),
       encodeRequestWithdrawalFunctionData({ shares: 200_000_000_000_000n }),
     ])
+  })
+})
+
+describe('buildClaimVaultShareCalldatas', () => {
+  it('executes every fulfilled deposit epoch without requesting a withdrawal', () => {
+    const result = buildClaimVaultShareCalldatas({
+      user: USER,
+      queuedDeposits: [
+        { amount: 20n, epoch: 0n },
+        { amount: 40n, epoch: 1n },
+        { amount: 30n, epoch: 2n },
+      ],
+      depositEpochStates: [
+        {
+          epoch: 0n,
+          assetsDeposited: 20n,
+          assetsFulfilled: 20n,
+          sharesReceived: 20n,
+        },
+        {
+          epoch: 1n,
+          assetsDeposited: 40n,
+          assetsFulfilled: 40n,
+          sharesReceived: 40n,
+        },
+        {
+          epoch: 2n,
+          assetsDeposited: 30n,
+          assetsFulfilled: 30n,
+          sharesReceived: 30n,
+        },
+      ],
+      currentDepositEpoch: 3n,
+    })
+
+    expect(result.selectedExecuteDepositEpochs).toEqual([0n, 1n, 2n])
+    expect(result.multicallCalldatas).toEqual([
+      encodeExecuteDepositFunctionData({ user: USER, epoch: 0n }),
+      encodeExecuteDepositFunctionData({ user: USER, epoch: 1n }),
+      encodeExecuteDepositFunctionData({ user: USER, epoch: 2n }),
+    ])
+  })
+
+  it('has no calldata when there are no claimable shares', () => {
+    const result = buildClaimVaultShareCalldatas({
+      user: USER,
+      queuedDeposits: [{ amount: 20n, epoch: 0n }],
+      depositEpochStates: [],
+      currentDepositEpoch: 1n,
+    })
+
+    expect(result.selectedExecuteDepositEpochs).toEqual([])
+    expect(result.multicallCalldatas).toEqual([])
   })
 })

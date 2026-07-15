@@ -418,6 +418,8 @@ export type {
   // Guardian unlock params + state
   GetGuardianUnlockStateParams,
   GetInterestStateParams,
+  // Collateral estimation params/result
+  GetItmAmountsParams,
   GetLiquidationPricesParams,
   // Margin buffer params
   GetMarginBufferParams,
@@ -454,9 +456,11 @@ export type {
   IrmPoint,
   // Check params
   IsLiquidatableParams,
+  ItmAmounts,
   LiquidationCheck,
   MarginBuffer,
   MaxPositionSize,
+  NeutralLeg,
   OpenPositionPreview,
   OptimizeTokenIdRiskPartnersParams,
   PoolLiquidities,
@@ -527,6 +531,7 @@ export {
   getInterestState,
   getIrmCurrent,
   getIrmCurve,
+  getItmAmounts,
   getLiquidationPrices,
   // Margin buffer
   getMarginBuffer,
@@ -983,6 +988,7 @@ export {
   // Position-level greeks
   calculatePositionValue,
   getLegDelta,
+  getLegDeltaInVaultFrame,
   getLegGamma,
   // Leg-level greeks
   getLegNetValueWidth0,
@@ -990,6 +996,7 @@ export {
   // Helpers
   isCall,
   isDefinedRisk,
+  toVaultFrameAtTick,
 } from './greeks'
 
 // ============================================================================

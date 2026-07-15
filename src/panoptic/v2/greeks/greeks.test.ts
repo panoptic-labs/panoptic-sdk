@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { tickToSqrtPriceX96 } from '../formatters/tick'
 import type { TokenIdLeg } from '../types'
 import {
   calculatePortfolioDelta,
@@ -12,6 +13,7 @@ import {
   calculatePositionGreeks,
   calculatePositionValue,
   getLegDelta,
+  getLegDeltaInVaultFrame,
   getLegGamma,
   getLegNetValueWidth0,
   getLegValue,
@@ -425,6 +427,35 @@ describe('greeks module', () => {
       const deltaOverride = getLegDelta(leg, 50n, positionSize, poolTickSpacing, 0n, false, 1n)
 
       expect(deltaDefault).not.toBe(deltaOverride)
+    })
+
+    it('computes width-zero legs directly in the vault frame', () => {
+      const leg = createLeg({ asset: 0n, tokenType: 1n, isLong: true, width: 0n })
+
+      expect(getLegDelta(leg, 0n, positionSize, poolTickSpacing, 0n, false)).toBe(0n)
+      expect(getLegDeltaInVaultFrame(leg, 0n, positionSize, poolTickSpacing, 0n, false, 1n)).toBe(
+        positionSize,
+      )
+    })
+
+    it('converts option delta from the leg frame at the current tick', () => {
+      const currentTick = 1_000n
+      const leg = createLeg({ asset: 1n, tokenType: 0n, isLong: true, width: 2n })
+      const legDelta = getLegDelta(leg, currentTick, positionSize, poolTickSpacing, 0n, false)
+      const sqrtPriceX96 = tickToSqrtPriceX96(currentTick)
+      const expected = -((legDelta * (1n << 192n)) / (sqrtPriceX96 * sqrtPriceX96))
+
+      expect(
+        getLegDeltaInVaultFrame(leg, currentTick, positionSize, poolTickSpacing, 0n, false, 0n),
+      ).toBe(expected)
+    })
+
+    it('propagates an out-of-bounds current tick', () => {
+      const leg = createLeg({ asset: 1n, tokenType: 0n, isLong: true, width: 2n })
+
+      expect(() =>
+        getLegDeltaInVaultFrame(leg, 887_273n, positionSize, poolTickSpacing, 0n, false, 0n),
+      ).toThrow(RangeError)
     })
 
     it('should override gamma calculation', () => {

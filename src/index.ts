@@ -159,8 +159,10 @@ export {
   requestDeposit,
   simulateRequestDeposit,
 } from './hypoVault/requestDeposit/requestDeposit'
+export { useClaimVaultShares } from './hypoVault/requestWithdrawal/hooks/use-claim-vault-shares'
 export { useRequestWithdrawal } from './hypoVault/requestWithdrawal/hooks/use-request-withdrawal'
 export {
+  buildClaimVaultShareCalldatas,
   buildExecuteDepositCalldatas,
   buildRequestWithdrawalCalldatas,
   encodeExecuteDepositFunctionData,

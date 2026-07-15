@@ -23,7 +23,11 @@
  */
 import { spawnSync } from 'node:child_process'
 
-const MAX_ATTEMPTS = Number(process.env.SDK_BUILD_MAX_ATTEMPTS ?? 5)
+// Default 20: each attempt is an independent, side-effect-free clean rebuild that passes
+// ~half the time on multi-core CI, so 5 wasn't enough (it exhausted all retries in the
+// wild). At ~50% per-attempt failure, 20 drives the persisted-failure odds to ~1e-6; a
+// clean run still exits on the first attempt. Override via SDK_BUILD_MAX_ATTEMPTS.
+const MAX_ATTEMPTS = Number(process.env.SDK_BUILD_MAX_ATTEMPTS ?? 20)
 const RACE_MARKER = 'UNLOADABLE_DEPENDENCY'
 const tsdownArgs = process.argv.slice(2)
 

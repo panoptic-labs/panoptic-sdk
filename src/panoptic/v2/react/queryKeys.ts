@@ -324,15 +324,15 @@ export const queryKeys = {
       tokenId.toString(),
     ] as const,
   /**
-   * Key for flow-neutral tokenId (ITM-neutralizing leg).
+   * Key for flow-neutral tokenId (ITM-neutralizing legs). Account-independent —
+   * itmAmounts is a pure projection of the tokenId + size.
    */
-  flowNeutralTokenId: (chainId: bigint, poolAddress: Address, account: Address, tokenId: bigint) =>
+  flowNeutralTokenId: (chainId: bigint, poolAddress: Address, tokenId: bigint) =>
     [
       ...queryKeys.all,
       'flowNeutralTokenId',
       chainId.toString(),
       poolAddress,
-      account,
       tokenId.toString(),
     ] as const,
   /**

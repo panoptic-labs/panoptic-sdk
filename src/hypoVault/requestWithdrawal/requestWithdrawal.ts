@@ -153,6 +153,39 @@ export function buildExecuteDepositCalldatas({
   return epochsToExecute.map((epoch) => encodeExecuteDepositFunctionData({ user, epoch }))
 }
 
+export function buildClaimVaultShareCalldatas({
+  user,
+  queuedDeposits,
+  depositEpochStates,
+  currentDepositEpoch,
+}: {
+  user: Address
+  queuedDeposits: QueuedDepositSnapshot[]
+  depositEpochStates: DepositEpochStateSnapshot[]
+  currentDepositEpoch: bigint
+}) {
+  const claimableDepositShares = calculateClaimableSharesFromQueuedDeposits({
+    queuedDeposits,
+    depositEpochStates,
+    currentDepositEpoch,
+  })
+  const selectedExecuteDepositEpochs = selectExecuteDepositEpochs({
+    claimableByExecutionEpoch: claimableDepositShares.byExecutionEpoch,
+    requiredClaimableShares: 0n,
+    requestAllAvailableShares: true,
+  })
+  const multicallCalldatas = buildExecuteDepositCalldatas({
+    user,
+    epochsToExecute: selectedExecuteDepositEpochs,
+  })
+
+  return {
+    claimableDepositShares,
+    selectedExecuteDepositEpochs,
+    multicallCalldatas,
+  }
+}
+
 export function buildRequestWithdrawalCalldatas({
   user,
   desiredAssets,

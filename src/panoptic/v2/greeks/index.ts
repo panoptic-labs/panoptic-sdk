@@ -554,6 +554,61 @@ export function getLegDelta(
   return definedRisk ? debtDelta + vDelta : debtDelta + vDelta + itmDelta
 }
 
+/** Convert a delta between token frames at the current pool tick. */
+export function toVaultFrameAtTick(
+  delta: bigint,
+  fromAsset: bigint,
+  vaultAssetIndex: 0n | 1n,
+  currentTick: bigint,
+  flipSignOnAssetInversion = false,
+): bigint {
+  if (fromAsset === vaultAssetIndex) return delta
+  const sqrtPriceX96 = tickToSqrtPriceX96(currentTick)
+  const converted =
+    vaultAssetIndex === 0n
+      ? (delta * Q192) / (sqrtPriceX96 * sqrtPriceX96)
+      : (delta * sqrtPriceX96 * sqrtPriceX96) / Q192
+  return flipSignOnAssetInversion ? -converted : converted
+}
+
+/**
+ * Calculate one leg's wallet-aware delta in the vault asset frame.
+ *
+ * Width-zero loans and credits must be evaluated directly in the vault frame.
+ * Option legs remain in their natural leg frame until converted at the mark tick.
+ */
+export function getLegDeltaInVaultFrame(
+  leg: TokenIdLeg,
+  currentTick: bigint,
+  positionSize: bigint,
+  poolTickSpacing: bigint,
+  mintTick: bigint | undefined,
+  definedRisk: boolean,
+  vaultAssetIndex: 0n | 1n,
+): bigint {
+  if (leg.width === 0n) {
+    return getLegDelta(
+      leg,
+      currentTick,
+      positionSize,
+      poolTickSpacing,
+      mintTick,
+      definedRisk,
+      vaultAssetIndex,
+    )
+  }
+
+  const legDelta = getLegDelta(
+    leg,
+    currentTick,
+    positionSize,
+    poolTickSpacing,
+    mintTick,
+    definedRisk,
+  )
+  return toVaultFrameAtTick(legDelta, leg.asset, vaultAssetIndex, currentTick, true)
+}
+
 /**
  * Calculate the gamma (dollar gamma) of a single leg.
  *

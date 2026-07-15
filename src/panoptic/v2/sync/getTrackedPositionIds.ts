@@ -5,6 +5,7 @@
 
 import type { Address, Hash, PublicClient } from 'viem'
 
+import { panopticPoolV2Abi } from '../../../generated'
 import type { StorageAdapter } from '../storage'
 import { getPositionsKey, jsonSerializer } from '../storage'
 import {
@@ -12,6 +13,37 @@ import {
   recoverSnapshot,
   recoverSnapshotFromTx,
 } from './snapshotRecovery'
+
+/**
+ * Verify that a recovered position-id list still matches the account's current
+ * on-chain state. `getFullPositionsData` reverts when the list contains a
+ * tokenId the account no longer holds, so a successful call is proof the list
+ * is live. Returns `false` on revert so the caller can fall back to an
+ * authoritative event scan instead of trusting a stale checkpoint.
+ */
+async function isPositionListLive(params: {
+  client: PublicClient
+  poolAddress: Address
+  account: Address
+  positionIds: bigint[]
+  blockNumber?: bigint
+}): Promise<boolean> {
+  const { client, poolAddress, account, positionIds, blockNumber } = params
+  // An empty list is always a valid (positionless) state — no need to probe.
+  if (positionIds.length === 0) return true
+  try {
+    await client.readContract({
+      address: poolAddress,
+      abi: panopticPoolV2Abi,
+      functionName: 'getFullPositionsData',
+      args: [account, false, positionIds],
+      blockNumber,
+    })
+    return true
+  } catch {
+    return false
+  }
+}
 
 /**
  * Parameters for getTrackedPositionIds.
@@ -152,18 +184,34 @@ export async function getOpenPositionIds(
     rolesContext,
   } = params
 
-  // Fast path: decode directly from a known tx hash (O(1), no event scanning)
-  // Falls back to full event-scanning recovery if the fast path returns null or throws
+  // Fast path: decode directly from a known tx hash (O(1), no event scanning).
+  // The tx's finalPositionIdList only reflects state as of THAT dispatch — if
+  // positions changed afterwards (e.g. a dispatch this caller never recorded),
+  // the list is stale and would revert downstream reads. So we validate the
+  // recovered list against current on-chain state and fall through to the
+  // authoritative event scan when it no longer matches.
   let snapshot: SnapshotRecoveryResult | null = null
   if (lastDispatchTxHash) {
     try {
-      snapshot = await recoverSnapshotFromTx({
+      const candidate = await recoverSnapshotFromTx({
         client,
         transactionHash: lastDispatchTxHash,
         account,
         pool: poolAddress,
         rolesContext,
       })
+      if (
+        candidate &&
+        (await isPositionListLive({
+          client,
+          poolAddress,
+          account,
+          positionIds: candidate.positionIds,
+          blockNumber: toBlock,
+        }))
+      ) {
+        snapshot = candidate
+      }
     } catch {
       // Fast path failed (e.g. RPC error, validation mismatch); fall through to slow-path
       snapshot = null

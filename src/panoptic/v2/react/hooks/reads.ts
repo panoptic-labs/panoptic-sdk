@@ -947,25 +947,36 @@ export function useFlowNeutralTokenId(
   tokenId: bigint,
   positionSize: bigint,
   account?: Address,
-  options?: QueryOptions & { existingPositionIds?: bigint[]; neutralizeITM?: boolean },
+  options?: QueryOptions & {
+    existingPositionIds?: bigint[]
+    neutralizeITM?: boolean
+    swapAtMint?: boolean
+    /** Size to measure the base flow at (defaults to positionSize). See SDK param. */
+    referenceSize?: bigint
+    /** PanopticQuery address — gates OTM on true intrinsic. See SDK param. */
+    queryAddress?: Address
+  },
 ) {
   const ctx = usePanopticContext()
   const resolvedAccount = account ?? ctx.account
   const neutralizeITM = options?.neutralizeITM ?? true
+  const swapAtMint = options?.swapAtMint ?? true
+  const referenceSize = options?.referenceSize
+  const queryAddress = options?.queryAddress
   return useQuery({
     queryKey: [
-      ...queryKeys.flowNeutralTokenId(
-        ctx.chainId,
-        poolAddress,
-        resolvedAccount ?? ('' as Address),
-        tokenId,
-      ),
+      ...queryKeys.flowNeutralTokenId(ctx.chainId, poolAddress, tokenId),
       getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
+      resolvedAccount ?? '',
       positionSize.toString(),
       (options?.existingPositionIds ?? []).map(String).join(','),
       neutralizeITM,
+      swapAtMint,
       positionSize,
       options?.existingPositionIds,
+      (referenceSize ?? 0n).toString(),
+      referenceSize,
+      queryAddress ?? '',
     ],
     queryFn: () => {
       if (!resolvedAccount) throw new Error('account required for createFlowNeutralTokenId')
@@ -976,6 +987,9 @@ export function useFlowNeutralTokenId(
         tokenId,
         positionSize,
         existingPositionIds: options?.existingPositionIds,
+        swapAtMint,
+        referenceSize,
+        queryAddress,
       })
     },
     enabled:
@@ -1000,6 +1014,7 @@ export function useMaxPositionSize(
     existingPositionIds?: bigint[]
     swapAtMint?: boolean
     precisionPct?: number
+    usePremiaAsCollateral?: boolean
   },
 ) {
   const ctx = usePanopticContext()
@@ -1018,6 +1033,7 @@ export function useMaxPositionSize(
       options?.existingPositionIds,
       options?.swapAtMint ?? false,
       options?.precisionPct ?? 1,
+      options?.usePremiaAsCollateral ?? false,
     ],
     queryFn: () => {
       if (!resolvedAccount) throw new Error('account required for getMaxPositionSize')
@@ -1030,6 +1046,7 @@ export function useMaxPositionSize(
         existingPositionIds: options?.existingPositionIds,
         swapAtMint: options?.swapAtMint,
         precisionPct: options?.precisionPct,
+        usePremiaAsCollateral: options?.usePremiaAsCollateral,
       })
     },
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
