@@ -3,12 +3,15 @@
  * @module v2/sync/snapshotRecovery
  */
 
-import type { AbiFunction, Address, Hash, PublicClient } from 'viem'
-import { decodeFunctionData, toFunctionSelector } from 'viem'
+import type { AbiFunction, Address, Hash, Hex, PublicClient } from 'viem'
+import { decodeFunctionData, getAddress, parseAbi, toFunctionSelector } from 'viem'
 
 import { panopticPoolV2Abi } from '../../../generated'
 
 const LOG_SCAN_WINDOW = 10_000n
+const rolesExecutionAbi = parseAbi([
+  'function execTransactionWithRole(address to, uint256 value, bytes data, uint8 operation, bytes32 roleKey, bool shouldRevert)',
+])
 
 type SnapshotEventLog = Awaited<ReturnType<PublicClient['getLogs']>>[number]
 type SnapshotCandidateEvent = SnapshotEventLog & {
@@ -320,6 +323,68 @@ export interface RecoverSnapshotFromTxParams {
   account?: Address
   /** Pool address to validate against. When set, rejects transactions not sent to this pool. */
   pool?: Address
+  /** Expected Zodiac Roles wrapper for bot-originated Safe dispatches. */
+  rolesContext?: {
+    modifier: Address
+    member: Address
+    roleKey: Hash
+  }
+}
+
+export interface RolesSnapshotContext {
+  modifier: Address
+  member: Address
+  roleKey: Hash
+}
+
+export function decodeSnapshotTransaction(params: {
+  input: Hex
+  from: Address
+  to: Address | null
+  account?: Address
+  pool?: Address
+  rolesContext?: RolesSnapshotContext
+}): DispatchCalldata | null {
+  const { account, pool, rolesContext } = params
+  let dispatchInput = params.input
+  let dispatchSender = params.from
+
+  if (rolesContext) {
+    if (
+      params.to === null ||
+      getAddress(params.to) !== getAddress(rolesContext.modifier) ||
+      getAddress(params.from) !== getAddress(rolesContext.member)
+    ) {
+      return null
+    }
+    try {
+      const decodedRoleCall = decodeFunctionData({ abi: rolesExecutionAbi, data: params.input })
+      const [target, value, data, operation, roleKey, shouldRevert] = decodedRoleCall.args
+      if (
+        !pool ||
+        getAddress(target) !== getAddress(pool) ||
+        value !== 0n ||
+        operation !== 0 ||
+        roleKey.toLowerCase() !== rolesContext.roleKey.toLowerCase() ||
+        !shouldRevert
+      ) {
+        return null
+      }
+      dispatchInput = data
+      if (!account) return null
+      dispatchSender = account
+    } catch {
+      return null
+    }
+  } else if (pool && (params.to === null || getAddress(params.to) !== getAddress(pool))) {
+    return null
+  }
+
+  const candidates = decodeAllDispatchCalldata(dispatchInput)
+  if (candidates.length === 0) return null
+  return account
+    ? selectDispatchForAccount(candidates, account, dispatchSender)
+    : candidates[candidates.length - 1]
 }
 
 /**
@@ -347,29 +412,21 @@ export interface RecoverSnapshotFromTxParams {
 export async function recoverSnapshotFromTx(
   params: RecoverSnapshotFromTxParams,
 ): Promise<SnapshotRecoveryResult | null> {
-  const { client, transactionHash, account, pool } = params
+  const { client, transactionHash, account, pool, rolesContext } = params
 
   const tx = await client.getTransaction({ hash: transactionHash })
 
   // Pending transactions have no block number — cannot recover snapshot
   if (tx.blockNumber == null) return null
 
-  // Validate pool: transaction must have been sent to the expected pool address
-  if (pool && tx.to?.toLowerCase() !== pool.toLowerCase()) {
-    return null
-  }
-
-  const candidates = decodeAllDispatchCalldata(tx.input)
-  if (candidates.length === 0) return null
-
-  // Validate account context:
-  // - dispatch: tx.from must be the account (msg.sender is the trader)
-  // - dispatchFrom: decoded.targetAccount must be the account (builder sends on behalf of trader)
-  // A tx may embed several dispatch calls (e.g. a force-exercise multicall carrying both
-  // the exercisor's dispatch and the victim's dispatchFrom); pick the one for `account`.
-  const decoded = account
-    ? selectDispatchForAccount(candidates, account, tx.from)
-    : candidates[candidates.length - 1]
+  const decoded = decodeSnapshotTransaction({
+    input: tx.input,
+    from: tx.from,
+    to: tx.to,
+    account,
+    pool,
+    rolesContext,
+  })
   if (!decoded) return null
 
   const blockNumber = tx.blockNumber

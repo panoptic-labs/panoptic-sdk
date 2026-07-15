@@ -21,6 +21,7 @@ import {
   type ResolvePanopticPoolFromPoolIdParams,
   type SimulateDeployNewPoolParams,
   type UniswapV4PoolKey,
+  createFlowNeutralTokenId,
   estimateCollateralRequired,
   getAccountCollateral,
   getAccountGreeks,
@@ -919,6 +920,8 @@ export function useRequiredCreditForITM(
         tokenId,
       ),
       getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
+      positionSize.toString(),
+      (options?.existingPositionIds ?? []).map(String).join(','),
       positionSize,
       options?.existingPositionIds,
     ],
@@ -936,6 +939,55 @@ export function useRequiredCreditForITM(
     enabled: (options?.enabled ?? true) && !!resolvedAccount && tokenId !== 0n && positionSize > 0n,
     refetchInterval: options?.refetchInterval,
     placeholderData: keepPreviousData,
+  })
+}
+
+export function useFlowNeutralTokenId(
+  poolAddress: Address,
+  tokenId: bigint,
+  positionSize: bigint,
+  account?: Address,
+  options?: QueryOptions & { existingPositionIds?: bigint[]; neutralizeITM?: boolean },
+) {
+  const ctx = usePanopticContext()
+  const resolvedAccount = account ?? ctx.account
+  const neutralizeITM = options?.neutralizeITM ?? true
+  return useQuery({
+    queryKey: [
+      ...queryKeys.flowNeutralTokenId(
+        ctx.chainId,
+        poolAddress,
+        resolvedAccount ?? ('' as Address),
+        tokenId,
+      ),
+      getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
+      positionSize.toString(),
+      (options?.existingPositionIds ?? []).map(String).join(','),
+      neutralizeITM,
+      positionSize,
+      options?.existingPositionIds,
+    ],
+    queryFn: () => {
+      if (!resolvedAccount) throw new Error('account required for createFlowNeutralTokenId')
+      return createFlowNeutralTokenId({
+        client: ctx.publicClient,
+        poolAddress,
+        account: resolvedAccount,
+        tokenId,
+        positionSize,
+        existingPositionIds: options?.existingPositionIds,
+      })
+    },
+    enabled:
+      (options?.enabled ?? true) &&
+      neutralizeITM &&
+      !!resolvedAccount &&
+      tokenId !== 0n &&
+      positionSize > 0n,
+    refetchInterval: options?.refetchInterval,
+    // Intentionally NO keepPreviousData: the result encodes a specific tokenId that
+    // will be minted, so serving stale data from a prior legs/size input could mint
+    // the wrong position. Consumers must gate the mint on a fresh, matching result.
   })
 }
 

@@ -20,6 +20,7 @@ export {
   useFactoryConstructMetadata,
   useFactoryOwnerOf,
   useFactoryTokenURI,
+  useFlowNeutralTokenId,
   useGuardianUnlockState,
   useInterestState,
   useIsLiquidatable,

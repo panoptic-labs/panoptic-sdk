@@ -5,13 +5,15 @@ export default defineConfig({
     './src/index.ts',
     './src/test/index.ts',
     './src/panoptic/v2/index.ts',
-    './src/panoptic/v2/types/index.ts',
+    // v2/index.ts already exports the complete types barrel. Adding that barrel
+    // as a second entry creates a competing declaration graph and triggers
+    // rolldown-plugin-dts UNLOADABLE_DEPENDENCY races on multi-core CI.
     './src/uniswap/index.ts',
     './src/cow/index.ts',
     // Dedicated entry so the type-only re-export (`export type … from './types'`
     // in cow/index.ts) gets a deterministically-emitted declaration file. Without
     // it, rolldown's parallel dts generation can race and fail to load
-    // src/cow/types.d.ts on multi-core CI (mirrors the v2/types entry above).
+    // src/cow/types.d.ts on multi-core CI.
     './src/cow/types.ts',
     './src/zodiac/index.ts',
   ],

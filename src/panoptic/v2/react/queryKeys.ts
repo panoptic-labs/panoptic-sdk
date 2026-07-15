@@ -324,6 +324,18 @@ export const queryKeys = {
       tokenId.toString(),
     ] as const,
   /**
+   * Key for flow-neutral tokenId (ITM-neutralizing leg).
+   */
+  flowNeutralTokenId: (chainId: bigint, poolAddress: Address, account: Address, tokenId: bigint) =>
+    [
+      ...queryKeys.all,
+      'flowNeutralTokenId',
+      chainId.toString(),
+      poolAddress,
+      account,
+      tokenId.toString(),
+    ] as const,
+  /**
    * Key for interest state (per-user borrows).
    */
   interestState: (chainId: bigint, poolAddress: Address, account: Address) =>

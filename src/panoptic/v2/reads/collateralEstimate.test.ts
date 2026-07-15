@@ -9,7 +9,9 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { PanopticError } from '../errors'
 import { createMemoryStorage, getPositionsKey, jsonSerializer } from '../storage'
+import { countLegs, createTokenIdBuilder, decodeAllLegs, encodePoolId } from '../tokenId'
 import {
+  createFlowNeutralTokenId,
   estimateCollateralRequired,
   getMaxPositionSize,
   getRequiredCreditForITM,
@@ -499,6 +501,222 @@ describe('Collateral Estimation with PanopticQuery', () => {
       expect(result.tokenFlow.balanceAfter1).toBe(2100n)
       expect(result.tokenFlow.delta0).toBe(-100n)
       expect(result.tokenFlow.delta1).toBe(100n)
+    })
+  })
+
+  describe('createFlowNeutralTokenId', () => {
+    const TICK_SPACING = 60n
+    const POOL_ID = encodePoolId(POOL_ADDRESS, TICK_SPACING)
+    const ONE = 10n ** 18n
+
+    // Encode getAssetsOf -> (uint256 assets0, uint256 assets1)
+    const hex32 = (x: bigint) => x.toString(16).padStart(64, '0')
+    const encodeAssets = (a0: bigint, a1: bigint): `0x${string}` =>
+      `0x${hex32(a0)}${hex32(a1)}` as `0x${string}`
+
+    // Mock client whose token-flow simulation produces the given before/after balances.
+    function clientWithFlow(
+      before0: bigint,
+      before1: bigint,
+      after0: bigint,
+      after1: bigint,
+      tick = 0,
+    ) {
+      const client = createMockClient()
+      const simulateContract = vi.fn().mockResolvedValue({
+        result: [
+          encodeAssets(before0, before1),
+          encodeCurrentTick(tick),
+          '0x',
+          encodeCurrentTick(tick),
+          encodeAssets(after0, after1),
+        ],
+      })
+      return {
+        ...client,
+        simulateContract,
+        estimateGas: vi.fn().mockResolvedValue(100000n),
+      } as unknown as PublicClient
+    }
+
+    const singleCall = () =>
+      createTokenIdBuilder(POOL_ID)
+        .addCall({ strike: 0n, width: 2n, optionRatio: 1n, isLong: false })
+        .build()
+
+    it('returns the original tokenId unchanged when OTM (within dust)', async () => {
+      const tokenId = singleCall()
+      // delta0 = -100, delta1 = +100 -> both below dust threshold
+      const client = clientWithFlow(1000n, 2000n, 900n, 2100n)
+      const result = await createFlowNeutralTokenId({
+        client,
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        tokenId,
+        positionSize: ONE,
+      })
+      expect(result.tokenId).toBe(tokenId)
+      expect(result.positionSize).toBe(ONE)
+      expect(result.neutralStrike).toBe(0n)
+      expect(countLegs(result.tokenId)).toBe(1n)
+    })
+
+    it('prepends a loan leg for a token0 deposit (credit needed)', async () => {
+      const tokenId = singleCall()
+      // delta0 = -ONE -> creditAmount0 = +ONE (user deposits token0) -> offset with a LOAN
+      const client = clientWithFlow(3n * ONE, ONE, 2n * ONE, ONE)
+      const result = await createFlowNeutralTokenId({
+        client,
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        tokenId,
+        positionSize: ONE,
+      })
+
+      expect(result.positionSize).toBe(ONE) // never rescaled
+      expect(result.neutralIsCredit).toBe(false)
+      expect(result.neutralTokenType).toBe(0n)
+      expect(result.neutralAsset).toBe(1n)
+      expect(countLegs(result.tokenId)).toBe(2n)
+
+      const legs = decodeAllLegs(result.tokenId)
+      const neutral = legs[0]
+      expect(neutral.index).toBe(0n)
+      expect(neutral.width).toBe(0n)
+      expect(neutral.optionRatio).toBe(1n)
+      expect(neutral.isLong).toBe(false)
+      expect(neutral.asset).toBe(1n)
+      expect(neutral.tokenType).toBe(0n)
+      // ratio = ONE/ONE = 1 -> tick 0 -> strike 0
+      expect(neutral.strike).toBe(0n)
+      // poolId (low 64 bits) preserved
+      expect(result.tokenId & ((1n << 64n) - 1n)).toBe(POOL_ID)
+    })
+
+    it('prepends a credit leg for a token1 payout (ITM short put)', async () => {
+      const tokenId = singleCall()
+      // delta1 = +ONE -> creditAmount1 = -ONE (user receives token1) -> offset with a CREDIT
+      const client = clientWithFlow(ONE, ONE, ONE, 2n * ONE)
+      const result = await createFlowNeutralTokenId({
+        client,
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        tokenId,
+        positionSize: ONE,
+      })
+
+      expect(result.neutralIsCredit).toBe(true)
+      expect(result.neutralTokenType).toBe(1n)
+      expect(result.neutralAsset).toBe(0n)
+      const neutral = decodeAllLegs(result.tokenId)[0]
+      expect(neutral.isLong).toBe(true)
+      expect(neutral.width).toBe(0n)
+    })
+
+    it('rounds the neutralizing strike to tick spacing within bounds', async () => {
+      const tokenId = singleCall()
+      // creditAmount0 = +2*ONE -> ratio 2 -> tick ≈ 6931.8
+      const client = clientWithFlow(3n * ONE, ONE, ONE, ONE)
+      const result = await createFlowNeutralTokenId({
+        client,
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        tokenId,
+        positionSize: ONE,
+      })
+      const neutral = decodeAllLegs(result.tokenId)[0]
+      // legAsset === 1 -> strike is the negated rounded tick; magnitude on spacing grid
+      expect(neutral.strike % TICK_SPACING).toBe(0n)
+      const absResidual =
+        result.strikeResidualTick < 0n ? -result.strikeResidualTick : result.strikeResidualTick
+      expect(absResidual).toBeLessThan(TICK_SPACING)
+    })
+
+    it('shifts existing legs and remaps self-partners on prepend', async () => {
+      const tokenId = createTokenIdBuilder(POOL_ID)
+        .addCall({ strike: 120n, width: 2n, optionRatio: 1n, isLong: false })
+        .addPut({ strike: -120n, width: 2n, optionRatio: 2n, isLong: false })
+        .build()
+      const client = clientWithFlow(3n * ONE, ONE, 2n * ONE, ONE)
+      const result = await createFlowNeutralTokenId({
+        client,
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        tokenId,
+        positionSize: ONE,
+      })
+      const legs = decodeAllLegs(result.tokenId)
+      expect(legs).toHaveLength(3)
+      // original legs shifted to indices 1 and 2, self-partners follow their index
+      expect(legs[1].strike).toBe(120n)
+      expect(legs[1].riskPartner).toBe(1n)
+      expect(legs[2].strike).toBe(-120n)
+      expect(legs[2].optionRatio).toBe(2n)
+      expect(legs[2].riskPartner).toBe(2n)
+    })
+
+    it('selects the ITM token by value, not raw magnitude (mixed decimals)', async () => {
+      // Simulates an ITM short put on an 18-dec token0 / 6-dec token1 pool:
+      //   - token1 (e.g. USDC, 6-dec) carries the real ITM: ~1665 "USDC" payout
+      //   - token0 (e.g. WETH, 18-dec) carries a tiny residual whose RAW integer
+      //     (1e15) dwarfs the token1 raw (1.665e9) purely due to decimals.
+      // Value-aware selection must still neutralize the token1 ITM.
+      const tokenId = singleCall()
+      const residual0 = 1_000_000_000_000_000n // 1e15 raw (~0.001 of an 18-dec token)
+      const itm1 = 1_665_000_000n // 1.665e9 raw (1665 of a 6-dec token)
+      // Tick where token0 is worth very little in token1 terms (price ~1.66e-9).
+      const tick = -202100
+      const client = clientWithFlow(
+        ONE, // before0
+        2_000_000_000n, // before1
+        ONE + residual0, // after0 -> delta0 = +residual0 (user receives token0)
+        2_000_000_000n + itm1, // after1 -> delta1 = +itm1 (user receives the ITM)
+        tick,
+      )
+      const result = await createFlowNeutralTokenId({
+        client,
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        tokenId,
+        positionSize: 5n * ONE,
+      })
+      // Raw comparison would pick token0 (1e15 > 1.665e9); value-aware picks token1.
+      expect(result.neutralTokenType).toBe(1n)
+      expect(result.neutralAsset).toBe(0n)
+      expect(result.neutralIsCredit).toBe(true) // creditAmount1 < 0 (user receives) -> credit
+    })
+
+    it('throws when positionSize is not positive', async () => {
+      const tokenId = singleCall()
+      const client = clientWithFlow(ONE, ONE, ONE, ONE)
+      await expect(
+        createFlowNeutralTokenId({
+          client,
+          poolAddress: POOL_ADDRESS,
+          account: ACCOUNT_ADDRESS,
+          tokenId,
+          positionSize: 0n,
+        }),
+      ).rejects.toThrow(PanopticError)
+    })
+
+    it('throws when the tokenId already has 4 legs', async () => {
+      const tokenId = createTokenIdBuilder(POOL_ID)
+        .addCall({ strike: 0n, width: 2n, optionRatio: 1n, isLong: false })
+        .addCall({ strike: 60n, width: 2n, optionRatio: 1n, isLong: false })
+        .addCall({ strike: 120n, width: 2n, optionRatio: 1n, isLong: false })
+        .addCall({ strike: 180n, width: 2n, optionRatio: 1n, isLong: false })
+        .build()
+      const client = clientWithFlow(ONE, ONE, ONE, ONE)
+      await expect(
+        createFlowNeutralTokenId({
+          client,
+          poolAddress: POOL_ADDRESS,
+          account: ACCOUNT_ADDRESS,
+          tokenId,
+          positionSize: ONE,
+        }),
+      ).rejects.toThrow(PanopticError)
     })
   })
 })

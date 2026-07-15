@@ -14,11 +14,23 @@ import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import { panopticQueryAbi } from '../abis/panopticQuery'
 import { getBlockMeta } from '../clients/blockMeta'
 import { PanopticError } from '../errors'
+import { sqrtPriceX96ToTick, tickToSqrtPriceX96 } from '../formatters/tick'
 import { type TokenFlow, simulateWithTokenFlow } from '../simulations/tokenFlow'
 import type { StorageAdapter } from '../storage'
 import { getTrackedPositionIds } from '../sync/getTrackedPositionIds'
+import { addLegToTokenId, countLegs, decodeAllLegs, decodeTickSpacing } from '../tokenId/encoding'
 import type { BlockMeta } from '../types'
 import { MAX_TICK, MIN_TICK } from '../utils/constants'
+
+/**
+ * Max int24 (2^23 - 1), used as the per-position `effectiveLiquidityLimit` (the
+ * 3rd element of the dispatch tickAndSpreadLimits triplet). Passing this lets the
+ * contract clamp to its real on-chain `maxSpread()` ceiling, matching the live
+ * trade. Passing 0 instead forces the limit to 0, so any long-leg removal reverts
+ * with EffectiveLiquidityAboveThreshold and ITM/size measurements silently
+ * collapse (see PanopticPool._mintInSFPMAndUpdateCollateral / _checkLiquiditySpread).
+ */
+const MAX_EFFECTIVE_LIQUIDITY_LIMIT = 8388607
 
 /**
  * Collateral estimate result.
@@ -377,15 +389,8 @@ async function tryDispatchSimulation(params: {
     // - swapAtMint=true: descending order (high, low) triggers SFPM swap
     // - swapAtMint=false: ascending order (low, high) no swap
     //
-    // The third element is the per-position `effectiveLiquidityLimit` (denominated
-    // X10_000 = removedLiquidity/netLiquidity ratio). For LONG legs the contract caps
-    // the allowed spread at `min(effectiveLiquidityLimit, maxSpread())`
-    // (PanopticPool._mintInSFPMAndUpdateCollateral / _checkLiquiditySpread). Passing 0
-    // here forces the limit to 0, so ANY long-leg removal reverts with
-    // EffectiveLiquidityAboveThreshold — which silently collapsed the max size for
-    // multi-leg positions containing a long leg (e.g. spreads). Use the max int24 so the
-    // contract clamps to its real on-chain `maxSpread()` ceiling, matching the live trade.
-    const MAX_EFFECTIVE_LIQUIDITY_LIMIT = 8388607 // max int24 (2^23 - 1)
+    // The third element is the per-position `effectiveLiquidityLimit`; see the
+    // MAX_EFFECTIVE_LIQUIDITY_LIMIT definition for why 0 must not be used here.
     const tickLimits: readonly [number, number, number] = swapAtMint
       ? [887272, -887272, MAX_EFFECTIVE_LIQUIDITY_LIMIT]
       : [-887272, 887272, MAX_EFFECTIVE_LIQUIDITY_LIMIT]
@@ -509,7 +514,10 @@ export async function getRequiredCreditForITM(
   const finalPositionIdList = [...existingPositionIds, tokenId]
 
   // Encode dispatch call with swapAtMint=true (descending tickLimits)
-  // Descending order (MAX_TICK > MIN_TICK) triggers SFPM swap, giving single-sided token flow
+  // Descending order (MAX_TICK > MIN_TICK) triggers SFPM swap, giving single-sided token flow.
+  // The 3rd element is the per-position effectiveLiquidityLimit: use the max so the contract
+  // clamps to its real maxSpread() ceiling (matching the live trade). Passing 0 here collapses
+  // ITM measurement for positions with a long-leg removal (see MAX_EFFECTIVE_LIQUIDITY_LIMIT).
   const callData = encodeFunctionData({
     abi: panopticPoolV2Abi,
     functionName: 'dispatch',
@@ -517,7 +525,13 @@ export async function getRequiredCreditForITM(
       [tokenId], // positionIdList: positions being minted
       finalPositionIdList,
       [positionSize as unknown as bigint & { readonly __uint128: true }],
-      [[Number(MAX_TICK), Number(MIN_TICK), 0] as readonly [number, number, number]], // Descending = swapAtMint
+      [
+        [Number(MAX_TICK), Number(MIN_TICK), MAX_EFFECTIVE_LIQUIDITY_LIMIT] as readonly [
+          number,
+          number,
+          number,
+        ],
+      ], // Descending = swapAtMint
       false, // usePremiaAsCollateral
       0n, // builderCode
     ],
@@ -548,6 +562,273 @@ export async function getRequiredCreditForITM(
     creditAmount1: -result.tokenFlow.delta1,
     tokenFlow: result.tokenFlow,
     _meta,
+  }
+}
+
+/**
+ * Dust threshold (raw token units) below which an ITM measurement is treated as
+ * zero. Token-flow deltas carry sub-unit rounding noise from on-chain math and
+ * the sqrt/tick conversions below; 1000n raw units swallows that noise while
+ * staying many orders of magnitude below any real ITM credit (which is on the
+ * order of `positionSize`).
+ */
+const FLOW_NEUTRAL_DUST_THRESHOLD = 1000n
+
+const Q192 = 1n << 192n
+const POOL_ID_MASK = (1n << 64n) - 1n
+
+/**
+ * Floor integer square root for bigints (Newton's method). Exact for all
+ * non-negative inputs — no float precision loss for values above 2^53.
+ */
+function isqrt(value: bigint): bigint {
+  if (value < 0n) throw new PanopticError('isqrt of negative number')
+  if (value < 2n) return value
+  let x = value
+  let y = (x + 1n) >> 1n
+  while (y < x) {
+    x = y
+    y = (x + value / x) >> 1n
+  }
+  return x
+}
+
+/**
+ * Round a signed tick to the nearest multiple of `spacing` (bigint, nearest).
+ */
+function roundToSpacing(tick: bigint, spacing: bigint): bigint {
+  if (spacing <= 1n) return tick
+  const half = spacing / 2n
+  // bigint division truncates toward zero, so bias by ±half before dividing.
+  const quotient = tick >= 0n ? (tick + half) / spacing : (tick - half) / spacing
+  return quotient * spacing
+}
+
+/**
+ * Parameters for createFlowNeutralTokenId.
+ */
+export interface CreateFlowNeutralTokenIdParams {
+  /** viem PublicClient */
+  client: PublicClient
+  /** PanopticPool address */
+  poolAddress: Address
+  /** Account address */
+  account: Address
+  /** The base tokenId (without neutralizing leg) */
+  tokenId: bigint
+  /** Position size (number of contracts) — unchanged by this function */
+  positionSize: bigint
+  /** Existing position IDs held by the account (defaults to empty) */
+  existingPositionIds?: bigint[]
+  /** Optional block number for simulation */
+  blockNumber?: bigint
+  /** Optional pre-fetched block metadata */
+  _meta?: BlockMeta
+}
+
+/**
+ * Result of createFlowNeutralTokenId.
+ */
+export interface FlowNeutralTokenId {
+  /**
+   * New tokenId with a single width=0 neutralizing leg prepended at index 0
+   * (existing legs shifted to 1..n). Equals the original tokenId if OTM.
+   */
+  tokenId: bigint
+  /**
+   * Position size to use when opening this tokenId. Always equal to the input
+   * `positionSize` — the neutralizing leg is sized via its strike, not by
+   * rescaling the position.
+   */
+  positionSize: bigint
+  /** The computed strike of the neutralizing leg (0n if OTM). */
+  neutralStrike: bigint
+  /** Asset (0n or 1n) of the neutralizing leg (0n if OTM). */
+  neutralAsset: bigint
+  /** Token type (0n or 1n) of the neutralizing leg (0n if OTM). */
+  neutralTokenType: bigint
+  /** true = credit leg (isLong), false = loan leg; only meaningful when a leg was added. */
+  neutralIsCredit: boolean
+  /** The raw ITM measurement that drove the leg sizing. */
+  originalCredit: RequiredCreditForITM
+  /**
+   * Tick-spacing rounding residual (solved tick − rounded tick) for diagnostics.
+   * The achieved notional differs from the exact ITM amount by at most ~half a
+   * tick-spacing in basis points (each tick ≈ 1bp) — an intended approximation.
+   */
+  strikeResidualTick: bigint
+  /** Block metadata */
+  _meta: BlockMeta
+}
+
+/**
+ * Create a flow-neutral tokenId by prepending a width=0 credit/loan leg that
+ * offsets the net ITM token flow.
+ *
+ * When a position is ITM, opening it produces an imbalanced single-sided token
+ * flow. This function measures that net flow via {@link getRequiredCreditForITM}
+ * and prepends a single width=0 leg (at index 0, with `asset !== tokenType` so
+ * its notional scales continuously by strike) sized so its token flow is equal
+ * and opposite. The result has net flow ~zero at mint.
+ *
+ * The leg occupies index 0; existing legs are shifted to indices 1..n with their
+ * `riskPartner` references remapped (self-partners stay self, cross-partners +1).
+ * The input `positionSize` is never modified — the leg is sized via its strike.
+ *
+ * @param params - The parameters
+ * @returns The flow-neutral tokenId with metadata
+ * @throws PanopticError if the tokenId already has 4 legs, positionSize <= 0, or
+ *   the required neutralizing strike falls outside the valid tick range.
+ */
+export async function createFlowNeutralTokenId(
+  params: CreateFlowNeutralTokenIdParams,
+): Promise<FlowNeutralTokenId> {
+  const { client, poolAddress, account, tokenId, positionSize, existingPositionIds, blockNumber } =
+    params
+
+  if (positionSize <= 0n) {
+    throw new PanopticError('positionSize must be positive to create flow-neutral position')
+  }
+
+  const legCount = countLegs(tokenId)
+  if (legCount >= 4n) {
+    throw new PanopticError('Cannot prepend neutralizing leg: tokenId already has 4 legs')
+  }
+
+  // Measure net ITM exposure. positive = user deposits (credit needed),
+  // negative = user receives (loan proceeds).
+  const credit = await getRequiredCreditForITM({
+    client,
+    poolAddress,
+    account,
+    tokenId,
+    positionSize,
+    existingPositionIds,
+    blockNumber,
+    _meta: params._meta,
+  })
+
+  // Select the token carrying the dominant ITM flow. Compare by VALUE, not raw
+  // integer magnitude: token0 and token1 typically have different decimals (e.g.
+  // 18 vs 6), so a tiny residual flow in the higher-decimal token would otherwise
+  // out-number the real ITM in the lower-decimal token. Convert token0 into
+  // token1 units via the current price (P = 1.0001^tick = sqrtP^2 / 2^192).
+  const abs0 = credit.creditAmount0 < 0n ? -credit.creditAmount0 : credit.creditAmount0
+  const abs1 = credit.creditAmount1 < 0n ? -credit.creditAmount1 : credit.creditAmount1
+  const tickBefore = credit.tokenFlow.tickBefore
+  if (tickBefore === null) {
+    throw new PanopticError('Cannot create flow-neutral position: current tick unavailable')
+  }
+  const sqrtPX96 = tickToSqrtPriceX96(tickBefore)
+  const abs0InToken1 = (abs0 * sqrtPX96 * sqrtPX96) / Q192
+
+  let itmTokenIndex: 0n | 1n
+  let amount: bigint
+  if (abs0InToken1 <= FLOW_NEUTRAL_DUST_THRESHOLD && abs1 <= FLOW_NEUTRAL_DUST_THRESHOLD) {
+    // OTM — no neutralizing leg needed (both flows are dust in token1 terms).
+    return {
+      tokenId,
+      positionSize,
+      neutralStrike: 0n,
+      neutralAsset: 0n,
+      neutralTokenType: 0n,
+      neutralIsCredit: false,
+      originalCredit: credit,
+      strikeResidualTick: 0n,
+      _meta: credit._meta,
+    }
+  } else if (abs0InToken1 >= abs1) {
+    itmTokenIndex = 0n
+    amount = credit.creditAmount0
+  } else {
+    itmTokenIndex = 1n
+    amount = credit.creditAmount1
+  }
+
+  const absAmount = amount < 0n ? -amount : amount
+
+  // The neutralizing leg moves the ITM token (tokenType = itmTokenIndex) and is
+  // priced in the opposite asset so its notional scales by strike.
+  const legTokenType = itmTokenIndex
+  const legAsset = itmTokenIndex === 0n ? 1n : 0n
+  // The neutralizing leg must produce the OPPOSITE flow of the ITM.
+  // `amount` is creditAmount = -delta (positive = user deposits / credit needed;
+  // negative = user receives / loan proceeds), so:
+  //   amount < 0 (user receives) → CREDIT (isLong) makes them deposit it back.
+  //   amount > 0 (user deposits) → LOAN (short) pays it out to them.
+  const legIsLong = amount < 0n
+
+  // Solve the strike so the leg notional matches absAmount.
+  // notional_tokenType = positionSize * 1.0001^signedStrike, so
+  //   1.0001^signedStrike = absAmount / positionSize
+  //   sqrtKrawX96 = sqrt(absAmount / positionSize) * 2^96
+  //              = isqrt(absAmount * 2^192 / positionSize)
+  const sqrtKrawX96 = isqrt((absAmount * Q192) / positionSize)
+
+  let signedTick: bigint
+  try {
+    signedTick = sqrtPriceX96ToTick(sqrtKrawX96)
+  } catch {
+    throw new PanopticError(
+      'Cannot create flow-neutral position: neutralizing strike out of bounds',
+    )
+  }
+
+  const tickSpacing = decodeTickSpacing(tokenId)
+  const roundedTick = roundToSpacing(signedTick, tickSpacing)
+  const strikeResidualTick = signedTick - roundedTick
+
+  // After grid rounding the strike must still be a valid in-range tick. Clamping to
+  // MIN_TICK/MAX_TICK would (a) likely be off the tick-spacing grid and (b) materially
+  // change the notional, producing a non-neutral leg — so throw instead.
+  if (roundedTick < MIN_TICK || roundedTick > MAX_TICK) {
+    throw new PanopticError(
+      'Cannot create flow-neutral position: neutralizing strike out of bounds',
+    )
+  }
+
+  // signedStrike = (asset === 0 ? strike : -strike) — invert to recover the
+  // encoded strike (mirrors getLegValueWidth0's convention).
+  const neutralStrike = legAsset === 0n ? roundedTick : -roundedTick
+
+  // Rebuild the tokenId: neutralizing leg at index 0, existing legs shifted +1.
+  const poolId = tokenId & POOL_ID_MASK
+  let newTokenId = addLegToTokenId(poolId, {
+    index: 0n,
+    asset: legAsset,
+    tokenType: legTokenType,
+    optionRatio: 1n,
+    isLong: legIsLong ? 1n : 0n,
+    riskPartner: 0n,
+    strike: neutralStrike,
+    width: 0n,
+  })
+
+  for (const leg of decodeAllLegs(tokenId)) {
+    const newIndex = leg.index + 1n
+    const newRiskPartner = leg.riskPartner === leg.index ? newIndex : leg.riskPartner + 1n
+    newTokenId = addLegToTokenId(newTokenId, {
+      index: newIndex,
+      asset: leg.asset,
+      tokenType: leg.tokenType,
+      optionRatio: leg.optionRatio,
+      isLong: leg.isLong ? 1n : 0n,
+      riskPartner: newRiskPartner,
+      strike: leg.strike,
+      width: leg.width,
+    })
+  }
+
+  return {
+    tokenId: newTokenId,
+    positionSize,
+    neutralStrike,
+    neutralAsset: legAsset,
+    neutralTokenType: legTokenType,
+    neutralIsCredit: legIsLong,
+    originalCredit: credit,
+    strikeResidualTick,
+    _meta: credit._meta,
   }
 }
 

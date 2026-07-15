@@ -147,12 +147,15 @@ export {
 // Collateral estimation (requires PanopticQuery / CollateralTracker)
 export {
   type CollateralEstimate,
+  type CreateFlowNeutralTokenIdParams,
   type EstimateCollateralRequiredParams,
+  type FlowNeutralTokenId,
   type GetMaxPositionSizeParams,
   type GetMaxWithdrawableParams,
   type GetRequiredCreditForITMParams,
   type MaxPositionSize,
   type RequiredCreditForITM,
+  createFlowNeutralTokenId,
   estimateCollateralRequired,
   getMaxPositionSize,
   getMaxWithdrawable,

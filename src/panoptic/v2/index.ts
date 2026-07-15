@@ -206,6 +206,7 @@ export {
   useFactoryOwnerOf,
   useFactoryTokenURI,
   useFailPendingPosition,
+  useFlowNeutralTokenId,
   useForceExercise as useForceExerciseHook,
   useGuardianUnlockState,
   useInterestState,
@@ -383,6 +384,8 @@ export type {
   ChunkLiquidityResult,
   CollateralAcrossTicks,
   CollateralDataPoint,
+  // Collateral estimation params
+  CreateFlowNeutralTokenIdParams,
   DeltaHedgeResult,
   // Pool read params
   EnforcedTickLimits,
@@ -393,6 +396,7 @@ export type {
   // fetchPoolId params/result
   FetchPoolIdParams,
   FetchPoolIdResult,
+  FlowNeutralTokenId,
   GetAccountBuyingPowerParams,
   // Account read params
   GetAccountCollateralParams,
@@ -438,7 +442,6 @@ export type {
   GetPositionParams,
   GetPositionsParams,
   GetPositionsWithPremiaParams,
-  // Collateral estimation params
   GetRequiredCreditForITMParams,
   GetRiskParametersParams,
   // Safe mode params
@@ -488,6 +491,8 @@ export {
   checkCollateralAcrossTicks,
   convertToAssets,
   convertToShares,
+  // Collateral estimation
+  createFlowNeutralTokenId,
   deriveSupplyRatePerSecWad,
   estimateCollateralRequired,
   // Pool ID fetch
@@ -545,7 +550,6 @@ export {
   getPositionGreeks,
   getPositions,
   getPositionsWithPremia,
-  // Collateral estimation
   getRequiredCreditForITM,
   getRiskParameters,
   // Safe mode

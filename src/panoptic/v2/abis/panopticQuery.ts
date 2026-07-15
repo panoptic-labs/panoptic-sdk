@@ -113,6 +113,20 @@ export const panopticQueryAbi = [
   },
   {
     type: 'function',
+    name: 'getItmAmounts',
+    inputs: [
+      { name: 'pool', type: 'address', internalType: 'contract PanopticPoolV2' },
+      { name: 'tokenId', type: 'uint256', internalType: 'TokenId' },
+      { name: 'positionSize', type: 'uint128', internalType: 'uint128' },
+    ],
+    outputs: [
+      { name: 'itm0', type: 'int256', internalType: 'int256' },
+      { name: 'itm1', type: 'int256', internalType: 'int256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
     name: 'getMaxPositionSizeBounds',
     inputs: [
       { name: 'pool', type: 'address', internalType: 'contract PanopticPool' },

@@ -25,7 +25,6 @@ export {
   EXECUTE_SELECTOR,
   LOAN_BITMASK_WINDOW_SHIFTS,
   loanBitmaskCompValueAt,
-  ROUTER_EXECUTE_SELECTOR_ONLY,
   WITHDRAW_SELECTOR,
 } from './roles/loanHedger'
 export {

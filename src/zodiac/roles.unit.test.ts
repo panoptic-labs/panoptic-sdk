@@ -1,3 +1,4 @@
+import { keccak256, toHex } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import type { ConditionFlat } from './conditions'
@@ -24,10 +25,20 @@ import { ROLLER_ROLE_KEY } from './roles/roller'
 import { SIZE_ADJUSTER_ROLE_KEY } from './roles/sizeAdjuster'
 import { loanWidthFieldsMask, optionRatioFieldsMask, strikeFieldsMask } from './tokenIdMask'
 
+const REVIEWED_LOAN_ROLE_TREE_HASH =
+  '0x82a2514e569a1aa6aa09d62c2d3018e4977709e6ddb098d08a1bc3f87797785d'
+
 const SAFE = '0x1111111111111111111111111111111111111111' as const
 const POOL = '0x2222222222222222222222222222222222222222' as const
 const MEMBER = '0x3333333333333333333333333333333333333333' as const
 const ADAPTER = '0x4444444444444444444444444444444444444444' as const
+
+describe('loan hedger authorization policy', () => {
+  it('keeps the explicitly accepted width-only condition tree byte-for-byte', () => {
+    const encoded = toHex(JSON.stringify(buildLoanOnlyDispatchConditions()))
+    expect(keccak256(encoded)).toBe(REVIEWED_LOAN_ROLE_TREE_HASH)
+  })
+})
 
 /** Integrity.sol structural checks shared by all condition trees. */
 function assertIntegrity(conditions: ConditionFlat[]): void {

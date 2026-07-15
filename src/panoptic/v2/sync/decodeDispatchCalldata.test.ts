@@ -1,16 +1,22 @@
 /**
  * Tests for decodeDispatchCalldata, including smart contract wallet wrappers.
  */
-import { encodeFunctionData, getAddress } from 'viem'
+import { encodeFunctionData, getAddress, parseAbi } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import { panopticPoolV2Abi } from '../../../generated'
-import { decodeDispatchCalldata } from './snapshotRecovery'
+import { decodeDispatchCalldata, decodeSnapshotTransaction } from './snapshotRecovery'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const POOL_ADDRESS = '0x1234567890123456789012345678901234567890' as const
 const ACCOUNT = getAddress('0xabcdef1234567890abcdef1234567890abcdef12')
+const ROLES = '0x1111111111111111111111111111111111111111' as const
+const MEMBER = '0x2222222222222222222222222222222222222222' as const
+const ROLE_KEY = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as const
+const rolesAbi = parseAbi([
+  'function execTransactionWithRole(address to, uint256 value, bytes data, uint8 operation, bytes32 roleKey, bool shouldRevert)',
+])
 
 /** Encode a direct dispatch call */
 function encodeDispatch(
@@ -124,6 +130,65 @@ function assertNonNull<T>(value: T | null | undefined): T {
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe('decodeDispatchCalldata', () => {
+  describe('Zodiac Roles transaction validation', () => {
+    const dispatch = encodeDispatch([1n], [1n, 2n], [100n])
+
+    function wrapped(
+      overrides: { target?: `0x${string}`; operation?: number; roleKey?: `0x${string}` } = {},
+    ) {
+      return encodeFunctionData({
+        abi: rolesAbi,
+        functionName: 'execTransactionWithRole',
+        args: [
+          overrides.target ?? POOL_ADDRESS,
+          0n,
+          dispatch,
+          overrides.operation ?? 0,
+          overrides.roleKey ?? ROLE_KEY,
+          true,
+        ],
+      })
+    }
+
+    it('recovers the Safe snapshot only from the exact member/modifier/role wrapper', () => {
+      const decoded = decodeSnapshotTransaction({
+        input: wrapped(),
+        from: MEMBER,
+        to: ROLES,
+        account: ACCOUNT,
+        pool: POOL_ADDRESS,
+        rolesContext: { modifier: ROLES, member: MEMBER, roleKey: ROLE_KEY },
+      })
+
+      expect(decoded?.positionIds).toEqual([1n, 2n])
+    })
+
+    it.each([
+      ['wrong member', '0x3333333333333333333333333333333333333333' as const, ROLES, wrapped()],
+      ['wrong modifier', MEMBER, '0x3333333333333333333333333333333333333333' as const, wrapped()],
+      ['delegatecall', MEMBER, ROLES, wrapped({ operation: 1 })],
+      [
+        'wrong role',
+        MEMBER,
+        ROLES,
+        wrapped({
+          roleKey: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        }),
+      ],
+    ])('rejects %s', (_label, from, to, input) => {
+      expect(
+        decodeSnapshotTransaction({
+          input,
+          from,
+          to,
+          account: ACCOUNT,
+          pool: POOL_ADDRESS,
+          rolesContext: { modifier: ROLES, member: MEMBER, roleKey: ROLE_KEY },
+        }),
+      ).toBeNull()
+    })
+  })
+
   describe('direct dispatch', () => {
     it('decodes a direct dispatch call', () => {
       const input = encodeDispatch([1n], [1n, 2n], [100n])

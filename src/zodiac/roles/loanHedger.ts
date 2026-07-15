@@ -139,9 +139,3 @@ export function buildDepositConditions(safe: `0x${string}`): ConditionFlat[] {
     }, // receiver
   ]
 }
-
-/**
- * Router `execute` is scoped with a calldata template — see
- * apps/hedger-bot/scripts/lib/routerScope.ts (hedging-specific, not migrated).
- */
-export const ROUTER_EXECUTE_SELECTOR_ONLY = EXECUTE_SELECTOR

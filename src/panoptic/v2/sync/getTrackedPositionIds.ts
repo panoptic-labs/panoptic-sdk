@@ -111,6 +111,14 @@ export interface GetOpenPositionIdsParams {
    * scanning from block 0. Use the checkpoint's lastBlock for incremental syncs.
    */
   fromBlock?: bigint
+  /** Upper bound for fallback event recovery. */
+  toBlock?: bigint
+  /** Expected Zodiac Roles wrapper for a bot-relayed Safe dispatch. */
+  rolesContext?: {
+    modifier: Address
+    member: Address
+    roleKey: Hash
+  }
 }
 
 /**
@@ -132,7 +140,17 @@ export interface GetOpenPositionIdsParams {
 export async function getOpenPositionIds(
   params: GetOpenPositionIdsParams,
 ): Promise<bigint[] | null> {
-  const { client, chainId, poolAddress, account, storage, lastDispatchTxHash, fromBlock } = params
+  const {
+    client,
+    chainId,
+    poolAddress,
+    account,
+    storage,
+    lastDispatchTxHash,
+    fromBlock,
+    toBlock,
+    rolesContext,
+  } = params
 
   // Fast path: decode directly from a known tx hash (O(1), no event scanning)
   // Falls back to full event-scanning recovery if the fast path returns null or throws
@@ -144,6 +162,7 @@ export async function getOpenPositionIds(
         transactionHash: lastDispatchTxHash,
         account,
         pool: poolAddress,
+        rolesContext,
       })
     } catch {
       // Fast path failed (e.g. RPC error, validation mismatch); fall through to slow-path
@@ -152,7 +171,7 @@ export async function getOpenPositionIds(
   }
 
   if (!snapshot) {
-    snapshot = await recoverSnapshot({ client, poolAddress, account, fromBlock })
+    snapshot = await recoverSnapshot({ client, poolAddress, account, fromBlock, toBlock })
   }
 
   if (!snapshot) {
