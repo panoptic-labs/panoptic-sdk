@@ -8,6 +8,7 @@ import {
   calculatePortfolioGreeks,
   calculatePortfolioValue,
   calculatePositionDelta,
+  calculatePositionDeltaDebtOnly,
   calculatePositionDeltaWithSwap,
   calculatePositionGamma,
   calculatePositionGreeks,
@@ -910,6 +911,86 @@ describe('greeks module', () => {
       })
 
       expect(delta).toBe(0n)
+    })
+  })
+
+  describe('calculatePositionDeltaDebtOnly', () => {
+    const poolTickSpacing = 10n
+    const positionSize = 1000000n
+
+    it('keeps a numeraire loan out of position delta', () => {
+      const loanLeg = createLeg({
+        asset: 0n,
+        tokenType: 1n,
+        width: 0n,
+        tickLower: 0n,
+        tickUpper: 0n,
+      })
+
+      expect(
+        calculatePositionDeltaDebtOnly({
+          legs: [loanLeg],
+          currentTick: 0n,
+          mintTick: 0n,
+          positionSize,
+          poolTickSpacing,
+          assetIndex: 0n,
+        }),
+      ).toBe(0n)
+    })
+
+    it('keeps an asset loan debt obligation in position delta', () => {
+      const loanLeg = createLeg({
+        asset: 0n,
+        tokenType: 0n,
+        width: 0n,
+        tickLower: 0n,
+        tickUpper: 0n,
+      })
+
+      expect(
+        calculatePositionDeltaDebtOnly({
+          legs: [loanLeg],
+          currentTick: 0n,
+          mintTick: 0n,
+          positionSize,
+          poolTickSpacing,
+          assetIndex: 0n,
+        }),
+      ).toBe(-positionSize)
+    })
+
+    it('converts mixed-asset option legs from their natural frame', () => {
+      const currentTick = 1000n
+      const leg = createLeg({
+        asset: 1n,
+        tokenType: 0n,
+        isLong: true,
+        width: 2n,
+        tickLower: -10n,
+        tickUpper: 10n,
+      })
+      const legDelta = getLegDelta(
+        leg,
+        currentTick,
+        positionSize,
+        poolTickSpacing,
+        currentTick,
+        false,
+      )
+      const sqrtPriceX96 = tickToSqrtPriceX96(currentTick)
+      const expected = -((legDelta * (1n << 192n)) / (sqrtPriceX96 * sqrtPriceX96))
+
+      expect(
+        calculatePositionDeltaDebtOnly({
+          legs: [leg],
+          currentTick,
+          mintTick: currentTick,
+          positionSize,
+          poolTickSpacing,
+          assetIndex: 0n,
+        }),
+      ).toBe(expected)
     })
   })
 

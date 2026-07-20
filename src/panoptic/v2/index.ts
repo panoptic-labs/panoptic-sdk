@@ -982,6 +982,7 @@ export {
   calculatePortfolioGreeks,
   calculatePortfolioValue,
   calculatePositionDelta,
+  calculatePositionDeltaDebtOnly,
   calculatePositionDeltaWithSwap,
   calculatePositionGamma,
   calculatePositionGreeks,

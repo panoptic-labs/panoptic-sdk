@@ -811,6 +811,41 @@ export function calculatePositionDelta(input: PositionGreeksInput): bigint {
 }
 
 /**
+ * Calculate debt-only position delta in a single target asset frame.
+ *
+ * Option legs are first valued in their natural `leg.asset` frame, then
+ * converted into `assetIndex` using the current pool price. Width-zero legs
+ * are evaluated directly in the target frame.
+ *
+ * Width=0 loan/credit legs include only their debt obligation. The held-token
+ * side must be added separately from account collateral balances, preventing a
+ * zap from being counted once in the position and again in collateral.
+ */
+export function calculatePositionDeltaDebtOnly(
+  input: Omit<PositionGreeksInput, 'assetIndex' | 'swapAtMint'> & {
+    assetIndex: 0n | 1n
+  },
+): bigint {
+  const { legs, currentTick, mintTick, positionSize, poolTickSpacing, assetIndex } = input
+  const definedRisk = isDefinedRisk(legs)
+
+  return legs.reduce(
+    (sum, leg) =>
+      sum +
+      getLegDeltaInVaultFrame(
+        leg,
+        currentTick,
+        positionSize,
+        poolTickSpacing,
+        mintTick,
+        definedRisk,
+        assetIndex,
+      ),
+    0n,
+  )
+}
+
+/**
  * Calculate total gamma across all legs.
  */
 export function calculatePositionGamma(input: PositionGreeksInput): bigint {

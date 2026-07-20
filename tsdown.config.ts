@@ -5,6 +5,7 @@ export default defineConfig({
     './src/index.ts',
     './src/test/index.ts',
     './src/panoptic/v2/index.ts',
+    './src/panoptic/v2/greeks/index.ts',
     // v2/index.ts already exports the complete types barrel. Adding that barrel
     // as a second entry creates a competing declaration graph and triggers
     // rolldown-plugin-dts UNLOADABLE_DEPENDENCY races on multi-core CI.

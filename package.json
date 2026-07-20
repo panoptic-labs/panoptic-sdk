@@ -1,6 +1,6 @@
 {
   "name": "@panoptic-eng/sdk",
-  "version": "1.0.26",
+  "version": "1.0.27",
   "repository": {
     "type": "git",
     "url": "https://github.com/panoptic-labs/panoptic-sdk.git"
@@ -18,6 +18,10 @@
     "./v2": {
       "types": "./dist/panoptic/v2/index.d.ts",
       "import": "./dist/panoptic/v2/index.js"
+    },
+    "./v2/greeks": {
+      "types": "./dist/panoptic/v2/greeks/index.d.ts",
+      "import": "./dist/panoptic/v2/greeks/index.js"
     },
     "./uniswap": {
       "types": "./dist/uniswap/index.d.ts",
