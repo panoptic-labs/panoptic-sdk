@@ -5,6 +5,10 @@ export default defineConfig({
     './src/index.ts',
     './src/test/index.ts',
     './src/panoptic/v2/index.ts',
+    // Public React entry (`@panoptic-eng/sdk/v2/react`): superset of `/v2` that
+    // also carries the hooks. Kept separate so the base `/v2` barrel stays
+    // React-free for bots/servers (e.g. @panoptic-eng/mcp).
+    './src/panoptic/v2/react-public.ts',
     './src/panoptic/v2/greeks/index.ts',
     // v2/index.ts already exports the complete types barrel. Adding that barrel
     // as a second entry creates a competing declaration graph and triggers
