@@ -3,5 +3,6 @@
  * @module uniswap
  */
 
+export * from './lpGreeks'
 export * from './v3'
 export * from './v4'

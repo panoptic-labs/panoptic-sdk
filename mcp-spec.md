@@ -165,8 +165,8 @@ canonical config:
       "command": "npx",
       "args": ["-y", "@panoptic-eng/mcp"],
       "env": {
-        "PANOPTIC_RPC_URL": "https://mainnet.base.org",
-        "PANOPTIC_CHAIN_ID": "8453",
+        "PANOPTIC_RPC_URL": "https://eth-mainnet.g.alchemy.com/v2/<key>",
+        "PANOPTIC_CHAIN_ID": "1",
         // optional — enables indexer-backed analytics tools
         "PANOPTIC_SUBGRAPH_URL": ""
       }
@@ -216,7 +216,7 @@ These invariants hold across **both** surfaces:
   {
     "summary": "Open 1×ETH short put, strike ~3200, width 4, 0.5% slippage",
     "risk": "defined | undefined | info",   // qualitative risk tag
-    "chainId": "8453",
+    "chainId": "1",
     "to": "0x…",                              // a known Panoptic deployment
     "value": "0",                             // decimal string, wei
     "data": "0x…",                            // ABI-encoded call, from the SDK
@@ -269,6 +269,20 @@ are planned and **not yet exposed**.
   advice, pre-trade quote, payoff/NLV curve, SDK delta-hedge params, and
   event-level trade history). All discover positions via the same on-chain event
   scan; none build or send transactions.
+- `configure_session({ assetIndex?, clearAssetIndex? })` — **SHIPPED.** The one
+  stateful exception in this otherwise read-only catalog: it mutates in-process
+  session state rather than reading the chain. Records per-session user
+  preferences (currently the preferred delta *reporting frame*), which live only
+  for the life of the server process. Aggregate net delta must be denominated in
+  one token; there is no canonical pool asset, so `suggest_delta_hedge` /
+  `hedge_params` resolve the frame as explicit arg → session preference → ask
+  (`needs_asset_preference`), never a silent guess.
+- `list_vaults`, `vault_summary`, `vault_account`, `vault_exposure` —
+  **SHIPPED.** HypoVault discovery and raw live vault/account state.
+  `vault_exposure` reuses the Panoptic account tooling with the vault address as
+  owner. NAV/share-price are intentionally omitted from this v0 surface because
+  HypoVault `totalAssets(bytes)` / `convertToAssets(uint256,bytes)` require
+  managerInput-aware accounting, not vanilla ERC4626 reads.
 - `stress_test({ address, priceMoves[] })` — *future.* Recompute account health
   / greeks at hypothetical ticks using client-side greeks (no RPC per scenario).
 - `decode_calldata({ to, data, chainId })` — *future.* Identify the Panoptic
@@ -276,6 +290,9 @@ are planned and **not yet exposed**.
   legs.
 - `read_contract({ address, functionName, args })` — *future.* Known-ABI getter
   reads only.
+- `vault_nav` / `vault_share_price` — *future.* Manager-input-aware HypoVault
+  NAV and exchange-rate reads built on `buildVaultManagerInput`, with explicit
+  stale-oracle / invalid-pool error reporting.
 
 ### v1 — build + simulate (unsigned envelopes)
 
@@ -478,7 +495,8 @@ ids, and tx hashes.
 **Product:**
 
 1. **v0 — local stdio, read-only**: `npx @panoptic-eng/mcp` wrapping SDK reads —
-   `list_pools`, `get_portfolio`, `explain_position`, `account_health`,
+   `list_pools`, `list_vaults`, `vault_summary`, `vault_account`,
+   `vault_exposure`, `get_portfolio`, `explain_position`, `account_health`,
    `stress_test`, `liquidity_map`, `identify_address`, `decode_calldata`,
    `read_contract`.
 2. **v1 — build + simulate**: explicit-leg `build_position`, `build_strategy`
@@ -567,5 +585,8 @@ left open:
   and what default strikes/widths — needs product approval and disclosures.
 - **Monetization** (hosted only, therefore deferred): free reads vs API-key tiers
   vs per-call payments.
+- **HypoVault NAV/share price.** Add `vault_nav` / `vault_share_price` only once
+  the MCP can build or accept the same managerInput used by the vault manager; do
+  not present raw no-arg ERC4626-style reads as authoritative for HypoVaults.
 - **Schema sharing.** Whether Hedger MCP shares serialization/schema types with
   Product MCP without sharing server code.
