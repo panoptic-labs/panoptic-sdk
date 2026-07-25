@@ -10,7 +10,7 @@ const BASE_PANOPTIC_POOL_ADDRESSES = BASE_DEPLOYMENT.panoptic.pool
 export const UsdcPlpVaultBaseProdConfig: HypoVaultManagerConfig = {
   deployment: 'prod',
   vaultAssetIndex: 0n,
-  manageCycleIntervalMs: 1200000,
+  manageCycleIntervalMs: 600_000,
   vaultCapInUnderlying: 300_000_000n, // 300 USDC
   vaultCapInShares: 3_000_000_000_000_000n, // ~300 USDC (verify share scaling on-chain)
   allowUnlimitedDepositRequestIfCapNotReached: true,
@@ -36,6 +36,11 @@ export const UsdcPlpVaultBaseProdConfig: HypoVaultManagerConfig = {
   deltaHedge: {
     deltaThresholdBps: 200n,
     maxHedgeSlots: 2,
+    timedRehedge: {
+      elapsedMinutes: 1440,
+      jitterMinutes: 60,
+      deltaThresholdBps: 0n,
+    },
   },
   alerts: {
     outOfRangeEnabled: true,

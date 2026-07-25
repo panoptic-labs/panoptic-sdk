@@ -54,6 +54,52 @@ const ALL_HYPOVAULT_CONFIGS = [
 ]
 
 describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
+  it('enables 24h timed rehedging only for production USDC configs', () => {
+    const baseUsdc = HypoVaultManagerConfigSchema.parse(UsdcPlpVaultBaseProdConfig)
+    const baseWeth = HypoVaultManagerConfigSchema.parse(WethPlpVaultBaseProdConfig)
+    const mainnetUsdc = HypoVaultManagerConfigSchema.parse(UsdcPlpVaultMainnetProdConfig)
+
+    expect(baseUsdc.manageCycleIntervalMs).toBe(600_000)
+    expect(baseWeth.manageCycleIntervalMs).toBe(600_000)
+    expect(baseUsdc.deltaHedge?.deltaThresholdBps).toBe(200n)
+    expect(baseUsdc.deltaHedge?.timedRehedge).toEqual({
+      elapsedMinutes: 1440,
+      jitterMinutes: 60,
+      deltaThresholdBps: 0n,
+    })
+    expect(mainnetUsdc.deltaHedge?.deltaThresholdBps).toBe(1500n)
+    expect(mainnetUsdc.deltaHedge?.timedRehedge).toEqual({
+      elapsedMinutes: 1440,
+      jitterMinutes: 60,
+      deltaThresholdBps: 0n,
+    })
+    expect(baseWeth.deltaHedge?.timedRehedge).toBeUndefined()
+    for (const config of [
+      UsdcPlpVaultMainnetLegacyConfig,
+      WethPlpVaultMainnetProdConfig,
+      WethPlpVaultMainnetLegacyConfig,
+      ...SEPOLIA_MANUAL_TX_CONFIGS,
+    ]) {
+      expect(config.deltaHedge?.timedRehedge).toBeUndefined()
+    }
+  })
+
+  it('rejects timed jitter that can make the effective interval non-positive', () => {
+    expect(() =>
+      HypoVaultManagerConfigSchema.parse({
+        ...UsdcPlpVaultBaseProdConfig,
+        deltaHedge: {
+          ...UsdcPlpVaultBaseProdConfig.deltaHedge,
+          timedRehedge: {
+            elapsedMinutes: 30,
+            jitterMinutes: 30,
+            deltaThresholdBps: 0n,
+          },
+        },
+      }),
+    ).toThrow('timed rehedge jitterMinutes must be less than elapsedMinutes')
+  })
+
   it('accepts manual collateral allocation defaults', () => {
     const parsed = HypoVaultManagerConfigSchema.parse(UsdcPlpVaultSepoliaDevConfig)
     const allocations = parsed.manualTxDefaults?.collateralAllocations ?? []

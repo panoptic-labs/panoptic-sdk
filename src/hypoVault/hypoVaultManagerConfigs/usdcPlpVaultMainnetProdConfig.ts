@@ -42,6 +42,11 @@ export const UsdcPlpVaultMainnetProdConfig: HypoVaultManagerConfig = {
   deltaHedge: {
     deltaThresholdBps: 1500n,
     maxHedgeSlots: 3,
+    timedRehedge: {
+      elapsedMinutes: 1440,
+      jitterMinutes: 60,
+      deltaThresholdBps: 0n,
+    },
   },
   alerts: {
     outOfRangeEnabled: true,
@@ -54,6 +59,10 @@ export const UsdcPlpVaultMainnetLegacyConfig: HypoVaultManagerConfig = {
   manageCycleIntervalMs: 3600000,
   poolDeploymentBlock: 24_822_309,
   hypoVaultAddress: '0x963Fe9c93bc353602656ee4051A75114bA74d6c5',
+  deltaHedge: {
+    deltaThresholdBps: 1500n,
+    maxHedgeSlots: 3,
+  },
   addresses: {
     ...UsdcPlpVaultMainnetProdConfig.addresses,
     ethUsdc500bpsV4Collateral0: MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES.collateralTracker0,

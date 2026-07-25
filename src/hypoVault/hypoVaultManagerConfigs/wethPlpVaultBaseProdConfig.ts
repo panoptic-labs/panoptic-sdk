@@ -9,7 +9,7 @@ const BASE_PANOPTIC_POOL_ADDRESSES = BASE_DEPLOYMENT.panoptic.pool
 export const WethPlpVaultBaseProdConfig: HypoVaultManagerConfig = {
   deployment: 'prod',
   vaultAssetIndex: 1n,
-  manageCycleIntervalMs: 1200000,
+  manageCycleIntervalMs: 600_000,
   vaultCapInUnderlying: 1_000_000_000_000_000_000n, // 1 WETH
   vaultCapInShares: 1_000_000_000_000_000_000_000_000n, // ~1 WETH (verify share scaling on-chain)
   allowUnlimitedDepositRequestIfCapNotReached: true,

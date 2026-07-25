@@ -4,6 +4,17 @@ const addressSchema = z.custom<`0x${string}`>((val) => {
   return typeof val === 'string' && /^0x[a-fA-F0-9]{40}$/.test(val)
 })
 
+const timedRehedgeSchema = z
+  .object({
+    elapsedMinutes: z.number().int().positive(),
+    jitterMinutes: z.number().int().nonnegative(),
+    deltaThresholdBps: z.bigint().nonnegative(),
+  })
+  .refine(({ elapsedMinutes, jitterMinutes }) => jitterMinutes < elapsedMinutes, {
+    message: 'timed rehedge jitterMinutes must be less than elapsedMinutes',
+    path: ['jitterMinutes'],
+  })
+
 export const HypoVaultManagerConfigSchema = z.object({
   deployment: z.enum(['dev', 'prod']),
   artifactSet: z.enum(['base', 'mainnet-prod', 'mainnet-legacy', 'sepolia']).optional(),
@@ -42,6 +53,7 @@ export const HypoVaultManagerConfigSchema = z.object({
     .object({
       deltaThresholdBps: z.bigint().positive().optional(),
       maxHedgeSlots: z.number().int().positive().optional(),
+      timedRehedge: timedRehedgeSchema.optional(),
     })
     .optional(),
   alerts: z
