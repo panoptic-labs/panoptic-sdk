@@ -6,10 +6,12 @@
 
 import type { Address, Client, PublicClient } from 'viem'
 
-import { AccountInsolventError, NotEnoughTokensError } from '../errors'
+import type { NotEnoughTokensError } from '../errors'
+import { AccountInsolventError } from '../errors'
 import { parsePanopticError } from '../errors/parser'
 import type { SimulateOpenPositionParams } from '../simulations/simulateOpenPosition'
 import { simulateOpenPosition } from '../simulations/simulateOpenPosition'
+import { getNotEnoughTokensError } from '../simulations/tokenShortfallRecovery'
 import type { OpenPositionSimulation, SimulationResult } from '../types'
 import type { AccountBuyingPower } from './buyingPower'
 import { getAccountBuyingPower } from './buyingPower'
@@ -56,8 +58,21 @@ export interface OpenPositionPreview {
   currentBuyingPower: AccountBuyingPower
   /** Simulation result (from dry-run dispatch) */
   simulation: SimulationResult<OpenPositionSimulation>
-  /** Whether the simulated mint succeeded (position is solvent post-mint) */
+  /**
+   * Whether the account has enough *buying power* for the position.
+   *
+   * False only for a genuine `AccountInsolvent` revert. A token shortfall is
+   * reported separately via {@link OpenPositionPreview.tokenShortfall} — the two
+   * have different remedies (lower the size vs. source the missing token), so
+   * do not collapse them back into one flag.
+   */
   isSolvent: boolean
+  /**
+   * Set when the mint reverted because one collateral tracker lacked tokens,
+   * not because the account is short on margin. The account may hold plenty of
+   * value in the *other* token, in which case a collateral swap resolves it.
+   */
+  tokenShortfall: NotEnoughTokensError | null
   /** Token 0 amount required (negative delta = deposit). Null if simulation failed. */
   amount0Required: bigint | null
   /** Token 1 amount required. Null if simulation failed. */
@@ -137,14 +152,20 @@ export async function getOpenPositionPreview(
     } satisfies SimulateOpenPositionParams),
   ])
 
-  // isSolvent should only be false for actual solvency errors (AccountInsolvent, NotEnoughTokens).
-  // Other simulation failures (PriceBoundFail, EffectiveLiquidityAboveThreshold, etc.) are not
-  // solvency issues and should not trigger the "buying power exceeded" message.
+  // Two distinct failures, kept apart because they have different remedies:
+  //   AccountInsolvent  -> not enough buying power; the size must come down.
+  //   NotEnoughTokens   -> one tracker is short tokens; the account may still be
+  //                        well within its buying power, just holding the wrong
+  //                        token, so sourcing it (swap / loan leg) resolves it.
+  // Everything else (PriceBoundFail, EffectiveLiquidityAboveThreshold, …) is
+  // neither, and must not read as a collateral problem.
   let isSolvent = true
+  let tokenShortfall: NotEnoughTokensError | null = null
   if (!simulation.success) {
     const parsed = parsePanopticError(simulation.error)
     const err = parsed?.error ?? simulation.error
-    isSolvent = !(err instanceof AccountInsolventError || err instanceof NotEnoughTokensError)
+    isSolvent = !(err instanceof AccountInsolventError)
+    tokenShortfall = getNotEnoughTokensError(err)
   }
   const data = simulation.success ? simulation.data : null
 
@@ -152,6 +173,7 @@ export async function getOpenPositionPreview(
     currentBuyingPower,
     simulation,
     isSolvent,
+    tokenShortfall,
     amount0Required: data?.amount0Required ?? null,
     amount1Required: data?.amount1Required ?? null,
     postCollateral0: data?.postCollateral0 ?? null,

@@ -374,6 +374,8 @@ export interface UniswapV4PoolBasicState {
   poolId: Hex
   sqrtPriceX96: bigint
   currentTick: number
+  /** Packed directional protocol fee: `oneForZero << 12 | zeroForOne`, in pips. */
+  protocolFee: bigint
   /** Dynamic LP fee from slot0 (NOT necessarily the static PoolKey.fee). */
   lpFee: number
   liquidity: bigint
@@ -381,7 +383,7 @@ export interface UniswapV4PoolBasicState {
 }
 
 export interface GetUniswapV4PoolBasicStateParams {
-  client: PublicClient
+  client: Pick<PublicClient, 'getBlock' | 'multicall'>
   stateViewAddress: Address
   poolId: Hex
 }
@@ -409,6 +411,7 @@ export async function getUniswapV4PoolBasicState(
     poolId,
     sqrtPriceX96: slot0[0],
     currentTick: Number(slot0[1]),
+    protocolFee: BigInt(slot0[2]),
     lpFee: Number(slot0[3]),
     liquidity,
     _meta,
@@ -425,12 +428,14 @@ export interface UniswapV4PoolInfo {
   hooks: Address
   currentTick: number
   sqrtPriceX96: bigint
+  /** Packed directional protocol fee: `oneForZero << 12 | zeroForOne`, in pips. */
+  protocolFee: bigint
   liquidity: bigint
   _meta: BlockMeta
 }
 
 export interface GetUniswapV4PoolInfoParams {
-  client: PublicClient
+  client: Pick<PublicClient, 'getBlock' | 'multicall'>
   stateViewAddress: Address
   poolKey: UniswapV4PoolKey
 }
@@ -439,7 +444,7 @@ export interface GetUniswapV4PoolInfoParams {
 const NATIVE_ETH_META = { symbol: 'ETH', name: 'Ether', decimals: 18 } as const
 
 async function readErc20Meta(
-  client: PublicClient,
+  client: Pick<PublicClient, 'multicall'>,
   address: Address,
   blockNumber?: bigint,
 ): Promise<{ symbol: string; name: string; decimals: number }> {
@@ -509,6 +514,7 @@ export async function getUniswapV4PoolInfo(
     hooks: poolKey.hooks,
     currentTick: Number(slot0[1]),
     sqrtPriceX96: slot0[0],
+    protocolFee: BigInt(slot0[2]),
     liquidity,
     _meta,
   }

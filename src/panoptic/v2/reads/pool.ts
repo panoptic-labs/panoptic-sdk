@@ -604,6 +604,16 @@ export async function getUtilization(params: GetUtilizationParams): Promise<Util
           abi: collateralTrackerV2Abi,
           functionName: 'getPoolData',
         },
+        {
+          address: collateralToken0,
+          abi: collateralTrackerV2Abi,
+          functionName: 'totalSupply',
+        },
+        {
+          address: collateralToken1,
+          abi: collateralTrackerV2Abi,
+          functionName: 'totalSupply',
+        },
       ],
       blockNumber: targetBlockNumber,
       allowFailure: false,
@@ -611,13 +621,37 @@ export async function getUtilization(params: GetUtilizationParams): Promise<Util
     params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
   ])
 
-  const [poolData0, poolData1] = poolDataResults
+  const [poolData0, poolData1, totalSupply0, totalSupply1] = poolDataResults
 
   return {
     utilization0: poolData0[3], // currentPoolUtilization
     utilization1: poolData1[3],
+    availableToBorrow0: availableToBorrow(poolData0, totalSupply0),
+    availableToBorrow1: availableToBorrow(poolData1, totalSupply1),
     _meta,
   }
+}
+
+/**
+ * Assets available to borrow from a collateral tracker.
+ *
+ * Mirrors `CollateralTracker._maxWithdrawWithPositions`: deposited assets less
+ * one wei, less the assets backing credited shares.
+ *
+ * @param poolData - `getPoolData()` tuple: [depositedAssets, insideAMM, creditedShares, utilization]
+ * @param totalSupply - Collateral tracker share supply, for the share→asset conversion
+ */
+function availableToBorrow(
+  poolData: readonly [bigint, bigint, bigint, bigint],
+  totalSupply: bigint,
+): bigint {
+  const [depositedAssets, insideAMM, creditedShares] = poolData
+  const available = depositedAssets > 0n ? depositedAssets - 1n : 0n
+  if (creditedShares === 0n || totalSupply === 0n) return available
+
+  const totalAssets = depositedAssets + insideAMM
+  const creditedAssets = (creditedShares * totalAssets) / totalSupply
+  return available > creditedAssets ? available - creditedAssets : 0n
 }
 
 /**

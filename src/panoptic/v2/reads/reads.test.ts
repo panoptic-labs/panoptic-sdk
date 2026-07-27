@@ -50,10 +50,12 @@ describe('Pool Read Functions', () => {
       // First multicall: get collateral tracker addresses
       vi.mocked(client.multicall)
         .mockResolvedValueOnce([COLLATERAL_TOKEN_0, COLLATERAL_TOKEN_1])
-        // Second multicall: get pool data
+        // Second multicall: pool data for both tokens, then both total supplies
         .mockResolvedValueOnce([
           [1000000n, 100000n, 900000n, 1000n], // token0 pool data
           [2000000n, 200000n, 1800000n, 2000n], // token1 pool data
+          1100000n, // token0 total supply
+          2200000n, // token1 total supply
         ])
 
       const result = await getUtilization({
@@ -64,6 +66,40 @@ describe('Pool Read Functions', () => {
       expect(result.utilization0).toBe(1000n)
       expect(result.utilization1).toBe(2000n)
       expect(result._meta.blockNumber).toBe(12345678n)
+    })
+
+    it('should report assets available to borrow, net of credited shares', async () => {
+      const client = createMockClient()
+
+      vi.mocked(client.multicall)
+        .mockResolvedValueOnce([COLLATERAL_TOKEN_0, COLLATERAL_TOKEN_1])
+        .mockResolvedValueOnce([
+          // deposited 1_000_000, inAMM 100_000, credited 900_000 shares
+          [1000000n, 100000n, 900000n, 1000n],
+          // no credited shares -> full deposited balance (less 1 wei) is available
+          [2000000n, 200000n, 0n, 2000n],
+          1100000n, // share price 1.0: 1_100_000 assets / 1_100_000 shares
+          2200000n,
+        ])
+
+      const result = await getUtilization({ client, poolAddress: POOL_ADDRESS })
+
+      // 999_999 available - 900_000 credited assets
+      expect(result.availableToBorrow0).toBe(99999n)
+      expect(result.availableToBorrow1).toBe(1999999n)
+    })
+
+    it('should floor available-to-borrow at zero when credits exceed deposits', async () => {
+      const client = createMockClient()
+
+      vi.mocked(client.multicall)
+        .mockResolvedValueOnce([COLLATERAL_TOKEN_0, COLLATERAL_TOKEN_1])
+        .mockResolvedValueOnce([[100n, 900n, 1000n, 9000n], [0n, 0n, 0n, 0n], 1000n, 0n])
+
+      const result = await getUtilization({ client, poolAddress: POOL_ADDRESS })
+
+      expect(result.availableToBorrow0).toBe(0n)
+      expect(result.availableToBorrow1).toBe(0n)
     })
 
     it('should use provided block number', async () => {
@@ -81,6 +117,8 @@ describe('Pool Read Functions', () => {
         .mockResolvedValueOnce([
           [1000000n, 100000n, 900000n, 500n],
           [2000000n, 200000n, 1800000n, 500n],
+          1100000n,
+          2200000n,
         ])
 
       const result = await getUtilization({

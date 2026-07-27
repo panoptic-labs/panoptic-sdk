@@ -58,12 +58,23 @@ export function isInputListFailError(error: unknown): boolean {
 }
 
 /**
- * Build a unique loan tokenId that doesn't collide with existing positions.
+ * Which kind of width=0 leg to build.
+ *
+ * Loans and credits are the same primitive with the `isLong` bit flipped:
+ * a loan borrows from the pool (`isLong=0`), a credit pays into it
+ * (`isLong=1`). See `createTokenIdBuilder`'s `addLoan` / `addCredit`.
+ */
+export type WidthZeroLegKind = 'loan' | 'credit'
+
+/**
+ * Build a unique width=0 tokenId that doesn't collide with existing positions.
  * Bumps optionRatio (1-127) and returns adjusted size to maintain equivalent exposure.
  *
+ * @param kind - Whether to build a loan (borrow) or a credit (pay-in) leg.
  * @param asset - Which token denominates the positionSize (0 or 1).
  */
-export function buildUniqueLoan(
+export function buildUniqueWidthZeroLeg(
+  kind: WidthZeroLegKind,
   poolId: bigint,
   asset: bigint,
   tokenType: bigint,
@@ -72,14 +83,18 @@ export function buildUniqueLoan(
   existingPositionIds: bigint[],
   positionSize: bigint,
 ): { tokenId: bigint; adjustedSize: bigint } {
+  const addLeg = (strike: bigint, optionRatio?: bigint): bigint => {
+    const builder = createTokenIdBuilder(poolId)
+    const config = { asset, tokenType, strike, optionRatio }
+    return (kind === 'loan' ? builder.addLoan(config) : builder.addCredit(config)).build()
+  }
+
   // Floor-align to tick spacing (bigint % preserves sign, so handle negatives)
   const mod = currentTick % tickSpacing
   let strike = currentTick - ((mod + tickSpacing) % tickSpacing)
 
   for (let ratio = 1n; ratio <= 127n; ratio++) {
-    const tokenId = createTokenIdBuilder(poolId)
-      .addLoan({ asset, tokenType, strike, optionRatio: ratio })
-      .build()
+    const tokenId = addLeg(strike, ratio)
 
     if (!existingPositionIds.includes(tokenId)) {
       const adjustedSize = positionSize / ratio
@@ -94,7 +109,7 @@ export function buildUniqueLoan(
   const mod2 = currentTick % tickSpacing
   strike = currentTick - ((mod2 + tickSpacing) % tickSpacing) + tickSpacing
   for (let i = 0; i < 100; i++) {
-    const tokenId = createTokenIdBuilder(poolId).addLoan({ asset, tokenType, strike }).build()
+    const tokenId = addLeg(strike)
 
     if (!existingPositionIds.includes(tokenId)) {
       return { tokenId, adjustedSize: positionSize }
@@ -103,4 +118,61 @@ export function buildUniqueLoan(
   }
 
   throw new LoanSlotExhaustedError()
+}
+
+/**
+ * Build a unique loan (borrow) tokenId that doesn't collide with existing positions.
+ *
+ * @param asset - Which token denominates the positionSize (0 or 1).
+ */
+export function buildUniqueLoan(
+  poolId: bigint,
+  asset: bigint,
+  tokenType: bigint,
+  currentTick: bigint,
+  tickSpacing: bigint,
+  existingPositionIds: bigint[],
+  positionSize: bigint,
+): { tokenId: bigint; adjustedSize: bigint } {
+  return buildUniqueWidthZeroLeg(
+    'loan',
+    poolId,
+    asset,
+    tokenType,
+    currentTick,
+    tickSpacing,
+    existingPositionIds,
+    positionSize,
+  )
+}
+
+/**
+ * Build a unique credit (pay-in) tokenId that doesn't collide with existing positions.
+ *
+ * Unlike a loan, a credit never borrows from the pool: it requires **zero** buying
+ * power, leaves `s_assetsInAMM` (and therefore utilization and the borrow rate)
+ * untouched, and accrues no interest. This is what lets a credit-based swap run
+ * against a fully-utilized collateral tracker.
+ *
+ * @param asset - Which token denominates the positionSize (0 or 1).
+ */
+export function buildUniqueCredit(
+  poolId: bigint,
+  asset: bigint,
+  tokenType: bigint,
+  currentTick: bigint,
+  tickSpacing: bigint,
+  existingPositionIds: bigint[],
+  positionSize: bigint,
+): { tokenId: bigint; adjustedSize: bigint } {
+  return buildUniqueWidthZeroLeg(
+    'credit',
+    poolId,
+    asset,
+    tokenType,
+    currentTick,
+    tickSpacing,
+    existingPositionIds,
+    positionSize,
+  )
 }

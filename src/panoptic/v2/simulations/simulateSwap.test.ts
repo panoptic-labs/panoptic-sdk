@@ -58,6 +58,9 @@ vi.mock('../tokenId/builder', () => ({
     addLoan: vi.fn().mockReturnValue({
       build: vi.fn().mockReturnValue(99999n),
     }),
+    addCredit: vi.fn().mockReturnValue({
+      build: vi.fn().mockReturnValue(99999n),
+    }),
   }),
 }))
 

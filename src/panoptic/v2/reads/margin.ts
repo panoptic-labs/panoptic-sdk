@@ -38,6 +38,20 @@ const MAX_TICK = 887272n
 const FP96 = 1n << 96n
 const Q128 = 1n << 128n
 
+/** Cap for a usage ratio with no collateral behind it. */
+const MAX_USAGE_BPS = 1_000_000n
+
+const bigintMax = (a: bigint, b: bigint): bigint => (a > b ? a : b)
+const bigintMin = (a: bigint, b: bigint): bigint => (a < b ? a : b)
+
+/**
+ * `RiskEngine.BP_DECREASE_BUFFER` over `PanopticPool.NO_BUFFER` — the extra
+ * margin the solvency check demands at mint (and on collateral withdrawal),
+ * above the maintenance requirement that governs liquidation.
+ */
+const MINT_BUFFER = 10_666_667n
+const MINT_BUFFER_DENOMINATOR = 10_000_000n
+
 /**
  * Convert a token0 amount to its token1-equivalent at the given sqrtPriceX96.
  *
@@ -137,6 +151,43 @@ export interface MarginBuffer {
   lowerLiquidationTick: bigint | null
   /** Upper liquidation tick (null if safe at MAX_TICK) */
   upperLiquidationTick: bigint | null
+  /**
+   * Collateral usage against the constraint that actually liquidates, in bps
+   * (10000 = at the liquidation threshold). Null when the account holds no
+   * positions.
+   *
+   * NOT `requiredMargin / currentMargin`. That ratio pools both collateral
+   * tokens into one number, which silently assumes cross-collateral is credited
+   * at 100%. It is only credited at `RiskEngine.crossBufferRatio(utilization,
+   * CROSS_BUFFER_n)`, which decays linearly from the configured buffer to ZERO
+   * between 90% and 95% pool utilization. Measured on mainnet with
+   * CROSS_BUFFER = 100% and the token0 tracker at 91.98% utilization, only
+   * 60.4% of the token0 surplus counted toward the token1 requirement — the
+   * pooled ratio read 40% while this one read ~90% and liquidation was 8.7%
+   * away.
+   *
+   * Sourced from `PanopticQuery.checkCollateral` at the current tick, which
+   * applies the live cross-buffer, and reported for whichever token side is
+   * tighter. Solvency requires both to hold.
+   */
+  crossMarginUsageBps: bigint | null
+  /** Usage of the token0 side alone, in bps. Null when no positions. */
+  usageBps0: bigint | null
+  /** Usage of the token1 side alone, in bps. Null when no positions. */
+  usageBps1: bigint | null
+  /**
+   * Collateral still deployable before the mint solvency check would fail,
+   * in `denominatedInToken` units. Null when the account holds no positions.
+   *
+   * The tighter of `balance - required * BP_DECREASE_BUFFER` across the two
+   * token sides, from `checkCollateral` at the current tick. NOT
+   * `currentMargin - requiredMargin * buffer`, which pools both collateral
+   * tokens and so credits cross-collateral at 100% regardless of the live
+   * `crossBufferRatio`. On a mainnet account that pooled figure read ~24,000
+   * USDC of headroom while the binding side had ~890 — and a mint requiring
+   * ~2,700 USDC duly reverted with AccountInsolvent.
+   */
+  mintableMarginBinding: bigint | null
   /** Current tick */
   currentTick: bigint
   /** Block metadata */
@@ -231,6 +282,22 @@ export async function getMarginBuffer(params: GetMarginBufferParams): Promise<Ma
     })
   }
 
+  // 3-arg overload: evaluates at (currentTick, fastOracleTick, slowOracleTick,
+  // latestObservation) so it needs no tick input and fits this same multicall.
+  // We read index 0 (currentTick) to stay consistent with the liquidation price
+  // and the risk chart, which are also anchored there.
+  const checkCollateralIndex = hasPositions ? calls.length : null
+  if (checkCollateralIndex !== null) {
+    calls.push({
+      target: queryAddress,
+      callData: encodeFunctionData({
+        abi: panopticQueryAbi,
+        functionName: 'checkCollateral',
+        args: [poolAddress, account, tokenIds],
+      }),
+    })
+  }
+
   const { _meta, results } = await readBlockAndAggregate({
     client,
     calls,
@@ -269,6 +336,64 @@ export async function getMarginBuffer(params: GetMarginBufferParams): Promise<Ma
           functionName: 'getLiquidationPrices',
           data: requireReturnData(results, liqPricesIndex, 'PanopticQuery.getLiquidationPrices'),
         }) as readonly [number, number])
+
+  const checkCollateralResult =
+    checkCollateralIndex === null
+      ? null
+      : (decodeFunctionResult({
+          abi: panopticQueryAbi,
+          functionName: 'checkCollateral',
+          data: requireReturnData(results, checkCollateralIndex, 'PanopticQuery.checkCollateral'),
+        }) as readonly [readonly bigint[], readonly bigint[], readonly bigint[], readonly bigint[]])
+
+  // Usage against the binding constraint, at the current tick (index 0).
+  // checkCollateral has already applied the live cross-buffer, so this reflects
+  // how much of the surplus in one token genuinely counts toward the other.
+  let usageBps0: bigint | null = null
+  let usageBps1: bigint | null = null
+  let crossMarginUsageBps: bigint | null = null
+  let mintableMarginBinding: bigint | null = null
+  if (checkCollateralResult) {
+    const [balances0, requireds0, balances1, requireds1] = checkCollateralResult
+    const ratio = (required: bigint | undefined, balance: bigint | undefined): bigint | null => {
+      if (required === undefined || balance === undefined) return null
+      // No balance but a requirement is maximally used, not undefined.
+      if (balance === 0n) return required > 0n ? MAX_USAGE_BPS : 0n
+      return (required * 10_000n) / balance
+    }
+    usageBps0 = ratio(requireds0[0], balances0[0])
+    usageBps1 = ratio(requireds1[0], balances1[0])
+    if (usageBps0 !== null || usageBps1 !== null) {
+      crossMarginUsageBps =
+        usageBps0 === null
+          ? usageBps1
+          : usageBps1 === null
+            ? usageBps0
+            : bigintMax(usageBps0, usageBps1)
+    }
+
+    // Collateral still deployable before the mint solvency check would fail.
+    // Per side: balance - required * mintBuffer, then the tighter of the two,
+    // because the mint must satisfy BOTH. Both sides are already in
+    // `denominatedInToken` units (checkCollateral branches on the same
+    // sqrtPriceX96 < FP96 test), so the min is well defined.
+    const mintable = (balance: bigint | undefined, required: bigint | undefined): bigint | null => {
+      if (balance === undefined || required === undefined) return null
+      const requiredAtMint =
+        (required * MINT_BUFFER + MINT_BUFFER_DENOMINATOR - 1n) / MINT_BUFFER_DENOMINATOR
+      return balance > requiredAtMint ? balance - requiredAtMint : 0n
+    }
+    const mintable0 = mintable(balances0[0], requireds0[0])
+    const mintable1 = mintable(balances1[0], requireds1[0])
+    if (mintable0 !== null || mintable1 !== null) {
+      mintableMarginBinding =
+        mintable0 === null
+          ? mintable1
+          : mintable1 === null
+            ? mintable0
+            : bigintMin(mintable0, mintable1)
+    }
+  }
 
   // Sum collateral requirements across all positions, per token.
   let required0Native = 0n
@@ -333,6 +458,10 @@ export async function getMarginBuffer(params: GetMarginBufferParams): Promise<Ma
     liquidationDistance,
     lowerLiquidationTick,
     upperLiquidationTick,
+    crossMarginUsageBps,
+    usageBps0,
+    usageBps1,
+    mintableMarginBinding,
     currentTick,
     _meta,
   }

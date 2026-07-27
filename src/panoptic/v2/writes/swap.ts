@@ -1,8 +1,15 @@
 /**
  * Swap functions for the Panoptic v2 SDK.
  *
- * Implements token swaps via Panoptic's loan mechanism:
- * open a loan with swapAtMint and immediately close it.
+ * Implements token swaps via Panoptic's **credit** mechanism: open a width=0
+ * credit leg and immediately close it in the same dispatch, with `swapAtMint`
+ * on exactly one of the two ops.
+ *
+ * Credits rather than loans because a credit pays into the pool instead of
+ * borrowing from it: it requires zero buying power, never touches
+ * `s_assetsInAMM`, and so can never be capped by a collateral tracker's
+ * utilization or available-to-borrow. A loan-based swap against a
+ * fully-utilized tracker simply fails.
  *
  * @module v2/writes/swap
  */
@@ -16,7 +23,7 @@ import { getPool } from '../reads/pool'
 import type { StorageAdapter } from '../storage'
 import type { TxOverrides, TxReceipt, TxResult } from '../types'
 import {
-  buildUniqueLoan,
+  buildUniqueCredit,
   isInputListFailError,
   MAX_RETRIES,
   resolvePositionIds,
@@ -87,8 +94,9 @@ export interface SwapExactInParams {
 /**
  * Swap tokens using Panoptic's exact-output mechanism.
  *
- * Opens a loan with `swapAtMint=true` and immediately burns it with `swapAtMint=false`.
- * The user receives exactly `amountOut` of `tokenOut`.
+ * Opens a credit in `tokenOut` with `swapAtMint=true` (paying a swapped amount of
+ * the other token), then burns it with `swapAtMint=false` to receive exactly
+ * `amountOut` of `tokenOut`.
  *
  * @param params - Swap parameters
  * @returns TxResult
@@ -132,13 +140,19 @@ export async function swapExactOut(params: SwapExactOutParams): Promise<TxResult
     const token1 = pool.collateralTracker1.token
     const tokenOutIndex = resolveTokenIndex(tokenOut, token0, token1)
 
-    // For exact output: borrow the OTHER token, swap it to tokenOut
-    const tokenType = tokenOutIndex === 0n ? 1n : 0n
+    // The credit is denominated in the EXACT token — tokenOut here, mirroring
+    // swapExactIn's tokenIn. asset === tokenType.
+    //
+    // Do NOT set tokenType to the other token. That is correct for a *loan*
+    // (which borrows the counter-token and swaps it in), and carrying it over to
+    // the credit inverts the whole swap: an exact-out for 4 ETH then PAYS 4 ETH
+    // and receives USDC. Verified on mainnet before/after.
+    const tokenType = tokenOutIndex
 
     const { low: tickLimitLow, high: tickLimitHigh } = tickLimits(pool.currentTick, slippageBps)
 
     // asset = tokenOutIndex so positionSize is denominated in tokenOut units
-    const { tokenId: loanTokenId, adjustedSize } = buildUniqueLoan(
+    const { tokenId: creditTokenId, adjustedSize } = buildUniqueCredit(
       pool.poolId,
       tokenOutIndex,
       tokenType,
@@ -148,7 +162,7 @@ export async function swapExactOut(params: SwapExactOutParams): Promise<TxResult
       amountOut,
     )
 
-    // Op 1 (mint): loan with swapAtMint=true → borrow + swap
+    // Op 1 (mint): credit with swapAtMint=true → pay a swapped amount of tokenIn
     // swapAtMint=true → descending tick limits: [high, low, spread]
     const mintTickLimits: readonly [number, number, number] = [
       Number(tickLimitHigh),
@@ -156,7 +170,7 @@ export async function swapExactOut(params: SwapExactOutParams): Promise<TxResult
       0,
     ]
 
-    // Op 2 (burn): same loan with swapAtMint=false → repay without swap
+    // Op 2 (burn): same credit with swapAtMint=false → receive exactly amountOut
     // swapAtMint=false → ascending tick limits: [low, high, spread]
     const burnTickLimits: readonly [number, number, number] = [
       Number(tickLimitLow),
@@ -165,9 +179,9 @@ export async function swapExactOut(params: SwapExactOutParams): Promise<TxResult
     ]
 
     // positionIdList: [mint tokenId, burn tokenId]
-    // finalPositionIdList: existing positions (loan opens and closes in same tx, net zero)
+    // finalPositionIdList: existing positions (credit opens and closes in same tx, net zero)
     // positionSizes: mint gets the size, burn gets 0n (= burn all)
-    const positionIdList = [loanTokenId, loanTokenId]
+    const positionIdList = [creditTokenId, creditTokenId]
     const finalPositionIdList = [...positionIds]
     const positionSizes = [adjustedSize, 0n]
 
@@ -211,9 +225,9 @@ export async function swapExactOutAndWait(params: SwapExactOutParams): Promise<T
 /**
  * Swap tokens using Panoptic's exact-input mechanism.
  *
- * Opens a loan with `swapAtMint=false` (borrows tokenIn to wallet),
- * then burns with `swapAtMint=true` (swaps tokenIn back to repay).
- * The user spends exactly `amountIn` of `tokenIn`.
+ * Opens a credit in `tokenIn` with `swapAtMint=false` (paying exactly `amountIn`),
+ * then burns it with `swapAtMint=true` to receive the swapped amount of the other
+ * token. The user spends exactly `amountIn` of `tokenIn`.
  *
  * @param params - Swap parameters
  * @returns TxResult
@@ -256,13 +270,13 @@ export async function swapExactIn(params: SwapExactInParams): Promise<TxResult> 
     const token1 = pool.collateralTracker1.token
     const tokenInIndex = resolveTokenIndex(tokenIn, token0, token1)
 
-    // For exact input: borrow tokenIn itself
+    // For exact input: the credit is denominated in tokenIn and paid in tokenIn
     const tokenType = tokenInIndex
 
     const { low: tickLimitLow, high: tickLimitHigh } = tickLimits(pool.currentTick, slippageBps)
 
     // asset = tokenInIndex so positionSize is denominated in tokenIn units
-    const { tokenId: loanTokenId, adjustedSize } = buildUniqueLoan(
+    const { tokenId: creditTokenId, adjustedSize } = buildUniqueCredit(
       pool.poolId,
       tokenInIndex,
       tokenType,
@@ -272,7 +286,7 @@ export async function swapExactIn(params: SwapExactInParams): Promise<TxResult> 
       amountIn,
     )
 
-    // Op 1 (mint): loan with swapAtMint=false → borrow tokenIn to wallet
+    // Op 1 (mint): credit with swapAtMint=false → pay exactly amountIn of tokenIn
     // swapAtMint=false → ascending tick limits: [low, high, spread]
     const mintTickLimits: readonly [number, number, number] = [
       Number(tickLimitLow),
@@ -280,7 +294,7 @@ export async function swapExactIn(params: SwapExactInParams): Promise<TxResult> 
       0,
     ]
 
-    // Op 2 (burn): same loan with swapAtMint=true → repay with swap
+    // Op 2 (burn): same credit with swapAtMint=true → receive the swapped tokenOut
     // swapAtMint=true → descending tick limits: [high, low, spread]
     const burnTickLimits: readonly [number, number, number] = [
       Number(tickLimitHigh),
@@ -289,7 +303,7 @@ export async function swapExactIn(params: SwapExactInParams): Promise<TxResult> 
     ]
 
     // positionSizes: mint gets the size, burn gets 0n (= burn all)
-    const positionIdList = [loanTokenId, loanTokenId]
+    const positionIdList = [creditTokenId, creditTokenId]
     const finalPositionIdList = [...positionIds]
     const positionSizes = [adjustedSize, 0n]
 

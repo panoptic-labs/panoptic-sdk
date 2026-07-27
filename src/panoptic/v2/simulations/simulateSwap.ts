@@ -1,5 +1,9 @@
 /**
  * Swap simulation for the Panoptic v2 SDK.
+ *
+ * Mirrors `writes/swap.ts`, which swaps via width=0 **credit** legs rather than
+ * loans so the swap can never be capped by a collateral tracker's utilization.
+ *
  * @module v2/simulations/simulateSwap
  */
 
@@ -8,11 +12,11 @@ import { encodeFunctionData } from 'viem'
 
 import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients'
-import { PanopticError, SwapTokenMismatchError } from '../errors'
+import { PanopticError } from '../errors'
 import { tickLimits } from '../formatters/tick'
 import { getPool } from '../reads/pool'
-import { createTokenIdBuilder } from '../tokenId/builder'
 import type { SimulationResult, TokenFlow } from '../types'
+import { buildUniqueCredit, resolveTokenIndex } from '../writes/loanUtils'
 import { simulateWithTokenFlow } from './tokenFlow'
 
 /**
@@ -47,6 +51,8 @@ export interface SimulateSwapExactOutParams {
   slippageBps: bigint
   /** Existing position IDs */
   existingPositionIds: bigint[]
+  /** Builder code for referral fee attribution. Defaults to `0n`. */
+  builderCode?: bigint
   /** Optional block number */
   blockNumber?: bigint
 }
@@ -71,68 +77,33 @@ export interface SimulateSwapExactInParams {
   slippageBps: bigint
   /** Existing position IDs */
   existingPositionIds: bigint[]
+  /** Builder code for referral fee attribution. Defaults to `0n`. */
+  builderCode?: bigint
   /** Optional block number */
   blockNumber?: bigint
-}
-
-/**
- * Resolve token index, throwing SwapTokenMismatchError on mismatch.
- */
-function resolveTokenIndex(tokenAddress: Address, token0: Address, token1: Address): bigint {
-  const lower = tokenAddress.toLowerCase()
-  if (lower === token0.toLowerCase()) return 0n
-  if (lower === token1.toLowerCase()) return 1n
-  throw new SwapTokenMismatchError(tokenAddress, token0, token1)
-}
-
-/**
- * Build a unique loan tokenId.
- */
-function buildUniqueLoan(
-  poolId: bigint,
-  asset: bigint,
-  tokenType: bigint,
-  currentTick: bigint,
-  tickSpacing: bigint,
-  existingPositionIds: bigint[],
-): bigint {
-  const mod = currentTick % tickSpacing
-  let strike = currentTick - ((mod + tickSpacing) % tickSpacing)
-  const step = tickSpacing
-  const existingSet = new Set(existingPositionIds)
-
-  for (let attempt = 0; attempt < 1000; attempt++) {
-    const tokenId = createTokenIdBuilder(poolId).addLoan({ asset, tokenType, strike }).build()
-
-    if (!existingSet.has(tokenId)) {
-      return tokenId
-    }
-    strike += step
-  }
-
-  throw new PanopticError('Could not build unique loan tokenId after 1000 attempts')
 }
 
 /**
  * Build dispatch calldata for swap simulation.
  */
 function buildSwapCallData(
-  loanTokenId: bigint,
+  creditTokenId: bigint,
   existingPositionIds: bigint[],
   amount: bigint,
   mintTickLimits: readonly [number, number, number],
   burnTickLimits: readonly [number, number, number],
+  builderCode: bigint,
 ): `0x${string}` {
   return encodeFunctionData({
     abi: panopticPoolV2Abi,
     functionName: 'dispatch',
     args: [
-      [loanTokenId, loanTokenId],
+      [creditTokenId, creditTokenId],
       [...existingPositionIds],
       [amount, 0n],
       [mintTickLimits, burnTickLimits],
       false,
-      0n,
+      builderCode,
     ],
   })
 }
@@ -179,6 +150,7 @@ export async function simulateSwapExactOut(
     amountOut,
     slippageBps,
     existingPositionIds,
+    builderCode = 0n,
     blockNumber,
   } = params
 
@@ -190,17 +162,20 @@ export async function simulateSwapExactOut(
     const token0 = pool.collateralTracker0.token
     const token1 = pool.collateralTracker1.token
     const tokenOutIndex = resolveTokenIndex(tokenOut, token0, token1)
-    const tokenType = tokenOutIndex === 0n ? 1n : 0n
+    // Credit is denominated in the exact token (tokenOut); asset === tokenType.
+    // Using the counter-token here is the loan convention and inverts the swap.
+    const tokenType = tokenOutIndex
 
     const { low: tickLimitLow, high: tickLimitHigh } = tickLimits(pool.currentTick, slippageBps)
 
-    const loanTokenId = buildUniqueLoan(
+    const { tokenId: creditTokenId, adjustedSize } = buildUniqueCredit(
       pool.poolId,
       tokenOutIndex,
       tokenType,
       pool.currentTick,
       pool.tickSpacing,
       existingPositionIds,
+      amountOut,
     )
 
     // Mint: swapAtMint=true (descending), Burn: swapAtMint=false (ascending)
@@ -216,11 +191,12 @@ export async function simulateSwapExactOut(
     ]
 
     const callData = buildSwapCallData(
-      loanTokenId,
+      creditTokenId,
       existingPositionIds,
-      amountOut,
+      adjustedSize,
       mintTickLimits,
       burnTickLimits,
+      builderCode,
     )
 
     const flowResult = await simulateWithTokenFlow({
@@ -280,6 +256,7 @@ export async function simulateSwapExactIn(
     amountIn,
     slippageBps,
     existingPositionIds,
+    builderCode = 0n,
     blockNumber,
   } = params
 
@@ -295,13 +272,14 @@ export async function simulateSwapExactIn(
 
     const { low: tickLimitLow, high: tickLimitHigh } = tickLimits(pool.currentTick, slippageBps)
 
-    const loanTokenId = buildUniqueLoan(
+    const { tokenId: creditTokenId, adjustedSize } = buildUniqueCredit(
       pool.poolId,
       tokenInIndex,
       tokenType,
       pool.currentTick,
       pool.tickSpacing,
       existingPositionIds,
+      amountIn,
     )
 
     // Mint: swapAtMint=false (ascending), Burn: swapAtMint=true (descending)
@@ -320,11 +298,12 @@ export async function simulateSwapExactIn(
     const tokenOutIndex = tokenInIndex === 0n ? 1n : 0n
 
     const callData = buildSwapCallData(
-      loanTokenId,
+      creditTokenId,
       existingPositionIds,
-      amountIn,
+      adjustedSize,
       mintTickLimits,
       burnTickLimits,
+      builderCode,
     )
 
     const flowResult = await simulateWithTokenFlow({

@@ -1,8 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { InputListFailError, MissingPositionIdsError, SwapTokenMismatchError } from '../errors'
+import { createTokenIdBuilder } from '../tokenId/builder'
 import { swapExactIn, swapExactInAndWait, swapExactOut, swapExactOutAndWait } from './swap'
 import { submitWrite } from './utils'
+
+/** Args the swap passed to `addCredit` on its most recent call. */
+function lastCreditConfig(): { asset: bigint; tokenType: bigint } {
+  const builder = vi.mocked(createTokenIdBuilder).mock.results.at(-1)?.value as {
+    addCredit: ReturnType<typeof vi.fn>
+  }
+  const call = builder?.addCredit?.mock.calls.at(-1)
+  if (!call) {
+    throw new Error('expected the swap to build a credit leg via addCredit')
+  }
+  return call[0]
+}
 
 const mockTxResult = vi.hoisted(() => ({
   hash: '0xabc' as `0x${string}`,
@@ -68,6 +81,9 @@ vi.mock('./utils', () => ({
 vi.mock('../tokenId/builder', () => ({
   createTokenIdBuilder: vi.fn().mockReturnValue({
     addLoan: vi.fn().mockReturnValue({
+      build: vi.fn().mockReturnValue(12345n),
+    }),
+    addCredit: vi.fn().mockReturnValue({
       build: vi.fn().mockReturnValue(12345n),
     }),
   }),
@@ -339,5 +355,53 @@ describe('swapExactInAndWait', () => {
     })
 
     expect(receipt.status).toBe('success')
+  })
+})
+
+// Regression: a credit must be denominated in the EXACT token of the swap, so
+// asset === tokenType. Setting tokenType to the counter-token is the *loan*
+// convention; carried over to a credit it silently reverses the whole swap. It
+// shipped that way and an exact-out for 4 ETH paid 4 ETH and received USDC
+// instead. Verified against mainnet: delta0 went -4.014 -> +3.999.
+describe('credit leg denomination', () => {
+  beforeEach(() => {
+    vi.mocked(submitWrite).mockReset().mockResolvedValue(mockTxResult)
+    vi.mocked(createTokenIdBuilder).mockClear()
+  })
+
+  it('denominates the exact-out credit in tokenOut', async () => {
+    await swapExactOut({
+      client: mockClient,
+      walletClient: mockWalletClient,
+      account: '0xUser' as `0x${string}`,
+      poolAddress: '0xPool' as `0x${string}`,
+      chainId: 1n,
+      tokenOut: '0xToken0' as `0x${string}`,
+      amountOut: 1000n,
+      slippageBps: 500n,
+      existingPositionIds: [],
+    })
+
+    const cfg = lastCreditConfig()
+    expect(cfg.asset).toBe(0n) // tokenOut is token0
+    expect(cfg.tokenType).toBe(cfg.asset)
+  })
+
+  it('denominates the exact-in credit in tokenIn', async () => {
+    await swapExactIn({
+      client: mockClient,
+      walletClient: mockWalletClient,
+      account: '0xUser' as `0x${string}`,
+      poolAddress: '0xPool' as `0x${string}`,
+      chainId: 1n,
+      tokenIn: '0xToken1' as `0x${string}`,
+      amountIn: 1000n,
+      slippageBps: 500n,
+      existingPositionIds: [],
+    })
+
+    const cfg = lastCreditConfig()
+    expect(cfg.asset).toBe(1n) // tokenIn is token1
+    expect(cfg.tokenType).toBe(cfg.asset)
   })
 })

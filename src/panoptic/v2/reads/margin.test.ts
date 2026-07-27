@@ -71,6 +71,10 @@ function createMockClient(): PublicClient {
   } as unknown as PublicClient
 }
 
+/** The `uint256[4]` quadruple `checkCollateral`'s 3-arg overload returns, x4. */
+type Quad = readonly [bigint, bigint, bigint, bigint]
+type CheckCollateralResult = readonly [Quad, Quad, Quad, Quad]
+
 function success(returnData: Hex) {
   return { success: true, returnData }
 }
@@ -101,6 +105,8 @@ function mockMarginMulticall(
     assets1: bigint
     positionData?: FullPositionsData
     liquidationPrices?: readonly [number, number]
+    /** checkCollateral(3-arg): [bal0[4], req0[4], bal1[4], req1[4]], index 0 = currentTick. */
+    checkCollateral?: CheckCollateralResult
   },
 ) {
   const results = [
@@ -149,11 +155,92 @@ function mockMarginMulticall(
       ),
     )
   }
+  // Pushed alongside positionData/liquidationPrices: the real call gates all
+  // three on `hasPositions`.
+  if (input.positionData !== undefined) {
+    const cc: CheckCollateralResult = input.checkCollateral ?? [
+      [0n, 0n, 0n, 0n],
+      [0n, 0n, 0n, 0n],
+      [0n, 0n, 0n, 0n],
+      [0n, 0n, 0n, 0n],
+    ]
+    results.push(
+      success(
+        encodeFunctionResult({
+          abi: panopticQueryAbi,
+          functionName: 'checkCollateral',
+          result: cc,
+        }),
+      ),
+    )
+  }
   results.push(timestampResult())
   vi.mocked(client.call).mockResolvedValueOnce({ data: encodeBlockAndAggregate(results) } as never)
 }
 
 describe('getMarginBuffer', () => {
+  // Regression: usage used to be requiredMargin/currentMargin, which pools both
+  // collateral tokens and so assumes cross-collateral is credited at 100%. It is
+  // only credited at RiskEngine.crossBufferRatio, which decays to zero between
+  // 90% and 95% pool utilization. A live account read 40% pooled while the
+  // binding side was ~90% and liquidation was 8.7% away.
+  it('reports usage from the binding side, not the pooled ratio', async () => {
+    const client = createMockClient()
+
+    mockMarginMulticall(client, {
+      tick: -200555,
+      assets0: 17n * 10n ** 18n,
+      assets1: 9411n * 10n ** 6n,
+      positionData: mockFullPositionsData([{ token0: 5n * 10n ** 18n, token1: 8n * 10n ** 18n }]),
+      liquidationPrices: [-201448, 8388607],
+      checkCollateral: [
+        // token0 side: comfortable (27.6% used)
+        [18n * 10n ** 18n, 0n, 0n, 0n],
+        [5n * 10n ** 18n, 0n, 0n, 0n],
+        // token1 side: nearly exhausted (89.5% used) -> this is what binds
+        [10n * 10n ** 18n, 0n, 0n, 0n],
+        [8n * 10n ** 18n + 950n * 10n ** 15n, 0n, 0n, 0n],
+      ],
+    })
+
+    const result = await getMarginBuffer({
+      client,
+      poolAddress: POOL_ADDRESS,
+      account: ACCOUNT_ADDRESS,
+      tokenIds: [1n],
+      queryAddress: QUERY_ADDRESS,
+      collateralAddresses: COLLATERAL_ADDRESSES,
+    })
+
+    expect(result.usageBps0).toBe(2777n) // 5 / 18
+    expect(result.usageBps1).toBe(8950n) // 8.95 / 10
+    expect(result.crossMarginUsageBps).toBe(8950n)
+
+    // Deployable headroom is the tighter side too: token0 has
+    // 18 - 5*1.0666667 = 12.67, token1 only 10 - 8.95*1.0666667 = 0.453.
+    // The pooled view would have reported the roomier one.
+    const mintable1 = 10n * 10n ** 18n - (8950n * 10n ** 15n * 10_666_667n) / 10_000_000n
+    expect(result.mintableMarginBinding).toBe(mintable1)
+    expect(result.mintableMarginBinding! < 10n ** 18n).toBe(true)
+  })
+
+  it('has no usage figure for an account with no positions', async () => {
+    const client = createMockClient()
+    mockMarginMulticall(client, { tick: 0, assets0: 10n ** 18n, assets1: 10n ** 6n })
+
+    const result = await getMarginBuffer({
+      client,
+      poolAddress: POOL_ADDRESS,
+      account: ACCOUNT_ADDRESS,
+      tokenIds: [],
+      queryAddress: QUERY_ADDRESS,
+      collateralAddresses: COLLATERAL_ADDRESSES,
+    })
+
+    expect(result.crossMarginUsageBps).toBeNull()
+    expect(result.mintableMarginBinding).toBeNull()
+  })
+
   it('returns positive buffers for a safe account (gross collateral - sum of requirements)', async () => {
     const client = createMockClient()
 

@@ -12,7 +12,7 @@ import type { BlockMeta } from '../types'
  */
 export interface GetBlockMetaParams {
   /** viem PublicClient */
-  client: PublicClient
+  client: Pick<PublicClient, 'getBlock'>
   /** Optional block number (defaults to latest) */
   blockNumber?: bigint
 }

@@ -621,7 +621,9 @@ export {
   // Position operations
   buildOpenPositionCalldata,
   // Loan utilities
+  buildUniqueCredit,
   buildUniqueLoan,
+  buildUniqueWidthZeroLeg,
   cancelTransaction,
   checkApproval,
   closePosition,
@@ -703,6 +705,8 @@ export {
 // Simulation Functions
 // ============================================================================
 export type {
+  BuildTokenShortfallRecoveryDispatchParams,
+  DispatchIntent,
   SFPMSimulationResult,
   SimulateBatchDispatchParams,
   SimulateBatchDispatchResult,
@@ -718,10 +722,17 @@ export type {
   SimulateSwapExactOutParams,
   SimulateWithdrawParams,
   SwapSimulation,
+  TokenShortfallRecoveryQuote,
+  TokenShortfallRecoveryQuoteParams,
+  TokenShortfallRecoveryResult,
+  TokenShortfallRecoveryUnavailableReason,
 } from './simulations'
 export {
+  buildTokenShortfallRecoveryDispatch,
   encodePoolKeyBytes,
   encodeV3PoolKeyBytes,
+  getNotEnoughTokensError,
+  quoteTokenShortfallRecovery,
   simulateBatchDispatch,
   simulateClosePosition,
   simulateDeposit,

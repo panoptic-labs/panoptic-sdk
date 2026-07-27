@@ -144,7 +144,14 @@ export {
 } from './wrap'
 
 // Loan utilities
-export { buildUniqueLoan, isInputListFailError, resolveTokenIndex } from './loanUtils'
+export type { WidthZeroLegKind } from './loanUtils'
+export {
+  buildUniqueCredit,
+  buildUniqueLoan,
+  buildUniqueWidthZeroLeg,
+  isInputListFailError,
+  resolveTokenIndex,
+} from './loanUtils'
 
 // Lending operations
 export {

@@ -6,7 +6,8 @@
 import type { PublicClient } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
-import { AccountInsolventError } from '../errors/contract'
+import { PanopticError } from '../errors/base'
+import { AccountInsolventError, NotEnoughTokensError } from '../errors/contract'
 import { simulateOpenPosition } from '../simulations/simulateOpenPosition'
 import type { OpenPositionSimulation, SimulationResult } from '../types'
 import type { AccountBuyingPower } from './buyingPower'
@@ -97,7 +98,7 @@ describe('getOpenPositionPreview', () => {
     expect(preview.currentBuyingPower).toEqual(mockBuyingPower)
   })
 
-  it('should return isSolvent=false when simulation fails', async () => {
+  it('should return isSolvent=false on AccountInsolvent', async () => {
     const client = createMockClient()
 
     vi.mocked(getAccountBuyingPower).mockResolvedValue(mockBuyingPower)
@@ -122,11 +123,73 @@ describe('getOpenPositionPreview', () => {
     })
 
     expect(preview.isSolvent).toBe(false)
+    expect(preview.tokenShortfall).toBeNull()
     expect(preview.amount0Required).toBeNull()
     expect(preview.amount1Required).toBeNull()
     expect(preview.postCollateral0).toBeNull()
     expect(preview.postCollateral1).toBeNull()
     expect(preview.currentBuyingPower).toEqual(mockBuyingPower)
+  })
+
+  // A token shortfall is NOT a buying-power problem: the account can be well
+  // within its margin and simply holding the wrong token. Collapsing the two
+  // made the UI tell users to lower their size when a swap was the fix.
+  it('should report a token shortfall without marking the account insolvent', async () => {
+    const client = createMockClient()
+
+    vi.mocked(getAccountBuyingPower).mockResolvedValue(mockBuyingPower)
+
+    const shortfall = new NotEnoughTokensError(
+      '0x0000000000000000000000000000000000000042',
+      1_000n,
+      400n,
+    )
+    vi.mocked(simulateOpenPosition).mockResolvedValue({
+      success: false,
+      error: shortfall,
+      _meta: MOCK_META,
+    })
+
+    const preview = await getOpenPositionPreview({
+      client,
+      poolAddress: POOL_ADDRESS,
+      account: ACCOUNT,
+      existingPositionIds: [],
+      tokenId: 1n,
+      positionSize: 100n,
+      queryAddress: QUERY_ADDRESS,
+      tickLimitLow: -887272n,
+      tickLimitHigh: 887272n,
+    })
+
+    expect(preview.isSolvent).toBe(true)
+    expect(preview.tokenShortfall).toBe(shortfall)
+  })
+
+  it('treats a non-collateral revert as neither insolvent nor short', async () => {
+    const client = createMockClient()
+
+    vi.mocked(getAccountBuyingPower).mockResolvedValue(mockBuyingPower)
+    vi.mocked(simulateOpenPosition).mockResolvedValue({
+      success: false,
+      error: new PanopticError('PriceBoundFail'),
+      _meta: MOCK_META,
+    })
+
+    const preview = await getOpenPositionPreview({
+      client,
+      poolAddress: POOL_ADDRESS,
+      account: ACCOUNT,
+      existingPositionIds: [],
+      tokenId: 1n,
+      positionSize: 100n,
+      queryAddress: QUERY_ADDRESS,
+      tickLimitLow: -887272n,
+      tickLimitHigh: 887272n,
+    })
+
+    expect(preview.isSolvent).toBe(true)
+    expect(preview.tokenShortfall).toBeNull()
   })
 
   it('should run buyingPower and simulation in parallel', async () => {

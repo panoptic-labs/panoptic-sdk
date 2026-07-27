@@ -49,3 +49,14 @@ export {
   getPoolTokensForSimulation,
   simulateWithTokenFlow,
 } from './tokenFlow'
+export {
+  type BuildTokenShortfallRecoveryDispatchParams,
+  type DispatchIntent,
+  type TokenShortfallRecoveryQuote,
+  type TokenShortfallRecoveryQuoteParams,
+  type TokenShortfallRecoveryResult,
+  type TokenShortfallRecoveryUnavailableReason,
+  buildTokenShortfallRecoveryDispatch,
+  getNotEnoughTokensError,
+  quoteTokenShortfallRecovery,
+} from './tokenShortfallRecovery'

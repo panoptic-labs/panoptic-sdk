@@ -117,6 +117,19 @@ export interface Utilization {
   utilization0: bigint
   /** Token 1 utilization (0-10000 bps) */
   utilization1: bigint
+  /**
+   * Assets of token 0 currently available to borrow, in token units.
+   *
+   * Mirrors the contract's `maxWithdraw` cap:
+   * `depositedAssets - 1 - convertToAssets(creditedShares)`, floored at 0.
+   * Slightly conservative — like the rest of the SDK's pool reads it omits
+   * `unrealizedInterest` from `totalAssets`.
+   *
+   * Informational only: credit-based swaps are not gated by this.
+   */
+  availableToBorrow0: bigint
+  /** See {@link Utilization.availableToBorrow0}. */
+  availableToBorrow1: bigint
   /** Block metadata */
   _meta: BlockMeta
 }
