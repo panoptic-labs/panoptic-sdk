@@ -1249,6 +1249,52 @@ export async function getMaxWithdrawable(
 }
 
 /**
+ * Parameters for getMaxRedeem.
+ */
+export interface GetMaxRedeemParams {
+  /** viem PublicClient */
+  client: PublicClient
+  /** CollateralTracker address */
+  collateralTrackerAddress: Address
+  /** Account address */
+  account: Address
+  /** Optional block number for historical queries */
+  blockNumber?: bigint
+}
+
+/**
+ * Read the maximum number of shares an account can redeem from a CollateralTracker.
+ *
+ * This is the ERC4626 `maxRedeem(owner)`, i.e. `min(availableShares, balanceOf(owner))`,
+ * and returns 0 when the account has open positions (legs). Redeeming exactly this many
+ * shares burns the account's full (available) share balance, so a MAX withdraw leaves no
+ * rounding dust — unlike an assets-based `withdraw`, which round-trips shares↔assets.
+ *
+ * @param params - The parameters
+ * @returns Maximum redeemable shares with block metadata
+ */
+export async function getMaxRedeem(
+  params: GetMaxRedeemParams,
+): Promise<{ maxRedeem: bigint; _meta: BlockMeta }> {
+  const { client, collateralTrackerAddress, account, blockNumber } = params
+
+  const targetBlockNumber = blockNumber ?? (await client.getBlockNumber())
+
+  const [maxRedeem, _meta] = await Promise.all([
+    client.readContract({
+      address: collateralTrackerAddress,
+      abi: collateralTrackerV2Abi,
+      functionName: 'maxRedeem',
+      args: [account],
+      blockNumber: targetBlockNumber,
+    }),
+    getBlockMeta({ client, blockNumber: targetBlockNumber }),
+  ])
+
+  return { maxRedeem, _meta }
+}
+
+/**
  * Try to simulate a solvency-checked withdraw with the given amount.
  */
 async function tryWithdrawSimulation(params: {

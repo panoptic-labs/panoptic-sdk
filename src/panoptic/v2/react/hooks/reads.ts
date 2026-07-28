@@ -39,6 +39,7 @@ import {
   getLiquidationPrices,
   getMarginBuffer,
   getMaxPositionSize,
+  getMaxRedeem,
   getMaxWithdrawable,
   getNativeTokenPrice,
   getNetLiquidationValue,
@@ -1116,6 +1117,41 @@ export function useMaxWithdrawable(
       })
     },
     enabled: (options?.enabled ?? true) && !!resolvedAccount && totalAssets > 0n,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+/**
+ * Read the maximum redeemable shares (`maxRedeem`) for an account on a collateral tracker.
+ *
+ * Redeeming exactly this many shares performs a dust-free full exit (it burns the account's
+ * whole available share balance), so it is the correct primitive for a MAX withdraw when the
+ * account has no open positions. Returns 0 when positions are open.
+ */
+export function useMaxRedeem(
+  collateralTrackerAddress: Address,
+  account?: Address,
+  options?: QueryOptions & { client?: PublicClient },
+) {
+  const ctx = usePanopticContext()
+  const client = options?.client ?? ctx.publicClient
+  const resolvedAccount = account ?? ctx.account
+  return useQuery({
+    queryKey: [
+      ...queryKeys.maxRedeem(
+        ctx.chainId,
+        collateralTrackerAddress,
+        resolvedAccount ?? ('' as Address),
+      ),
+      getClientCacheScopeKey(client, ctx.clientScope),
+    ],
+    queryFn: () => {
+      if (!resolvedAccount) throw new Error('account required for getMaxRedeem')
+      return getMaxRedeem({ client, collateralTrackerAddress, account: resolvedAccount })
+    },
+    enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
     staleTime: options?.staleTime,
     gcTime: options?.gcTime,

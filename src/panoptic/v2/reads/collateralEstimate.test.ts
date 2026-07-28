@@ -15,6 +15,7 @@ import {
   createFlowNeutralTokenId,
   estimateCollateralRequired,
   getMaxPositionSize,
+  getMaxRedeem,
   getRequiredCreditForITM,
 } from './collateralEstimate'
 
@@ -808,6 +809,57 @@ describe('Collateral Estimation with PanopticQuery', () => {
           positionSize: ONE,
         }),
       ).rejects.toThrow(PanopticError)
+    })
+  })
+
+  describe('getMaxRedeem', () => {
+    const COLLATERAL_TRACKER = '0x4444444444444444444444444444444444444444' as const
+
+    it('reads maxRedeem(account) on the tracker and returns it with block metadata', async () => {
+      const client = createMockClient()
+      vi.mocked(client.readContract).mockResolvedValueOnce(123456789n)
+
+      const result = await getMaxRedeem({
+        client,
+        collateralTrackerAddress: COLLATERAL_TRACKER,
+        account: ACCOUNT_ADDRESS,
+      })
+
+      expect(result.maxRedeem).toBe(123456789n)
+      expect(result._meta.blockNumber).toBe(MOCK_BLOCK.number)
+      expect(vi.mocked(client.readContract)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          address: COLLATERAL_TRACKER,
+          functionName: 'maxRedeem',
+          args: [ACCOUNT_ADDRESS],
+        }),
+      )
+    })
+
+    it('returns 0 shares when the account has open positions (contract returns 0)', async () => {
+      const client = createMockClient()
+      vi.mocked(client.readContract).mockResolvedValueOnce(0n)
+
+      const result = await getMaxRedeem({
+        client,
+        collateralTrackerAddress: COLLATERAL_TRACKER,
+        account: ACCOUNT_ADDRESS,
+      })
+
+      expect(result.maxRedeem).toBe(0n)
+    })
+
+    it('propagates an RPC failure from readContract', async () => {
+      const client = createMockClient()
+      vi.mocked(client.readContract).mockRejectedValueOnce(new Error('RPC request failed'))
+
+      await expect(
+        getMaxRedeem({
+          client,
+          collateralTrackerAddress: COLLATERAL_TRACKER,
+          account: ACCOUNT_ADDRESS,
+        }),
+      ).rejects.toThrow('RPC request failed')
     })
   })
 })

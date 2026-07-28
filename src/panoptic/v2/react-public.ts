@@ -74,6 +74,7 @@ export {
   useLiquidationPrices,
   useMarginBuffer,
   useMaxPositionSize,
+  useMaxRedeem,
   useMaxWithdrawable,
   useMinePoolAddress as useMinePoolAddressHook,
   useMintShares,

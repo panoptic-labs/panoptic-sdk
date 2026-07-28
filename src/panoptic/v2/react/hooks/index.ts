@@ -27,6 +27,7 @@ export {
   useLiquidationPrices,
   useMarginBuffer,
   useMaxPositionSize,
+  useMaxRedeem,
   useMaxWithdrawable,
   useMinePoolAddress,
   useNativeTokenPrice,

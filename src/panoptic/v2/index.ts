@@ -278,6 +278,7 @@ export type {
   // Margin buffer params
   GetMarginBufferParams,
   GetMaxPositionSizeParams,
+  GetMaxRedeemParams,
   GetMaxWithdrawableParams,
   GetNativeTokenPriceParams,
   GetNetLiquidationValueParams,
@@ -390,6 +391,7 @@ export {
   // Margin buffer
   getMarginBuffer,
   getMaxPositionSize,
+  getMaxRedeem,
   getMaxWithdrawable,
   getNativeTokenPrice,
   getNetLiquidationValue,

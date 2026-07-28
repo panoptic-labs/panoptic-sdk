@@ -228,6 +228,12 @@ export const queryKeys = {
     ] as const,
 
   /**
+   * Key for max redeemable shares from a collateral tracker.
+   */
+  maxRedeem: (chainId: bigint, collateralTrackerAddress: Address, account: Address) =>
+    [...queryKeys.all, chainId.toString(), 'maxRedeem', collateralTrackerAddress, account] as const,
+
+  /**
    * Key for approval check.
    */
   approval: (chainId: bigint, token: Address, owner: Address, spender: Address) =>
