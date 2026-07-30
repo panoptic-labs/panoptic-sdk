@@ -1065,7 +1065,7 @@ describe('Delta Hedge Functions', () => {
     vi.mocked(client.readContract).mockResolvedValueOnce(500)
 
     vi.mocked(client.multicall)
-      // 4. getPool: dynamic data (11 core values, allowFailure: true returns {status, result})
+      // 4. getPool: dynamic data (14 core values, allowFailure: true returns {status, result})
       .mockResolvedValueOnce([
         { status: 'success', result: currentTick }, // getCurrentTick
         { status: 'success', result: 0 }, // isSafeMode (0 = active)
@@ -1078,6 +1078,7 @@ describe('Delta Hedge Functions', () => {
         { status: 'success', result: 2000n }, // sellerCollateralRatio
         { status: 'success', result: 1000n }, // maintMarginRate
         { status: 'success', result: 10n }, // notionalFee
+        { status: 'success', result: 250n }, // premiumFee
         { status: 'success', result: 8n }, // vegoid
         { status: 'success', result: 3250n }, // maxSpread (3.25x in bps-like encoding)
       ])

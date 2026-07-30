@@ -51,8 +51,14 @@ export interface RiskEngine {
   collateralRequirement: bigint
   /** Maintenance margin factor (in bps) */
   maintenanceMargin: bigint
-  /** Commission rate (in bps) */
+  /** Commission rate (in bps), charged on notional at mint */
   commissionRate: bigint
+  /**
+   * Premium fee rate (in bps), charged on realized premium at burn. The burn
+   * commission is the lesser of this applied to the realized premium and
+   * 10x `commissionRate` applied to the notional — see CollateralTracker.settleBurn.
+   */
+  premiumFeeRate: bigint
   /** VEGOID constant used in spread calculation */
   vegoid: bigint
   /** Maximum spread parameter (in bps) */

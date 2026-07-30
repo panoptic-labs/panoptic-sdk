@@ -23,8 +23,10 @@ import type { StreamiaLeg } from '../types/streamia'
 
 /** A single snapshot of Uniswap fee data at a particular block. */
 export interface UniswapFeeSnapshot {
-  /** Block number (undefined if queried as latest) */
-  blockNumber: bigint | undefined
+  /** Resolved block number for this snapshot. */
+  blockNumber: bigint
+  /** Timestamp of the resolved block in Unix seconds. */
+  blockTimestamp: bigint
   /** Uniswap fee delta from the first block in the series */
   fees: { token0: bigint; token1: bigint }
 }
@@ -84,8 +86,9 @@ export async function getUniswapFeeHistory(
     return { snapshots: [], _meta }
   }
 
-  const [blockData, _meta] = await Promise.all([
+  const [blockData, blockMetadata, _meta] = await Promise.all([
     fetchUniswapFeeData(client, blockNumbers, legs, poolConfig),
+    Promise.all(blockNumbers.map((blockNumber) => getBlockMeta({ client, blockNumber }))),
     params._meta ? Promise.resolve(params._meta) : getBlockMeta({ client }),
   ])
 
@@ -101,7 +104,8 @@ export async function getUniswapFeeHistory(
     }
 
     return {
-      blockNumber: blockNumbers[i],
+      blockNumber: blockMetadata[i].blockNumber,
+      blockTimestamp: blockMetadata[i].blockTimestamp,
       fees: {
         token0: total0 - initialFees0,
         token1: total1 - (initialFees1 as bigint),

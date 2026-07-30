@@ -83,6 +83,8 @@ describe('getUniswapFeeHistory', () => {
     // First block = baseline, delta = 0
     expect(result.snapshots[0].fees.token0).toBe(0n)
     expect(result.snapshots[0].fees.token1).toBe(0n)
+    expect(result.snapshots[0].blockNumber).toBe(MOCK_BLOCK.number)
+    expect(result.snapshots[0].blockTimestamp).toBe(MOCK_BLOCK.timestamp)
 
     // Second block: delta = 100000
     expect(result.snapshots[1].fees.token0).toBe(100000n)

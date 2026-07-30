@@ -49,6 +49,21 @@ export {
   getPoolTokensForSimulation,
   simulateWithTokenFlow,
 } from './tokenFlow'
+// Credit-wrapped dispatches (collateral swaps inside a single dispatch)
+export {
+  type BuildCreditWrappedDispatchParams,
+  type CreditWrapDirection,
+  type CreditWrapPlacement,
+  buildCreditWrappedDispatch,
+} from './creditWrap'
+export {
+  type OneTokenFlowQuote,
+  type OneTokenFlowQuoteParams,
+  type OneTokenFlowResult,
+  type OneTokenFlowUnavailableReason,
+  DEFAULT_MIN_SWAP_RATIO_BPS,
+  quoteOneTokenFlow,
+} from './oneTokenFlow'
 export {
   type BuildTokenShortfallRecoveryDispatchParams,
   type DispatchIntent,

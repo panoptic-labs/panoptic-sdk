@@ -23,6 +23,8 @@ export interface UniswapV4Addresses {
   v4Quoter: Address
   /** Uniswap v4 PoolManager (singleton). */
   poolManager: Address
+  /** Uniswap v4 PositionManager (posm) — ERC721 LP position NFTs. */
+  positionManager: Address
   /** Canonical Permit2 (same address on every chain). */
   permit2: Address
 }
@@ -45,6 +47,7 @@ export const UNISWAP_V4_ADDRESSES: Record<number, UniswapV4Addresses> = {
     universalRouter: '0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af',
     v4Quoter: '0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203',
     poolManager: '0x000000000004444c5dc75cB358380D2e3dE08A90',
+    positionManager: '0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e',
     permit2: PERMIT2_ADDRESS,
   },
 }
@@ -74,6 +77,7 @@ export function getUniswapV4Addresses(
     merged.universalRouter === undefined ||
     merged.v4Quoter === undefined ||
     merged.poolManager === undefined ||
+    merged.positionManager === undefined ||
     merged.permit2 === undefined
   ) {
     throw new UnsupportedChainError(chainId)

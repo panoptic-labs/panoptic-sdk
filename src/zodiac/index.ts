@@ -34,6 +34,17 @@ export {
   MAINTENANCE_ROLE_KEY,
 } from './roles/maintenance'
 export { buildRollerRoleSteps, ROLLER_ROLE_KEY } from './roles/roller'
+export {
+  buildSfpmSwapConditions,
+  buildSfpmSwapVenueSteps,
+  buildWithdrawWithPositionsConditions,
+  MULTICALL_SELECTOR,
+  MULTISEND_SELECTOR,
+  sfpmPoolIdPinExtra,
+  WETH_DEPOSIT_SELECTOR,
+  WETH_WITHDRAW_SELECTOR,
+  WITHDRAW_WITH_POSITIONS_SELECTOR,
+} from './roles/sfpmSwap'
 export { buildSizeAdjusterRoleSteps, SIZE_ADJUSTER_ROLE_KEY } from './roles/sizeAdjuster'
 export { rolesV2Abi } from './rolesAbi'
 export {

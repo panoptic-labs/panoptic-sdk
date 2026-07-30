@@ -5,6 +5,7 @@
 
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import type { Address, PublicClient } from 'viem'
+import { zeroAddress } from 'viem'
 
 import { estimateBlockNumbers, resolveBlockNumbers } from '../../clients/blocksByTimestamp'
 import { PanopticValidationError } from '../../errors'
@@ -877,10 +878,14 @@ export function useEstimateCollateralRequired(
   options?: QueryOptions & { atTick?: bigint },
 ) {
   const ctx = usePanopticContext()
-  const resolvedAccount = account ?? ctx.account
+  // `getRequiredBase` is account-agnostic (it evaluates a synthetic position under
+  // `address(0xdead)`), so the estimate must NOT be gated on a connected account.
+  // Gating it here was what made a disconnected / view-only user fall through to the
+  // UI's buggy client-side per-leg math instead of this on-chain number.
+  const resolvedAccount = account ?? ctx.account ?? zeroAddress
   return useQuery({
     queryKey: [
-      ...queryKeys.collateralEstimate(ctx.chainId, poolAddress, resolvedAccount!, tokenId),
+      ...queryKeys.collateralEstimate(ctx.chainId, poolAddress, resolvedAccount, tokenId),
       getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
       positionSize,
       queryAddress,
@@ -890,13 +895,13 @@ export function useEstimateCollateralRequired(
       estimateCollateralRequired({
         client: ctx.publicClient,
         poolAddress,
-        account: resolvedAccount!,
+        account: resolvedAccount,
         tokenId,
         positionSize,
         queryAddress,
         atTick: options?.atTick,
       }),
-    enabled: (options?.enabled ?? true) && !!resolvedAccount,
+    enabled: options?.enabled ?? true,
     refetchInterval: options?.refetchInterval,
     staleTime: options?.staleTime,
     gcTime: options?.gcTime,

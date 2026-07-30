@@ -392,6 +392,11 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
         {
           address: metadata.riskEngineAddress,
           abi: riskEngineAbi,
+          functionName: 'PREMIUM_FEE',
+        },
+        {
+          address: metadata.riskEngineAddress,
+          abi: riskEngineAbi,
           functionName: 'VEGOID',
         },
         {
@@ -409,8 +414,8 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
     params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
   ])
 
-  // Extract results — first 13 are core (must succeed), last is liquidity (may fail)
-  const coreResults = dynamicResults.slice(0, 13)
+  // Extract results — first 14 are core (must succeed), last is liquidity (may fail)
+  const coreResults = dynamicResults.slice(0, 14)
   if (coreResults.some((r) => r.status !== 'success')) {
     const failed = coreResults.find((r) => r.status !== 'success')
     throw new Error(`Core pool read failed: ${JSON.stringify(failed)}`)
@@ -427,6 +432,7 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
     sellerCollateralRatio,
     maintMarginRate,
     notionalFee,
+    premiumFee,
     vegoid,
     maxSpread,
   ] = coreResults.map((r) => r.result) as [
@@ -441,10 +447,11 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
     bigint, // sellerCollateralRatio
     bigint, // maintMarginRate
     bigint, // notionalFee
+    bigint, // premiumFee
     bigint, // vegoid
     bigint, // maxSpread
   ]
-  const liquidityResult = dynamicResults[13]
+  const liquidityResult = dynamicResults[14]
   const uniswapPoolLiquidity =
     liquidityResult?.status === 'success' ? BigInt(liquidityResult.result as bigint) : 0n
 
@@ -499,6 +506,7 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
     collateralRequirement: sellerCollateralRatio,
     maintenanceMargin: maintMarginRate,
     commissionRate: BigInt(notionalFee),
+    premiumFeeRate: BigInt(premiumFee),
     vegoid: BigInt(vegoid),
     maxSpread: BigInt(maxSpread),
   }

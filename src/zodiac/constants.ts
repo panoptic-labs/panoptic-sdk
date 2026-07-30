@@ -51,6 +51,7 @@ export const Operator = {
 export const CANONICAL_ADAPTERS = {
   RollerCondition: '0x7b2402F7Ff7fFe0970D383dE1C6AF8892B87523a',
   SizeAdjusterCondition: '0x72494B2A0C5a69Dd0154386c2F4Af0b38a24C400',
+  SfpmSwapCondition: '0x9321DdE7242dFcFac61D1b2d357e88FC4302eAF7',
 } as const
 
 export const ExecutionOptions = {

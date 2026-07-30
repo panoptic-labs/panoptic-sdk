@@ -1,22 +1,17 @@
 import type { Address, PublicClient } from 'viem'
 
-import type { BatchDispatchArgs } from '../batch/types'
 import { NotEnoughTokensError, PanopticError, parsePanopticError } from '../errors'
 import { getPool } from '../reads/pool'
 import type { BlockMeta, DispatchSimulation, SimulationResult, TokenFlow } from '../types'
 import { MAX_TICK, MIN_TICK } from '../utils/constants'
 import { buildUniqueCredit } from '../writes/loanUtils'
+import { type DispatchIntent, buildCreditWrappedDispatch } from './creditWrap'
 import { simulateDispatch } from './simulateDispatch'
 
 const BPS_DENOMINATOR = 10_000n
 const MAX_RECOVERY_QUOTE_ATTEMPTS = 8
 
-/**
- * Pre-encoded `dispatch()` arguments the recovery wraps.
- *
- * Alias of {@link BatchDispatchArgs} — the two are the same concept.
- */
-export type DispatchIntent = BatchDispatchArgs
+export type { DispatchIntent }
 
 export interface TokenShortfallRecoveryQuoteParams {
   client: PublicClient
@@ -114,20 +109,7 @@ export interface BuildTokenShortfallRecoveryDispatchParams {
 export function buildTokenShortfallRecoveryDispatch(
   params: BuildTokenShortfallRecoveryDispatchParams,
 ): DispatchIntent {
-  const { dispatch, creditTokenId, creditPositionSize, tickLimitLow, tickLimitHigh } = params
-  const low = tickLimitLow <= tickLimitHigh ? tickLimitLow : tickLimitHigh
-  const high = tickLimitLow <= tickLimitHigh ? tickLimitHigh : tickLimitLow
-  const mintLimits = [high, low, 0n] as const
-  const burnLimits = [low, high, 0n] as const
-
-  return {
-    positionIdList: [creditTokenId, ...dispatch.positionIdList, creditTokenId],
-    finalPositionIdList: [...dispatch.finalPositionIdList],
-    positionSizes: [creditPositionSize, ...dispatch.positionSizes, 0n],
-    tickAndSpreadLimits: [mintLimits, ...dispatch.tickAndSpreadLimits, burnLimits],
-    usePremiaAsCollateral: dispatch.usePremiaAsCollateral,
-    builderCode: dispatch.builderCode,
-  }
+  return buildCreditWrappedDispatch({ ...params, direction: 'exact-out', placement: 'straddle' })
 }
 
 /**

@@ -16,6 +16,8 @@ import { UnsupportedChainError } from '../v4/router/errors'
 export interface UniswapV3Addresses {
   /** Uniswap v3 QuoterV2 — `quoteExactInputSingle` (revert/staticcall-based). */
   quoterV2: Address
+  /** Uniswap v3 NonfungiblePositionManager — ERC721 LP position NFTs. */
+  nonfungiblePositionManager: Address
 }
 
 /**
@@ -24,7 +26,10 @@ export interface UniswapV3Addresses {
  */
 export const UNISWAP_V3_ADDRESSES: Record<number, UniswapV3Addresses> = {
   // Ethereum mainnet
-  1: { quoterV2: '0x61fFE014bA17989E743c5F6cB21bF9697530B21e' },
+  1: {
+    quoterV2: '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
+    nonfungiblePositionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88',
+  },
 }
 
 /**
@@ -40,7 +45,7 @@ export function getUniswapV3Addresses(
   const id = Number(chainId)
   const base = UNISWAP_V3_ADDRESSES[id]
   const merged = { ...base, ...overrides }
-  if (!merged.quoterV2) {
+  if (!merged.quoterV2 || !merged.nonfungiblePositionManager) {
     throw new UnsupportedChainError(BigInt(id))
   }
   return merged as UniswapV3Addresses

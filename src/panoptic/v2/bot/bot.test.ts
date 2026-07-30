@@ -69,6 +69,7 @@ function createPool(healthStatus: 'active' | 'low_liquidity' | 'paused' = 'activ
       collateralRequirement: 10000n,
       maintenanceMargin: 5000n,
       commissionRate: 10n,
+      premiumFeeRate: 250n,
       vegoid: 4n,
       maxSpread: 9000n,
     },

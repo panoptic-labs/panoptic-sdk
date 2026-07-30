@@ -22,6 +22,15 @@ import {
   MAINTENANCE_ROLE_KEY,
 } from './roles/maintenance'
 import { ROLLER_ROLE_KEY } from './roles/roller'
+import {
+  buildSfpmSwapConditions,
+  buildSfpmSwapVenueSteps,
+  buildWithdrawWithPositionsConditions,
+  MULTICALL_SELECTOR,
+  MULTISEND_SELECTOR,
+  sfpmPoolIdPinExtra,
+  WITHDRAW_WITH_POSITIONS_SELECTOR,
+} from './roles/sfpmSwap'
 import { SIZE_ADJUSTER_ROLE_KEY } from './roles/sizeAdjuster'
 import { loanWidthFieldsMask, optionRatioFieldsMask, strikeFieldsMask } from './tokenIdMask'
 
@@ -259,5 +268,129 @@ describe('tokenId masks — parity with contracts/lib/TokenIdMasks.sol goldens',
     expect(strikeFieldsMask() & optionRatioFieldsMask()).toBe(0n)
     expect(strikeFieldsMask() & loanWidthFieldsMask()).toBe(0n)
     expect(optionRatioFieldsMask() & loanWidthFieldsMask()).toBe(0n)
+  })
+})
+
+describe('sfpm swap venue role', () => {
+  const SFPM = '0x5555555555555555555555555555555555555555' as const
+  const CT0 = '0x6666666666666666666666666666666666666666' as const
+  const CT1 = '0x7777777777777777777777777777777777777777' as const
+  const MULTISEND = '0x8888888888888888888888888888888888888888' as const
+  const UNWRAPPER = '0x9999999999999999999999999999999999999999' as const
+  const POOL_ID = 0xa0488e6a0c2ddn
+  const BOT_ROLE = roleKey('loan-hedger')
+
+  it('pins the poolId in the low 64 bits of a right-aligned uint96 extra', () => {
+    expect(sfpmPoolIdPinExtra(POOL_ID)).toBe(`0x${POOL_ID.toString(16).padStart(24, '0')}`)
+  })
+
+  it('rejects a zero or oversized poolId pin', () => {
+    expect(() => sfpmPoolIdPinExtra(0n)).toThrow()
+    expect(() => sfpmPoolIdPinExtra(1n << 64n)).toThrow()
+  })
+
+  it('builds an integrity-valid Custom tree over multicall arg0', () => {
+    const tree = buildSfpmSwapConditions(ADAPTER, POOL_ID)
+    assertIntegrity(tree)
+    expect(tree[1].operator).toBe(Operator.Custom)
+    expect(tree[1].paramType).toBe(ParameterType.Array)
+    expect(tree[1].compValue).toBe(customCompValue(ADAPTER, sfpmPoolIdPinExtra(POOL_ID)))
+    // array element child (bytes → Dynamic)
+    expect(tree[2].parent).toBe(1)
+    expect(tree[2].paramType).toBe(ParameterType.Dynamic)
+  })
+
+  it('scopes the solvency-aware withdrawal to the Safe and false premia mode', () => {
+    const tree = buildWithdrawWithPositionsConditions(SAFE)
+    assertIntegrity(tree)
+    expect(WITHDRAW_WITH_POSITIONS_SELECTOR).toBe('0xe51161ba')
+    expect(tree[2].compValue).toBe(addressEqualCompValue(SAFE))
+    expect(tree[3].compValue).toBe(addressEqualCompValue(SAFE))
+    expect(tree[5]).toEqual({
+      parent: 0,
+      paramType: ParameterType.Static,
+      operator: Operator.EqualTo,
+      compValue: `0x${'0'.repeat(64)}`,
+    })
+  })
+
+  it('emits unwrapper + SFPM scope + both CT scopes under the existing role key', () => {
+    const steps = buildSfpmSwapVenueSteps({
+      roleKey: BOT_ROLE,
+      safe: SAFE,
+      sfpm: SFPM,
+      collateralTracker0: CT0,
+      collateralTracker1: CT1,
+      adapter: ADAPTER,
+      poolIdPin: POOL_ID,
+      multiSendCallOnly: MULTISEND,
+      multiSendUnwrapper: UNWRAPPER,
+    })
+    expect(steps.map((s) => s.functionName)).toEqual([
+      'setTransactionUnwrapper',
+      'scopeTarget', // SFPM
+      'scopeFunction', // SFPM.multicall
+      'scopeTarget', // CT0
+      'scopeFunction', // CT0.withdraw
+      'scopeFunction', // CT0.deposit
+      'scopeTarget', // CT1
+      'scopeFunction', // CT1.withdraw
+      'scopeFunction', // CT1.deposit
+    ])
+    // no assignRoles: extends the existing bot role
+    expect(steps.some((s) => s.functionName === 'assignRoles')).toBe(false)
+    // no WETH scoping for a two-ERC20 pool
+    expect(steps.some((s) => s.functionName === 'allowFunction')).toBe(false)
+    // unwrapper registered for MultiSend.multiSend
+    expect(steps[0].args).toEqual([MULTISEND, MULTISEND_SELECTOR, UNWRAPPER])
+    // SFPM scopeFunction targets multicall under the bot role
+    expect(steps[2].args[0]).toBe(BOT_ROLE)
+    expect(steps[2].args[1]).toBe(SFPM)
+    expect(steps[2].args[2]).toBe(MULTICALL_SELECTOR)
+    expect(steps[4].args[2]).toBe(WITHDRAW_WITH_POSITIONS_SELECTOR)
+    expect(steps[7].args[2]).toBe(WITHDRAW_WITH_POSITIONS_SELECTOR)
+  })
+
+  it('adds WETH wrap/unwrap scopes when a collateral asset is native ETH', () => {
+    const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const
+    const steps = buildSfpmSwapVenueSteps({
+      roleKey: BOT_ROLE,
+      safe: SAFE,
+      sfpm: SFPM,
+      collateralTracker0: CT0,
+      collateralTracker1: CT1,
+      adapter: ADAPTER,
+      poolIdPin: POOL_ID,
+      multiSendCallOnly: MULTISEND,
+      multiSendUnwrapper: UNWRAPPER,
+      nativeCollateral: 'token1', // WETH side is native ETH collateral
+      weth9: WETH,
+    })
+    const allows = steps.filter((s) => s.functionName === 'allowFunction')
+    expect(allows).toHaveLength(2) // WETH deposit + withdraw
+    expect(steps.some((s) => s.name === 'scopeTarget(WETH9)')).toBe(true)
+    // the native side's CT deposit must allow value (ExecutionOptions.Send = 1)
+    const ct1Deposit = steps.find((s) => s.name.includes('CT1.deposit'))
+    expect(ct1Deposit?.args[4]).toBe(ExecutionOptions.Send)
+    // the ERC20 side's CT deposit does not
+    const ct0Deposit = steps.find((s) => s.name.includes('CT0.deposit'))
+    expect(ct0Deposit?.args[4]).toBe(ExecutionOptions.None)
+  })
+
+  it('rejects native collateral without a WETH address', () => {
+    expect(() =>
+      buildSfpmSwapVenueSteps({
+        roleKey: BOT_ROLE,
+        safe: SAFE,
+        sfpm: SFPM,
+        collateralTracker0: CT0,
+        collateralTracker1: CT1,
+        adapter: ADAPTER,
+        poolIdPin: POOL_ID,
+        multiSendCallOnly: MULTISEND,
+        multiSendUnwrapper: UNWRAPPER,
+        nativeCollateral: 'token1',
+      }),
+    ).toThrow()
   })
 })

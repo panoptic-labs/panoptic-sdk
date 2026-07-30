@@ -325,6 +325,17 @@ export {
   resolveUniswapV4PoolKey,
 } from './uniswapPool'
 
+// Direct Uniswap V3/V4 LP position reads (no Panoptic deployment required)
+export {
+  type GetUniswapV3LpPositionStateParams,
+  type GetUniswapV4LpPositionStateParams,
+  type UniswapLpPositionState,
+  type UniswapV3LpPositionState,
+  feesFromFeeGrowthDelta,
+  getUniswapV3LpPositionState,
+  getUniswapV4LpPositionState,
+} from './uniswapLpPosition'
+
 // Price history (historical tick + sqrtPriceX96)
 export {
   type GetPriceHistoryParams,

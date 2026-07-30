@@ -211,6 +211,37 @@ export {
 } from './tokenId'
 
 // ============================================================================
+// SFPM Off-Venue Swap
+// ============================================================================
+export type {
+  EnsureSfpmV3PoolInitializedParams,
+  EnsureSfpmV3PoolInitializedResult,
+  FetchSfpmV3PoolIdParams,
+  QuoteSfpmSwapParams,
+  SfpmSwapCalldata,
+  SfpmSwapKind,
+  SfpmSwapPlan,
+  SfpmSwapPlanParams,
+  SfpmSwapQuote,
+} from './sfpmSwap'
+export {
+  buildSfpmSwapCalldata,
+  buildSfpmSwapPlan,
+  ensureSfpmV3PoolInitialized,
+  fetchSfpmV3PoolId,
+  quoteSfpmSwap,
+  slippageBpsToTickDistance,
+} from './sfpmSwap'
+// v3 QuoterV2 exact-in quote — used by the hedger to price the off-venue swap
+// without the Safe holding the input token (unlike quoteSfpmSwap, which simulates
+// the SFPM multicall and needs the caller funded).
+export {
+  type QuoteV3ExactInParams,
+  type V3ExactInQuote,
+  quoteV3ExactIn,
+} from '../../uniswap/v3/router'
+
+// ============================================================================
 // Read Functions
 // ============================================================================
 export type {
@@ -487,6 +518,19 @@ export {
   resolveUniswapV4PoolKey,
 } from './reads'
 
+// Direct Uniswap V3/V4 LP position reads (no Panoptic deployment required)
+export type {
+  GetUniswapV3LpPositionStateParams,
+  GetUniswapV4LpPositionStateParams,
+  UniswapLpPositionState,
+  UniswapV3LpPositionState,
+} from './reads'
+export {
+  feesFromFeeGrowthDelta,
+  getUniswapV3LpPositionState,
+  getUniswapV4LpPositionState,
+} from './reads'
+
 // ============================================================================
 // Position Tracking & Sync
 // ============================================================================
@@ -707,8 +751,15 @@ export {
 // Simulation Functions
 // ============================================================================
 export type {
+  BuildCreditWrappedDispatchParams,
   BuildTokenShortfallRecoveryDispatchParams,
+  CreditWrapDirection,
+  CreditWrapPlacement,
   DispatchIntent,
+  OneTokenFlowQuote,
+  OneTokenFlowQuoteParams,
+  OneTokenFlowResult,
+  OneTokenFlowUnavailableReason,
   SFPMSimulationResult,
   SimulateBatchDispatchParams,
   SimulateBatchDispatchResult,
@@ -730,10 +781,13 @@ export type {
   TokenShortfallRecoveryUnavailableReason,
 } from './simulations'
 export {
+  buildCreditWrappedDispatch,
   buildTokenShortfallRecoveryDispatch,
+  DEFAULT_MIN_SWAP_RATIO_BPS,
   encodePoolKeyBytes,
   encodeV3PoolKeyBytes,
   getNotEnoughTokensError,
+  quoteOneTokenFlow,
   quoteTokenShortfallRecovery,
   simulateBatchDispatch,
   simulateClosePosition,
