@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { MAINNET_CHAIN_ID } from '../chainDeployments'
+import {
+  MAINNET_CHAIN_ID,
+  MAINNET_ETH_USDC_5BPS_V3_PANOPTIC_POOL_ADDRESSES,
+} from '../chainDeployments'
 import { getVaultPoolInfos } from '../utils/vaultManagerInput'
 import { getHypoVaultConfigForVault } from './vaultToConfig'
 
@@ -44,13 +47,24 @@ describe('getHypoVaultConfigForVault', () => {
   })
 
   it('resolves mainnet production and legacy HypoVault pool infos', () => {
-    expect(getVaultPoolInfos(MAINNET_PRODUCTION_WETH_VAULT, MAINNET_CHAIN_ID)).toHaveLength(1)
+    const productionWethPoolInfos = getVaultPoolInfos(
+      MAINNET_PRODUCTION_WETH_VAULT,
+      MAINNET_CHAIN_ID,
+    )
+    const mainnetV3Pool = MAINNET_ETH_USDC_5BPS_V3_PANOPTIC_POOL_ADDRESSES
+    if (mainnetV3Pool === undefined) {
+      throw new Error('Missing canonical mainnet ETH/USDC 5bps v3 pool')
+    }
+    expect(productionWethPoolInfos).toHaveLength(2)
+    expect(productionWethPoolInfos.map((poolInfo) => poolInfo.pool.toLowerCase())).toContain(
+      mainnetV3Pool.panopticPool.toLowerCase(),
+    )
     expect(getVaultPoolInfos(MAINNET_LEGACY_WETH_VAULT, MAINNET_CHAIN_ID)).toHaveLength(1)
     const productionUsdcPoolInfos = getVaultPoolInfos(
       MAINNET_PRODUCTION_USDC_VAULT,
       MAINNET_CHAIN_ID,
     )
-    expect(productionUsdcPoolInfos).toHaveLength(2)
+    expect(productionUsdcPoolInfos).toHaveLength(3)
     expect(productionUsdcPoolInfos.map((poolInfo) => poolInfo.pool.toLowerCase())).toContain(
       MAINNET_SPCX_USDC_PANOPTIC_POOL.toLowerCase(),
     )

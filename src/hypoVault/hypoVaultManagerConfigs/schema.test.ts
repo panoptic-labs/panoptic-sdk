@@ -205,10 +205,10 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     expect(WethPlpVaultMainnetProdConfig.vaultCapInUnderlying).toBe(50_000_000_000_000_000_000n)
     expect(WethPlpVaultMainnetProdConfig.vaultCapInShares).toBe(50_000_000_000_000_000_000_000_000n)
     expect(MainnetWETHPLPStrategistLeaves.metadata.ManageRoot).toBe(
-      '0x14c4c96cc3730452ce71a447bdde6132f81acec862098a9ddd5e086805046a07',
+      '0x4d2fb008ac93d2a363881e31e65f31bacbefef39efb44cf2f95b65cf49c65c7d',
     )
     expect(MainnetUSDCPLPStrategistLeaves.metadata.ManageRoot).toBe(
-      '0xed7d4ae055fd62c6edc93bd676456748f52fe4f4b78f60ab3ef6394bacc31b5d',
+      '0x3223880461fe3e61dc96d9d81579ae943507ec95f17cba100b462cec53967e14',
     )
     expect(MainnetWETHPLPVaultPoolInfos.vaultAddress).toBe(deployment.hypovault.vaults.wethPlpVault)
     expect(MainnetUSDCPLPVaultPoolInfos.vaultAddress).toBe(deployment.hypovault.vaults.usdcPlpVault)
@@ -221,6 +221,18 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     expect(MainnetUSDCPLPVaultPoolInfos.poolInfos[1]?.pool).toBe(
       '0x0f34e6fCda264349Db10d445BD95f529cbe88090',
     )
+    expect(MainnetWETHPLPVaultPoolInfos.poolInfos[1]).toMatchObject({
+      pool: '0x00000000009C7B687e833559e34503f64d7ed7c4',
+      token0: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+      token1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+      maxPriceDeviation: 100,
+    })
+    expect(MainnetUSDCPLPVaultPoolInfos.poolInfos[2]).toMatchObject({
+      pool: '0x00000000009C7B687e833559e34503f64d7ed7c4',
+      token0: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+      token1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+      maxPriceDeviation: 100,
+    })
   })
 
   it('resolves Ethereum mainnet legacy configs to beta vault and pool artifacts', () => {

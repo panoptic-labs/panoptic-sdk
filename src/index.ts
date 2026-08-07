@@ -86,7 +86,9 @@ export {
   isSupportedChain,
   MAINNET_CHAIN_ID,
   MAINNET_DEPLOYMENT,
+  MAINNET_ETH_USDC_5BPS_V3_PANOPTIC_POOL_ADDRESSES,
   MAINNET_PANOPTIC_V2_ADDRESSES,
+  MAINNET_RISK_ENGINES,
   requireChainDeployment,
   SEPOLIA_CHAIN_ID,
   SEPOLIA_DEPLOYMENT,
@@ -121,14 +123,22 @@ export { BaseWETHPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifac
 export { BaseWETHPLPVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts/BaseWETHPLPVaultPoolInfos'
 export { MainnetLegacyUSDCPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/MainnetLegacyUSDCPLPStrategistLeaves'
 export { MainnetLegacyWETHPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/MainnetLegacyWETHPLPStrategistLeaves'
-export { MainnetUSDCPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/MainnetUSDCPLPStrategistLeaves'
+export {
+  MainnetUSDCPLPPreviousStrategistLeaves,
+  MainnetUSDCPLPStrategistLeaves,
+} from './hypoVault/hypoVaultManagerArtifacts/MainnetUSDCPLPStrategistLeaves'
 export {
   MainnetUSDCPLPLegacyVaultPoolInfos,
+  MainnetUSDCPLPPreviousVaultPoolInfos,
   MainnetUSDCPLPVaultPoolInfos,
 } from './hypoVault/hypoVaultManagerArtifacts/MainnetUSDCPLPVaultPoolInfos'
-export { MainnetWETHPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/MainnetWETHPLPStrategistLeaves'
+export {
+  MainnetWETHPLPPreviousStrategistLeaves,
+  MainnetWETHPLPStrategistLeaves,
+} from './hypoVault/hypoVaultManagerArtifacts/MainnetWETHPLPStrategistLeaves'
 export {
   MainnetWETHPLPLegacyVaultPoolInfos,
+  MainnetWETHPLPPreviousVaultPoolInfos,
   MainnetWETHPLPVaultPoolInfos,
 } from './hypoVault/hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
 export { SepoliaUSDCPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/SepoliaUSDCPLPStrategistLeaves'
@@ -152,6 +162,12 @@ export {
 export { getHypoVaultConfigForVault } from './hypoVault/hypoVaultManagerConfigs/vaultToConfig'
 export { encodeFulfillDepositsFunctionData } from './hypoVault/hypoVaultManagerWithMerkleVerification/fulfillDeposits'
 export { encodeFulfillWithdrawalsFunctionData } from './hypoVault/hypoVaultManagerWithMerkleVerification/fulfillWithdrawals'
+export {
+  type MainnetV3AuthorizationArtifacts,
+  type MainnetV3AuthorizationVersion,
+  getMainnetV3AuthorizationGenerations,
+  resolveMainnetV3AuthorizationArtifacts,
+} from './hypoVault/mainnetV3Authorization'
 export { useRequestDeposit } from './hypoVault/requestDeposit/hooks/use-request-deposit'
 export {
   encodeRequestDepositFunctionData,
@@ -236,6 +252,7 @@ export {
   type StrategistLeavesArtifact,
   buildManageArgs,
   findLeaf,
+  findLeafForTarget,
 } from './hypoVault/utils/buildManageArgs'
 export {
   type BuildManagerInputParams,

@@ -1,257 +1,231 @@
-export const MainnetWETHPLPStrategistLeaves = {
-  metadata: {
-    AccountantAddress: '0x65aA902AE3135658587FFC36ED51B61c927114e1',
-    BoringVaultAddress: '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92',
-    DecoderAndSanitizerAddress: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
-    DigestComposition: [
-      'Bytes20(DECODER_AND_SANITIZER_ADDRESS)',
-      'Bytes20(TARGET_ADDRESS)',
-      'Bytes1(CAN_SEND_VALUE)',
-      'Bytes4(TARGET_FUNCTION_SELECTOR)',
-      'Bytes{N*20}(ADDRESS_ARGUMENT_0,...,ADDRESS_ARGUMENT_N)',
-    ],
-    LeafCount: 10,
-    ManageRoot: '0x14c4c96cc3730452ce71a447bdde6132f81acec862098a9ddd5e086805046a07',
-    ManagerAddress: '0xB6Fc48e658C9B1a7dbdFA51A5E153ab60BB2e04d',
-    TreeCapacity: 16,
+import { MAINNET_CHAIN_ID, requireChainDeployment } from '../chainDeployments'
+import { createStrategistLeavesArtifact } from './createStrategistLeavesArtifact'
+
+const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
+const NEW_POOL_DEPLOYMENT = MAINNET_DEPLOYMENT.panoptic.additionalPools?.ethUsdc5bpsV3
+if (NEW_POOL_DEPLOYMENT === undefined) {
+  throw new Error('Missing mainnet ETH/USDC 5bps v3 Panoptic pool deployment')
+}
+
+const VAULT = MAINNET_DEPLOYMENT.hypovault.vaults.wethPlpVault
+const DECODER = MAINNET_DEPLOYMENT.hypovault.core.collateralTrackerDecoderAndSanitizer
+const CURRENT_POOL = MAINNET_DEPLOYMENT.panoptic.pool.panopticPool
+const CURRENT_PO_ETH = MAINNET_DEPLOYMENT.panoptic.pool.collateralTracker0
+const CURRENT_PO_USDC = MAINNET_DEPLOYMENT.panoptic.pool.collateralTracker1
+const NEW_POOL = NEW_POOL_DEPLOYMENT.panopticPool
+const NEW_PO_USDC = NEW_POOL_DEPLOYMENT.collateralTracker0
+const NEW_PO_WETH = NEW_POOL_DEPLOYMENT.collateralTracker1
+const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
+const DISPATCH_SIGNATURE = 'dispatch(uint256[],uint256[],uint128[],int24[3][],bool,uint256)'
+
+export const MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS = [
+  {
+    description: 'Deposit ETH for poETH (payable)',
+    target: CURRENT_PO_ETH,
+    functionSignature: 'deposit(uint256,address)',
+    addressArguments: [VAULT],
+    canSendValue: true,
   },
-  leafs: [
-    {
-      AddressArguments: ['0xd4e2c720a760049cc4151bcf61e3a9348db9cd92'],
-      CanSendValue: true,
-      DecoderAndSanitizerAddress: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
-      Description: 'Deposit ETH for poETH (payable)',
-      FunctionSelector: '0x6e553f65',
-      FunctionSignature: 'deposit(uint256,address)',
-      LeafDigest: '0xcde717428f55a23f1c5590ae350e411a96f376207e4cd74f2ad261072915782c',
-      PackedArgumentAddresses: '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92',
-      TargetAddress: '0x1e46b0289B7E0F710E2Db8Ab87800dd782D624f7',
-    },
-    {
-      AddressArguments: [
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92',
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92',
-      ],
-      CanSendValue: false,
-      DecoderAndSanitizerAddress: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
-      Description: 'Withdraw ETH from poETH',
-      FunctionSelector: '0xb460af94',
-      FunctionSignature: 'withdraw(uint256,address,address)',
-      LeafDigest: '0xcebfac0106f9d33ca5766a2f6054eeb9df218af39b9f87a446a54674481caa4f',
-      PackedArgumentAddresses:
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92d4e2c720a760049cc4151bcf61e3a9348db9cd92',
-      TargetAddress: '0x1e46b0289B7E0F710E2Db8Ab87800dd782D624f7',
-    },
-    {
-      AddressArguments: [
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92',
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92',
-      ],
-      CanSendValue: false,
-      DecoderAndSanitizerAddress: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
-      Description: 'Withdraw ETH from poETH (with open positions)',
-      FunctionSelector: '0xe51161ba',
-      FunctionSignature: 'withdraw(uint256,address,address,uint256[],bool)',
-      LeafDigest: '0x6eacf89fb24e20afd26b47bc704571a6ae14675623678caf767ff4167b989b94',
-      PackedArgumentAddresses:
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92d4e2c720a760049cc4151bcf61e3a9348db9cd92',
-      TargetAddress: '0x1e46b0289B7E0F710E2Db8Ab87800dd782D624f7',
-    },
-    {
-      AddressArguments: ['0xd4e2c720a760049cc4151bcf61e3a9348db9cd92'],
-      CanSendValue: true,
-      DecoderAndSanitizerAddress: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
-      Description: 'Mint poETH using ETH (payable)',
-      FunctionSelector: '0x94bf804d',
-      FunctionSignature: 'mint(uint256,address)',
-      LeafDigest: '0x2393ae33b276888f3402cd9be5ac50c99f6c093ab26d76309fcde84f32ac5779',
-      PackedArgumentAddresses: '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92',
-      TargetAddress: '0x1e46b0289B7E0F710E2Db8Ab87800dd782D624f7',
-    },
-    {
-      AddressArguments: [
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92',
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92',
-      ],
-      CanSendValue: false,
-      DecoderAndSanitizerAddress: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
-      Description: 'Redeem poETH for ETH',
-      FunctionSelector: '0xba087652',
-      FunctionSignature: 'redeem(uint256,address,address)',
-      LeafDigest: '0x7560d3271ed5c3e12cf98e16f3e6810c35a9da7ade8642ce4f4047012f768ae4',
-      PackedArgumentAddresses:
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92d4e2c720a760049cc4151bcf61e3a9348db9cd92',
-      TargetAddress: '0x1e46b0289B7E0F710E2Db8Ab87800dd782D624f7',
-    },
-    {
-      AddressArguments: [],
-      CanSendValue: false,
-      DecoderAndSanitizerAddress: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
-      Description: 'Dispatch mint/burn options on PanopticPool',
-      FunctionSelector: '0xc25813aa',
-      FunctionSignature: 'dispatch(uint256[],uint256[],uint128[],int24[3][],bool,uint256)',
-      LeafDigest: '0xf5cc741985c1ce6b1af02be04696bd5944097198abf5ce09945a956143b14e6d',
-      PackedArgumentAddresses: '0x',
-      TargetAddress: '0x00000000563b70d704f4c6675a5f6ac989fbae13',
-    },
-    {
-      AddressArguments: [],
-      CanSendValue: true,
-      DecoderAndSanitizerAddress: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
-      Description: 'Wrap ETH to WETH',
-      FunctionSelector: '0xd0e30db0',
-      FunctionSignature: 'deposit()',
-      LeafDigest: '0x89484d127bf05d2f4fcc56181335b8d87023e41ccc81c042e9f922f578f1471b',
-      PackedArgumentAddresses: '0x',
-      TargetAddress: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-    },
-    {
-      AddressArguments: [],
-      CanSendValue: false,
-      DecoderAndSanitizerAddress: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
-      Description: 'Unwrap WETH to ETH',
-      FunctionSelector: '0x2e1a7d4d',
-      FunctionSignature: 'withdraw(uint256)',
-      LeafDigest: '0x7f94c593f64614a4739e3005bc02e9db203ded2796c3104cc7609ecbc89bc240',
-      PackedArgumentAddresses: '0x',
-      TargetAddress: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-    },
-    {
-      AddressArguments: [
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92',
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92',
-      ],
-      CanSendValue: false,
-      DecoderAndSanitizerAddress: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
-      Description: 'Withdraw USDC from poUSDC',
-      FunctionSelector: '0xb460af94',
-      FunctionSignature: 'withdraw(uint256,address,address)',
-      LeafDigest: '0xa7b676c12e394da66e124d4611ddf107a1267f476fab0b3cbc3dc885a8e5a77c',
-      PackedArgumentAddresses:
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92d4e2c720a760049cc4151bcf61e3a9348db9cd92',
-      TargetAddress: '0x12bF31955522BAC337D93e1bC0a39F68D8BDa216',
-    },
-    {
-      AddressArguments: [
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92',
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92',
-      ],
-      CanSendValue: false,
-      DecoderAndSanitizerAddress: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
-      Description: 'Withdraw USDC from poUSDC (with open positions)',
-      FunctionSelector: '0xe51161ba',
-      FunctionSignature: 'withdraw(uint256,address,address,uint256[],bool)',
-      LeafDigest: '0x219732b5a811c3167d72323963327d5ea266e27575caecab2d1f35746f30a2f2',
-      PackedArgumentAddresses:
-        '0xd4e2c720a760049cc4151bcf61e3a9348db9cd92d4e2c720a760049cc4151bcf61e3a9348db9cd92',
-      TargetAddress: '0x12bF31955522BAC337D93e1bC0a39F68D8BDa216',
-    },
-    {
-      AddressArguments: [],
-      CanSendValue: false,
-      DecoderAndSanitizerAddress: '0x0000000000000000000000000000000000000000',
-      Description: '',
-      FunctionSelector: '0xc5d24601',
-      FunctionSignature: '',
-      LeafDigest: '0xa7a0fd846665d92e66be6155c6221b3acd7145ca7c4e4b67a594e4c516969400',
-      PackedArgumentAddresses: '0x',
-      TargetAddress: '0x0000000000000000000000000000000000000000',
-    },
-    {
-      AddressArguments: [],
-      CanSendValue: false,
-      DecoderAndSanitizerAddress: '0x0000000000000000000000000000000000000000',
-      Description: '',
-      FunctionSelector: '0xc5d24601',
-      FunctionSignature: '',
-      LeafDigest: '0xa7a0fd846665d92e66be6155c6221b3acd7145ca7c4e4b67a594e4c516969400',
-      PackedArgumentAddresses: '0x',
-      TargetAddress: '0x0000000000000000000000000000000000000000',
-    },
-    {
-      AddressArguments: [],
-      CanSendValue: false,
-      DecoderAndSanitizerAddress: '0x0000000000000000000000000000000000000000',
-      Description: '',
-      FunctionSelector: '0xc5d24601',
-      FunctionSignature: '',
-      LeafDigest: '0xa7a0fd846665d92e66be6155c6221b3acd7145ca7c4e4b67a594e4c516969400',
-      PackedArgumentAddresses: '0x',
-      TargetAddress: '0x0000000000000000000000000000000000000000',
-    },
-    {
-      AddressArguments: [],
-      CanSendValue: false,
-      DecoderAndSanitizerAddress: '0x0000000000000000000000000000000000000000',
-      Description: '',
-      FunctionSelector: '0xc5d24601',
-      FunctionSignature: '',
-      LeafDigest: '0xa7a0fd846665d92e66be6155c6221b3acd7145ca7c4e4b67a594e4c516969400',
-      PackedArgumentAddresses: '0x',
-      TargetAddress: '0x0000000000000000000000000000000000000000',
-    },
-    {
-      AddressArguments: [],
-      CanSendValue: false,
-      DecoderAndSanitizerAddress: '0x0000000000000000000000000000000000000000',
-      Description: '',
-      FunctionSelector: '0xc5d24601',
-      FunctionSignature: '',
-      LeafDigest: '0xa7a0fd846665d92e66be6155c6221b3acd7145ca7c4e4b67a594e4c516969400',
-      PackedArgumentAddresses: '0x',
-      TargetAddress: '0x0000000000000000000000000000000000000000',
-    },
-    {
-      AddressArguments: [],
-      CanSendValue: false,
-      DecoderAndSanitizerAddress: '0x0000000000000000000000000000000000000000',
-      Description: '',
-      FunctionSelector: '0xc5d24601',
-      FunctionSignature: '',
-      LeafDigest: '0xa7a0fd846665d92e66be6155c6221b3acd7145ca7c4e4b67a594e4c516969400',
-      PackedArgumentAddresses: '0x',
-      TargetAddress: '0x0000000000000000000000000000000000000000',
-    },
-  ],
-  MerkleTree: {
-    '0': ['0x14c4c96cc3730452ce71a447bdde6132f81acec862098a9ddd5e086805046a07'],
-    '1': [
-      '0xcd0defea21f2f5625ba2d231bce9500ad31a12181821c3e44a9eab8091726ef9',
-      '0xb456d992b88713679d0f26a8212a362b552e0f1b8e8f4730ef9d93260658e6f4',
-    ],
-    '2': [
-      '0xd49b1154605f32b0e47658955ad9aa7f3fe8cd35358ee78a1cd96557e5c3aa4d',
-      '0x6522d66ec4944c055a9004873f1d3eab7c42ec8328cad32a43f7cf5626099576',
-      '0x106e1c4bfe0f35058431f70afe23aa18c131f9ed04c0e9442c15742800410377',
-      '0x849eda7a295b642e5ddaf49a30eec4470cf507efa83b4104c0752d069c7638fe',
-    ],
-    '3': [
-      '0xa6bf0406d4c1a9cc26bd7b8e443b3d933011eeed6f805e7f96c98f8ca7b6570c',
-      '0x1b4e0fc75d960683a9b652c9f9aa14ee22ba29685a3253a96bf65aea93934cee',
-      '0xc13cedfed63f868281097bfc4491f94573cf90c8d65c417aefc7c10ed03f60cf',
-      '0xe684b7c98715395e7d8478eb48587181872712495d41b47760ac5fe24211fc5e',
-      '0x9c00f68592aac90ff74b0f87e48d5a3f0ca6108c0af23ed83cbbdab4ea49ffb6',
-      '0xc5a36f3b7b955966d5ed3135dcc612f978306d73bce3697e230afae57fbaeeba',
-      '0xc5a36f3b7b955966d5ed3135dcc612f978306d73bce3697e230afae57fbaeeba',
-      '0xc5a36f3b7b955966d5ed3135dcc612f978306d73bce3697e230afae57fbaeeba',
-    ],
-    '4': [
-      '0xcde717428f55a23f1c5590ae350e411a96f376207e4cd74f2ad261072915782c',
-      '0xcebfac0106f9d33ca5766a2f6054eeb9df218af39b9f87a446a54674481caa4f',
-      '0x6eacf89fb24e20afd26b47bc704571a6ae14675623678caf767ff4167b989b94',
-      '0x2393ae33b276888f3402cd9be5ac50c99f6c093ab26d76309fcde84f32ac5779',
-      '0x7560d3271ed5c3e12cf98e16f3e6810c35a9da7ade8642ce4f4047012f768ae4',
-      '0xf5cc741985c1ce6b1af02be04696bd5944097198abf5ce09945a956143b14e6d',
-      '0x89484d127bf05d2f4fcc56181335b8d87023e41ccc81c042e9f922f578f1471b',
-      '0x7f94c593f64614a4739e3005bc02e9db203ded2796c3104cc7609ecbc89bc240',
-      '0xa7b676c12e394da66e124d4611ddf107a1267f476fab0b3cbc3dc885a8e5a77c',
-      '0x219732b5a811c3167d72323963327d5ea266e27575caecab2d1f35746f30a2f2',
-      '0xa7a0fd846665d92e66be6155c6221b3acd7145ca7c4e4b67a594e4c516969400',
-      '0xa7a0fd846665d92e66be6155c6221b3acd7145ca7c4e4b67a594e4c516969400',
-      '0xa7a0fd846665d92e66be6155c6221b3acd7145ca7c4e4b67a594e4c516969400',
-      '0xa7a0fd846665d92e66be6155c6221b3acd7145ca7c4e4b67a594e4c516969400',
-      '0xa7a0fd846665d92e66be6155c6221b3acd7145ca7c4e4b67a594e4c516969400',
-      '0xa7a0fd846665d92e66be6155c6221b3acd7145ca7c4e4b67a594e4c516969400',
-    ],
+  {
+    description: 'Withdraw ETH from poETH',
+    target: CURRENT_PO_ETH,
+    functionSignature: 'withdraw(uint256,address,address)',
+    addressArguments: [VAULT, VAULT],
+    canSendValue: false,
   },
+  {
+    description: 'Withdraw ETH from poETH (with open positions)',
+    target: CURRENT_PO_ETH,
+    functionSignature: 'withdraw(uint256,address,address,uint256[],bool)',
+    addressArguments: [VAULT, VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Mint poETH using ETH (payable)',
+    target: CURRENT_PO_ETH,
+    functionSignature: 'mint(uint256,address)',
+    addressArguments: [VAULT],
+    canSendValue: true,
+  },
+  {
+    description: 'Redeem poETH for ETH',
+    target: CURRENT_PO_ETH,
+    functionSignature: 'redeem(uint256,address,address)',
+    addressArguments: [VAULT, VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Dispatch mint/burn options on PanopticPool',
+    target: CURRENT_POOL,
+    functionSignature: DISPATCH_SIGNATURE,
+    addressArguments: [],
+    canSendValue: false,
+  },
+  {
+    description: 'Wrap ETH to WETH',
+    target: WETH,
+    functionSignature: 'deposit()',
+    addressArguments: [],
+    canSendValue: true,
+  },
+  {
+    description: 'Unwrap WETH to ETH',
+    target: WETH,
+    functionSignature: 'withdraw(uint256)',
+    addressArguments: [],
+    canSendValue: false,
+  },
+  {
+    description: 'Withdraw USDC from poUSDC',
+    target: CURRENT_PO_USDC,
+    functionSignature: 'withdraw(uint256,address,address)',
+    addressArguments: [VAULT, VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Withdraw USDC from poUSDC (with open positions)',
+    target: CURRENT_PO_USDC,
+    functionSignature: 'withdraw(uint256,address,address,uint256[],bool)',
+    addressArguments: [VAULT, VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Approve poUSDC to spend USDC',
+    target: USDC,
+    functionSignature: 'approve(address,uint256)',
+    addressArguments: [CURRENT_PO_USDC],
+    canSendValue: false,
+  },
+  {
+    description: 'Deposit USDC for poUSDC',
+    target: CURRENT_PO_USDC,
+    functionSignature: 'deposit(uint256,address)',
+    addressArguments: [VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Mint poUSDC using USDC',
+    target: CURRENT_PO_USDC,
+    functionSignature: 'mint(uint256,address)',
+    addressArguments: [VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Redeem poUSDC for USDC',
+    target: CURRENT_PO_USDC,
+    functionSignature: 'redeem(uint256,address,address)',
+    addressArguments: [VAULT, VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Approve poWETH v3 to spend WETH',
+    target: WETH,
+    functionSignature: 'approve(address,uint256)',
+    addressArguments: [NEW_PO_WETH],
+    canSendValue: false,
+  },
+  {
+    description: 'Deposit WETH for poWETH v3',
+    target: NEW_PO_WETH,
+    functionSignature: 'deposit(uint256,address)',
+    addressArguments: [VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Withdraw WETH from poWETH v3',
+    target: NEW_PO_WETH,
+    functionSignature: 'withdraw(uint256,address,address)',
+    addressArguments: [VAULT, VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Withdraw WETH from poWETH v3 (with open positions)',
+    target: NEW_PO_WETH,
+    functionSignature: 'withdraw(uint256,address,address,uint256[],bool)',
+    addressArguments: [VAULT, VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Mint poWETH v3 using WETH',
+    target: NEW_PO_WETH,
+    functionSignature: 'mint(uint256,address)',
+    addressArguments: [VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Redeem poWETH v3 for WETH',
+    target: NEW_PO_WETH,
+    functionSignature: 'redeem(uint256,address,address)',
+    addressArguments: [VAULT, VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Dispatch mint/burn options on PanopticPool',
+    target: NEW_POOL,
+    functionSignature: DISPATCH_SIGNATURE,
+    addressArguments: [],
+    canSendValue: false,
+  },
+  {
+    description: 'Approve poUSDC v3 to spend USDC',
+    target: USDC,
+    functionSignature: 'approve(address,uint256)',
+    addressArguments: [NEW_PO_USDC],
+    canSendValue: false,
+  },
+  {
+    description: 'Deposit USDC for poUSDC v3',
+    target: NEW_PO_USDC,
+    functionSignature: 'deposit(uint256,address)',
+    addressArguments: [VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Withdraw USDC from poUSDC v3',
+    target: NEW_PO_USDC,
+    functionSignature: 'withdraw(uint256,address,address)',
+    addressArguments: [VAULT, VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Withdraw USDC from poUSDC v3 (with open positions)',
+    target: NEW_PO_USDC,
+    functionSignature: 'withdraw(uint256,address,address,uint256[],bool)',
+    addressArguments: [VAULT, VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Mint poUSDC v3 using USDC',
+    target: NEW_PO_USDC,
+    functionSignature: 'mint(uint256,address)',
+    addressArguments: [VAULT],
+    canSendValue: false,
+  },
+  {
+    description: 'Redeem poUSDC v3 for USDC',
+    target: NEW_PO_USDC,
+    functionSignature: 'redeem(uint256,address,address)',
+    addressArguments: [VAULT, VAULT],
+    canSendValue: false,
+  },
+] as const
+
+const MAINNET_WETH_PLP_STRATEGIST_ARTIFACT_METADATA = {
+  accountantAddress: MAINNET_DEPLOYMENT.hypovault.core.accountant,
+  boringVaultAddress: VAULT,
+  decoderAndSanitizerAddress: DECODER,
+  managerAddress: MAINNET_DEPLOYMENT.hypovault.managers.wethPlpVaultManager,
 } as const
+
+/** Production permissions before the ETH/USDC 5bps v3 pool authorization executes. */
+export const MainnetWETHPLPPreviousStrategistLeaves = createStrategistLeavesArtifact(
+  MAINNET_WETH_PLP_STRATEGIST_ARTIFACT_METADATA,
+  MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS.slice(0, 10),
+)
+
+/** Production permissions after the ETH/USDC 5bps v3 pool authorization executes. */
+export const MainnetWETHPLPStrategistLeaves = createStrategistLeavesArtifact(
+  MAINNET_WETH_PLP_STRATEGIST_ARTIFACT_METADATA,
+  MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS,
+)

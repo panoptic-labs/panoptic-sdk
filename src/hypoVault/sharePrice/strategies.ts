@@ -13,6 +13,7 @@ import { MainnetWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/Mainn
 import { SepoliaUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 import { SepoliaWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaWETHPLPVaultPoolInfos'
 import { getHypoVaultConfigForVault } from '../hypoVaultManagerConfigs/vaultToConfig'
+import { resolveMainnetV3AuthorizationArtifacts } from '../mainnetV3Authorization'
 import { buildManagerInputAtBlock } from '../utils/buildManagerInputAtBlock'
 import {
   getVaultPoolInfos,
@@ -77,7 +78,13 @@ function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
         })
       }
 
-      const poolInfos = getVaultPoolInfos(vaultAddress, chainId)
+      const authorization = await resolveMainnetV3AuthorizationArtifacts({
+        viemClient: client,
+        chainId,
+        vaultAddress,
+        blockNumber,
+      })
+      const poolInfos = authorization?.poolInfos ?? getVaultPoolInfos(vaultAddress, chainId)
       if (poolInfos.length === 0) {
         return DEFAULT_MANAGER_INPUT
       }
@@ -97,7 +104,15 @@ function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
           : await verifyVaultOpenTokenIdsAtBlock({
               viemClient: client,
               vaultAddress,
-              candidatesByPool: candidates,
+              candidatesByPool: poolInfos.map((poolInfo) => {
+                const candidate = candidates.find(
+                  (item) => item.poolAddress.toLowerCase() === poolInfo.pool.toLowerCase(),
+                )
+                return {
+                  poolAddress: poolInfo.pool,
+                  candidates: candidate?.candidates ?? [],
+                }
+              }),
               blockNumber,
             })
 

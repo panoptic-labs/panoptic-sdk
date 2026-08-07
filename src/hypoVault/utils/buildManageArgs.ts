@@ -81,6 +81,28 @@ export function findLeaf<T extends StrategistLeavesArtifact>(
 }
 
 /**
+ * Finds a pool-bound leaf by both its description and target contract.
+ * Use this instead of findLeaf when an artifact can authorize the same action
+ * on more than one Panoptic pool.
+ */
+export function findLeafForTarget<T extends StrategistLeavesArtifact>(
+  artifact: T,
+  description: LeafDescription<T>,
+  target: Address,
+): Extract<T['leafs'][number], { Description: typeof description }> {
+  const normalizedTarget = target.toLowerCase()
+  const leaf = artifact.leafs.find(
+    (candidate) =>
+      candidate.Description === description &&
+      candidate.TargetAddress.toLowerCase() === normalizedTarget,
+  )
+  if (!leaf) {
+    throw new Error(`Leaf not found: "${description}" for target ${target}`)
+  }
+  return leaf as Extract<T['leafs'][number], { Description: typeof description }>
+}
+
+/**
  * Represents a single action to execute via manageVaultWithMerkleVerification.
  * Pairs a strategist leaf with the encoded call data for that action.
  */

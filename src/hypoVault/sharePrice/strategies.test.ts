@@ -19,6 +19,10 @@ vi.mock('../hypoVaultManagerConfigs/vaultToConfig', () => ({
   getHypoVaultConfigForVault: vi.fn(() => null),
 }))
 
+vi.mock('../mainnetV3Authorization', () => ({
+  resolveMainnetV3AuthorizationArtifacts: vi.fn(async () => null),
+}))
+
 vi.mock('../utils/buildManagerInputAtBlock', () => ({
   buildManagerInputAtBlock: vi.fn(async () => '0x1234'),
 }))

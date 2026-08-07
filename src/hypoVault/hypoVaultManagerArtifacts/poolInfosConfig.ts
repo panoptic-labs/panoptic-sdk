@@ -14,6 +14,19 @@ export const MAX_PRICE_DEVIATION = 100 as const
 export const WSPCXX_USDC_MAX_PRICE_DEVIATION = 10000 as const
 export const DEFAULT_TRIGGER_TICK = 150 as const
 
+const MAINNET_ETH_USDC_5BPS_V3_POOL = MAINNET_DEPLOYMENT.panoptic.additionalPools?.ethUsdc5bpsV3
+
+if (MAINNET_ETH_USDC_5BPS_V3_POOL === undefined) {
+  throw new Error('Missing mainnet ETH/USDC 5bps v3 Panoptic pool deployment')
+}
+
+export const MAINNET_ETH_USDC_5BPS_V3_POOL_INFO = {
+  maxPriceDeviation: MAX_PRICE_DEVIATION,
+  pool: MAINNET_ETH_USDC_5BPS_V3_POOL.panopticPool,
+  token0: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  token1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+} as const
+
 export const SEPOLIA_DEFAULT_POOL_INFOS = [
   {
     maxPriceDeviation: MAX_PRICE_DEVIATION,
@@ -43,16 +56,18 @@ export const MAINNET_DEFAULT_POOL_INFOS = [
     token0: getEthUsdcMarket(MAINNET_DEPLOYMENT).currency0,
     token1: getEthUsdcMarket(MAINNET_DEPLOYMENT).currency1,
   },
+  MAINNET_ETH_USDC_5BPS_V3_POOL_INFO,
 ] as const
 
 export const MAINNET_USDC_PLP_POOL_INFOS = [
-  ...MAINNET_DEFAULT_POOL_INFOS,
+  MAINNET_DEFAULT_POOL_INFOS[0],
   {
     maxPriceDeviation: WSPCXX_USDC_MAX_PRICE_DEVIATION,
     pool: '0x0f34e6fCda264349Db10d445BD95f529cbe88090',
     token0: '0x8e2eeD8b8B5E13Ea7BF38e50d7821d2C57309072',
     token1: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   },
+  MAINNET_ETH_USDC_5BPS_V3_POOL_INFO,
 ] as const
 
 export const MAINNET_LEGACY_DEFAULT_POOL_INFOS = [
