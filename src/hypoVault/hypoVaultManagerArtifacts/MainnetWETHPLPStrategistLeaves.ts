@@ -218,10 +218,13 @@ const MAINNET_WETH_PLP_STRATEGIST_ARTIFACT_METADATA = {
   managerAddress: MAINNET_DEPLOYMENT.hypovault.managers.wethPlpVaultManager,
 } as const
 
+/** Number of leaf definitions authorized before the V3 pool release. */
+const PRE_V3_AUTHORIZATION_LEAF_COUNT = 10
+
 /** Production permissions before the ETH/USDC 5bps v3 pool authorization executes. */
 export const MainnetWETHPLPPreviousStrategistLeaves = createStrategistLeavesArtifact(
   MAINNET_WETH_PLP_STRATEGIST_ARTIFACT_METADATA,
-  MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS.slice(0, 10),
+  MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS.slice(0, PRE_V3_AUTHORIZATION_LEAF_COUNT),
 )
 
 /** Production permissions after the ETH/USDC 5bps v3 pool authorization executes. */

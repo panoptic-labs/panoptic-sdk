@@ -1,5 +1,12 @@
 import { createStrategistLeavesArtifact } from './createStrategistLeavesArtifact'
 
+/** Last mainnet block before the V3 authorization execute transaction. */
+export const MAINNET_USDC_PLP_PRE_V3_AUTHORIZATION_BLOCK = 25_704_950n
+export const MAINNET_USDC_PLP_PRE_V3_STRATEGIST =
+  '0x3c1c79d0cfc316Ba959194c89696a8382d7d283b' as const
+export const MAINNET_USDC_PLP_PRE_V3_MANAGE_ROOT =
+  '0xed7d4ae055fd62c6edc93bd676456748f52fe4f4b78f60ab3ef6394bacc31b5d' as const
+
 const VAULT = '0x236d0558f06cd60780b232d4Ec4c92d2cb7e4D18'
 const DECODER = '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6'
 const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
@@ -219,10 +226,13 @@ const MAINNET_USDC_PLP_STRATEGIST_ARTIFACT_METADATA = {
   managerAddress: '0x2ce65016366ef7320078e0758D58Cf1038bc7C4e',
 } as const
 
+/** Number of leaf definitions authorized before the V3 pool release. */
+const PRE_V3_AUTHORIZATION_LEAF_COUNT = 12
+
 /** Production permissions before the ETH/USDC 5bps v3 pool authorization executes. */
 export const MainnetUSDCPLPPreviousStrategistLeaves = createStrategistLeavesArtifact(
   MAINNET_USDC_PLP_STRATEGIST_ARTIFACT_METADATA,
-  MAINNET_USDC_PLP_STRATEGIST_LEAF_DEFINITIONS.slice(0, 12),
+  MAINNET_USDC_PLP_STRATEGIST_LEAF_DEFINITIONS.slice(0, PRE_V3_AUTHORIZATION_LEAF_COUNT),
 )
 
 /** Production permissions after the ETH/USDC 5bps v3 pool authorization executes. */

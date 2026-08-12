@@ -165,7 +165,9 @@ export { encodeFulfillWithdrawalsFunctionData } from './hypoVault/hypoVaultManag
 export {
   type MainnetV3AuthorizationArtifacts,
   type MainnetV3AuthorizationVersion,
+  getMainnetV3AuthorizationArtifactsAtBlock,
   getMainnetV3AuthorizationGenerations,
+  MAINNET_V3_AUTHORIZATION_BLOCK,
   resolveMainnetV3AuthorizationArtifacts,
 } from './hypoVault/mainnetV3Authorization'
 export { useRequestDeposit } from './hypoVault/requestDeposit/hooks/use-request-deposit'

@@ -68,6 +68,9 @@ describe('getHypoVaultConfigForVault', () => {
     expect(productionUsdcPoolInfos.map((poolInfo) => poolInfo.pool.toLowerCase())).toContain(
       MAINNET_SPCX_USDC_PANOPTIC_POOL.toLowerCase(),
     )
+    expect(productionUsdcPoolInfos.map((poolInfo) => poolInfo.pool.toLowerCase())).toContain(
+      mainnetV3Pool.panopticPool.toLowerCase(),
+    )
     expect(getVaultPoolInfos(MAINNET_LEGACY_USDC_VAULT, MAINNET_CHAIN_ID)).toHaveLength(1)
   })
 })

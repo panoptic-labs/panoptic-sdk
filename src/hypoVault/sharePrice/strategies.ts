@@ -13,7 +13,7 @@ import { MainnetWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/Mainn
 import { SepoliaUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 import { SepoliaWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaWETHPLPVaultPoolInfos'
 import { getHypoVaultConfigForVault } from '../hypoVaultManagerConfigs/vaultToConfig'
-import { resolveMainnetV3AuthorizationArtifacts } from '../mainnetV3Authorization'
+import { getMainnetV3AuthorizationArtifactsAtBlock } from '../mainnetV3Authorization'
 import { buildManagerInputAtBlock } from '../utils/buildManagerInputAtBlock'
 import {
   getVaultPoolInfos,
@@ -78,8 +78,7 @@ function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
         })
       }
 
-      const authorization = await resolveMainnetV3AuthorizationArtifacts({
-        viemClient: client,
+      const authorization = getMainnetV3AuthorizationArtifactsAtBlock({
         chainId,
         vaultAddress,
         blockNumber,
@@ -108,9 +107,14 @@ function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
                 const candidate = candidates.find(
                   (item) => item.poolAddress.toLowerCase() === poolInfo.pool.toLowerCase(),
                 )
+                if (candidate === undefined) {
+                  throw new Error(
+                    `Missing token-id candidates for authorized pool ${poolInfo.pool}`,
+                  )
+                }
                 return {
                   poolAddress: poolInfo.pool,
-                  candidates: candidate?.candidates ?? [],
+                  candidates: candidate.candidates,
                 }
               }),
               blockNumber,

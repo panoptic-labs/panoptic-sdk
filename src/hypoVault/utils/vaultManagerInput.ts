@@ -1,5 +1,5 @@
 import { type Address, type Client, ContractFunctionExecutionError } from 'viem'
-import { readContract } from 'viem/actions'
+import { getBlockNumber, readContract } from 'viem/actions'
 
 import { panopticPoolV2Abi as panopticPoolAbi } from '../../abis/panoptic_v2_abis'
 import {
@@ -20,8 +20,8 @@ import {
 } from '../hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
 import { SepoliaUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 import { SepoliaWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaWETHPLPVaultPoolInfos'
-import { resolveMainnetV3AuthorizationArtifacts } from '../mainnetV3Authorization'
-import { type PoolInfo, buildManagerInput } from './buildManagerInput'
+import { getMainnetV3AuthorizationArtifactsAtBlock } from '../mainnetV3Authorization'
+import type { PoolInfo } from './buildManagerInput'
 import { buildManagerInputAtBlock } from './buildManagerInputAtBlock'
 
 const DEFAULT_MANAGER_INPUT = '0x' as const
@@ -699,31 +699,16 @@ export async function buildVaultManagerInput({
   panopticSubgraphUrl?: string
   fetchFn?: FetchLike
 }): Promise<`0x${string}`> {
-  const authorization = await resolveMainnetV3AuthorizationArtifacts({
+  const blockNumber = await getBlockNumber(viemClient)
+  return buildVaultManagerInputAtBlock({
     viemClient,
     chainId,
     vaultAddress,
-  })
-  const poolInfos = authorization?.poolInfos ?? getVaultPoolInfos(vaultAddress, chainId)
-  if (poolInfos.length === 0) {
-    return DEFAULT_MANAGER_INPUT
-  }
-
-  const tokenIds = await resolveVaultTokenIdsByPool({
-    viemClient,
-    chainId,
-    vaultAddress,
+    underlyingToken,
+    blockNumber,
     managerAddress,
-    poolInfos,
     panopticSubgraphUrl,
     fetchFn,
-  })
-
-  return buildManagerInput({
-    viemClient,
-    poolInfos,
-    tokenIds,
-    underlyingToken,
   })
 }
 
@@ -746,8 +731,7 @@ export async function buildVaultManagerInputAtBlock({
   panopticSubgraphUrl?: string
   fetchFn?: FetchLike
 }): Promise<`0x${string}`> {
-  const authorization = await resolveMainnetV3AuthorizationArtifacts({
-    viemClient,
+  const authorization = getMainnetV3AuthorizationArtifactsAtBlock({
     chainId,
     vaultAddress,
     blockNumber,

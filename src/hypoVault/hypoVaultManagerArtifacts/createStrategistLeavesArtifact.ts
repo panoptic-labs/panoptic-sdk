@@ -117,7 +117,10 @@ function buildMerkleTree(leafDigests: readonly Hex[]): Record<string, readonly H
 
   while (layersFromLeaves[layersFromLeaves.length - 1]?.length !== 1) {
     const currentLayer = layersFromLeaves[layersFromLeaves.length - 1]
-    if (currentLayer === undefined || currentLayer.length % 2 !== 0) {
+    if (currentLayer === undefined || currentLayer.length === 0) {
+      throw new Error('Strategist Merkle tree produced an empty layer')
+    }
+    if (currentLayer.length % 2 !== 0) {
       throw new Error('Strategist Merkle tree layers must contain an even number of nodes')
     }
 

@@ -4,7 +4,14 @@ import { describe, expect, it } from 'vitest'
 
 import { MAINNET_CHAIN_ID, requireChainDeployment } from './chainDeployments'
 import {
+  MAINNET_USDC_PLP_PRE_V3_AUTHORIZATION_BLOCK,
+  MAINNET_USDC_PLP_PRE_V3_MANAGE_ROOT,
+  MAINNET_USDC_PLP_PRE_V3_STRATEGIST,
+} from './hypoVaultManagerArtifacts/MainnetUSDCPLPStrategistLeaves'
+import {
+  getMainnetV3AuthorizationArtifactsAtBlock,
   getMainnetV3AuthorizationGenerations,
+  MAINNET_V3_AUTHORIZATION_BLOCK,
   resolveMainnetV3AuthorizationArtifacts,
 } from './mainnetV3Authorization'
 
@@ -12,12 +19,16 @@ const deployment = requireChainDeployment(MAINNET_CHAIN_ID)
 const vaultAddress = deployment.hypovault.vaults.wethPlpVault
 const blockNumber = 24_000_000n
 
-function clientForState({ poolHash, manageRoot }: { poolHash: string; manageRoot: string }) {
+function clientForState(
+  { poolHash, manageRoot }: { poolHash: string; manageRoot: string },
+  { rejectBlockNumber = false }: { rejectBlockNumber?: boolean } = {},
+) {
   return createClient({
     chain: mainnet,
     transport: custom({
       request: async ({ method, params }) => {
         if (method === 'eth_blockNumber') {
+          if (rejectBlockNumber) throw new Error('Unexpected latest-block lookup')
           return numberToHex(blockNumber)
         }
         if (method === 'eth_call') {
@@ -33,7 +44,26 @@ function clientForState({ poolHash, manageRoot }: { poolHash: string; manageRoot
 }
 
 describe('mainnet v3 authorization transition', () => {
+  it('selects historical artifacts at the execution block boundary without a client', () => {
+    const before = getMainnetV3AuthorizationArtifactsAtBlock({
+      chainId: MAINNET_CHAIN_ID,
+      vaultAddress,
+      blockNumber: MAINNET_V3_AUTHORIZATION_BLOCK - 1n,
+    })
+    const current = getMainnetV3AuthorizationArtifactsAtBlock({
+      chainId: MAINNET_CHAIN_ID,
+      vaultAddress,
+      blockNumber: MAINNET_V3_AUTHORIZATION_BLOCK,
+    })
+
+    expect(before?.version).toBe('previous')
+    expect(before?.poolInfos).toHaveLength(1)
+    expect(current?.version).toBe('next')
+    expect(current?.poolInfos).toHaveLength(2)
+  })
+
   it('preserves the exact pre-transition pool hashes and manage roots', () => {
+    // Previous values were read from mainnet at block 25,704,950, immediately before execution.
     const wethGenerations = getMainnetV3AuthorizationGenerations({
       chainId: MAINNET_CHAIN_ID,
       vaultAddress,
@@ -111,5 +141,95 @@ describe('mainnet v3 authorization transition', () => {
         vaultAddress,
       }),
     ).rejects.toThrow('Unsupported or inconsistent mainnet v3 authorization state')
+  })
+
+  it.each([
+    [
+      'accountant pool hash',
+      '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      null,
+    ],
+    ['manager root', null, '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+  ] as const)('rejects an unknown %s', async (_label, poolHashOverride, manageRootOverride) => {
+    const generations = getMainnetV3AuthorizationGenerations({
+      chainId: MAINNET_CHAIN_ID,
+      vaultAddress,
+    })
+    expect(generations).not.toBeNull()
+    if (generations === null) return
+
+    await expect(
+      resolveMainnetV3AuthorizationArtifacts({
+        viemClient: clientForState({
+          poolHash: poolHashOverride ?? generations.next.poolHash,
+          manageRoot: manageRootOverride ?? generations.next.manageRoot,
+        }),
+        chainId: MAINNET_CHAIN_ID,
+        vaultAddress,
+      }),
+    ).rejects.toThrow('Unsupported or inconsistent mainnet v3 authorization state')
+  })
+
+  it('returns null before reading state for non-mainnet chains and unknown vaults', async () => {
+    const client = clientForState({ poolHash: '0x', manageRoot: '0x' })
+    await expect(
+      resolveMainnetV3AuthorizationArtifacts({
+        viemClient: client,
+        chainId: 8453,
+        vaultAddress,
+      }),
+    ).resolves.toBeNull()
+    await expect(
+      resolveMainnetV3AuthorizationArtifacts({
+        viemClient: client,
+        chainId: MAINNET_CHAIN_ID,
+        vaultAddress: '0x0000000000000000000000000000000000000001',
+      }),
+    ).resolves.toBeNull()
+  })
+
+  it('uses a caller-supplied block without resolving the latest block', async () => {
+    const generations = getMainnetV3AuthorizationGenerations({
+      chainId: MAINNET_CHAIN_ID,
+      vaultAddress,
+    })
+    expect(generations).not.toBeNull()
+    if (generations === null) return
+    const client = clientForState(generations.next, { rejectBlockNumber: true })
+
+    const resolved = await resolveMainnetV3AuthorizationArtifacts({
+      viemClient: client,
+      chainId: MAINNET_CHAIN_ID,
+      vaultAddress,
+      blockNumber: 25_704_950n,
+    })
+
+    expect(resolved?.blockNumber).toBe(25_704_950n)
+  })
+
+  it('matches the independently recorded USDC strategist root before authorization', async () => {
+    const usdcVaultAddress = deployment.hypovault.vaults.usdcPlpVault
+    const generations = getMainnetV3AuthorizationGenerations({
+      chainId: MAINNET_CHAIN_ID,
+      vaultAddress: usdcVaultAddress,
+    })
+    expect(generations).not.toBeNull()
+    if (generations === null) return
+
+    const resolved = await resolveMainnetV3AuthorizationArtifacts({
+      viemClient: clientForState(
+        {
+          poolHash: generations.previous.poolHash,
+          manageRoot: MAINNET_USDC_PLP_PRE_V3_MANAGE_ROOT,
+        },
+        { rejectBlockNumber: true },
+      ),
+      chainId: MAINNET_CHAIN_ID,
+      vaultAddress: usdcVaultAddress,
+      blockNumber: MAINNET_USDC_PLP_PRE_V3_AUTHORIZATION_BLOCK,
+    })
+
+    expect(MAINNET_USDC_PLP_PRE_V3_STRATEGIST).toBe('0x3c1c79d0cfc316Ba959194c89696a8382d7d283b')
+    expect(resolved?.strategistLeaves.metadata.ManageRoot).toBe(MAINNET_USDC_PLP_PRE_V3_MANAGE_ROOT)
   })
 })

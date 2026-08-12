@@ -6,6 +6,7 @@ import {
   createStrategistLeavesArtifact,
 } from './createStrategistLeavesArtifact'
 import {
+  MAINNET_USDC_PLP_PRE_V3_MANAGE_ROOT,
   MAINNET_USDC_PLP_STRATEGIST_LEAF_DEFINITIONS,
   MainnetUSDCPLPStrategistLeaves,
 } from './MainnetUSDCPLPStrategistLeaves'
@@ -105,9 +106,7 @@ describe('mainnet strategist leaves', () => {
     expect(wethPrevious.metadata.ManageRoot).toBe(
       '0x14c4c96cc3730452ce71a447bdde6132f81acec862098a9ddd5e086805046a07',
     )
-    expect(usdcPrevious.metadata.ManageRoot).toBe(
-      '0xed7d4ae055fd62c6edc93bd676456748f52fe4f4b78f60ab3ef6394bacc31b5d',
-    )
+    expect(usdcPrevious.metadata.ManageRoot).toBe(MAINNET_USDC_PLP_PRE_V3_MANAGE_ROOT)
   })
 
   it('selects and proves each dispatch leaf by pool target', () => {

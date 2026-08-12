@@ -30,7 +30,7 @@ export type StrategistLeavesArtifact<TLeaf extends StrategistLeaf = StrategistLe
     readonly DecoderAndSanitizerAddress: string
     readonly DigestComposition: readonly string[]
     readonly LeafCount: number
-    readonly ManageRoot: string
+    readonly ManageRoot: Hex
     readonly ManagerAddress: string
     readonly TreeCapacity: number
   }
@@ -46,6 +46,7 @@ export type StrategistLeavesArtifact<TLeaf extends StrategistLeaf = StrategistLe
  * type WETHLeaf = InferLeaf<typeof SepoliaWETHPLPStrategistLeaves>
  */
 export type InferLeaf<T extends StrategistLeavesArtifact> = T['leafs'][number]
+type LeafWithDescription<TLeaf, TDescription> = TLeaf & { readonly Description: TDescription }
 
 /**
  * Extracts the valid description strings from a strategist leaves artifact.
@@ -69,15 +70,15 @@ export type LeafDescription<T extends StrategistLeavesArtifact> = T['leafs'][num
  * const depositLeaf = findLeaf(SepoliaUSDCPLPStrategistLeaves, 'Deposit USDC for poUSDC')
  * ```
  */
-export function findLeaf<T extends StrategistLeavesArtifact>(
-  artifact: T,
-  description: LeafDescription<T>,
-): Extract<T['leafs'][number], { Description: typeof description }> {
+export function findLeaf<
+  T extends StrategistLeavesArtifact,
+  const TDescription extends LeafDescription<T>,
+>(artifact: T, description: TDescription): LeafWithDescription<T['leafs'][number], TDescription> {
   const leaf = artifact.leafs.find((l) => l.Description === description)
   if (!leaf) {
     throw new Error(`Leaf not found: "${description}"`)
   }
-  return leaf as Extract<T['leafs'][number], { Description: typeof description }>
+  return leaf as LeafWithDescription<T['leafs'][number], TDescription>
 }
 
 /**
@@ -85,11 +86,14 @@ export function findLeaf<T extends StrategistLeavesArtifact>(
  * Use this instead of findLeaf when an artifact can authorize the same action
  * on more than one Panoptic pool.
  */
-export function findLeafForTarget<T extends StrategistLeavesArtifact>(
+export function findLeafForTarget<
+  T extends StrategistLeavesArtifact,
+  const TDescription extends LeafDescription<T>,
+>(
   artifact: T,
-  description: LeafDescription<T>,
+  description: TDescription,
   target: Address,
-): Extract<T['leafs'][number], { Description: typeof description }> {
+): LeafWithDescription<T['leafs'][number], TDescription> {
   const normalizedTarget = target.toLowerCase()
   const leaf = artifact.leafs.find(
     (candidate) =>
@@ -99,7 +103,7 @@ export function findLeafForTarget<T extends StrategistLeavesArtifact>(
   if (!leaf) {
     throw new Error(`Leaf not found: "${description}" for target ${target}`)
   }
-  return leaf as Extract<T['leafs'][number], { Description: typeof description }>
+  return leaf as LeafWithDescription<T['leafs'][number], TDescription>
 }
 
 /**

@@ -1,5 +1,6 @@
 import {
   DEFAULT_TRIGGER_TICK,
+  MAINNET_ETH_USDC_5BPS_V3_POOL_INFO,
   MAINNET_LEGACY_DEFAULT_POOL_INFOS,
   MAINNET_LEGACY_VAULT_ADDRESSES,
   MAINNET_USDC_PLP_POOL_INFOS,
@@ -17,7 +18,9 @@ export const MainnetUSDCPLPVaultPoolInfos = {
 /** Production accountant input before the ETH/USDC 5bps v3 pool authorization executes. */
 export const MainnetUSDCPLPPreviousVaultPoolInfos = {
   vaultAddress: MAINNET_VAULT_ADDRESSES.usdcPlpVault,
-  poolInfos: MAINNET_USDC_PLP_POOL_INFOS.slice(0, 2).map((poolInfo) => ({
+  poolInfos: MAINNET_USDC_PLP_POOL_INFOS.filter(
+    (poolInfo) => poolInfo.pool !== MAINNET_ETH_USDC_5BPS_V3_POOL_INFO.pool,
+  ).map((poolInfo) => ({
     ...poolInfo,
     triggerTick: DEFAULT_TRIGGER_TICK,
   })),
