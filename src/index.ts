@@ -170,6 +170,14 @@ export {
   MAINNET_V3_AUTHORIZATION_BLOCK,
   resolveMainnetV3AuthorizationArtifacts,
 } from './hypoVault/mainnetV3Authorization'
+export {
+  type MainnetVaultManagerRootTransition,
+  type MainnetVaultPoolConfiguration,
+  getMainnetVaultManagerRootAtBlock,
+  getMainnetVaultManagerRootHistory,
+  getMainnetVaultPoolConfigurationAtBlock,
+  getMainnetVaultPoolConfigurationHistory,
+} from './hypoVault/mainnetVaultPoolHistory'
 export { useRequestDeposit } from './hypoVault/requestDeposit/hooks/use-request-deposit'
 export {
   encodeRequestDepositFunctionData,

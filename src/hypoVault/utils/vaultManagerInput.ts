@@ -20,7 +20,7 @@ import {
 } from '../hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
 import { SepoliaUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 import { SepoliaWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaWETHPLPVaultPoolInfos'
-import { getMainnetV3AuthorizationArtifactsAtBlock } from '../mainnetV3Authorization'
+import { getMainnetVaultPoolConfigurationAtBlock } from '../mainnetVaultPoolHistory'
 import type { PoolInfo } from './buildManagerInput'
 import { buildManagerInputAtBlock } from './buildManagerInputAtBlock'
 
@@ -731,12 +731,13 @@ export async function buildVaultManagerInputAtBlock({
   panopticSubgraphUrl?: string
   fetchFn?: FetchLike
 }): Promise<`0x${string}`> {
-  const authorization = getMainnetV3AuthorizationArtifactsAtBlock({
+  const historicalPoolConfiguration = getMainnetVaultPoolConfigurationAtBlock({
     chainId,
     vaultAddress,
     blockNumber,
   })
-  const poolInfos = authorization?.poolInfos ?? getVaultPoolInfos(vaultAddress, chainId)
+  const poolInfos =
+    historicalPoolConfiguration?.poolInfos ?? getVaultPoolInfos(vaultAddress, chainId)
   if (poolInfos.length === 0) {
     return DEFAULT_MANAGER_INPUT
   }

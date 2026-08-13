@@ -13,7 +13,7 @@ import { MainnetWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/Mainn
 import { SepoliaUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 import { SepoliaWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaWETHPLPVaultPoolInfos'
 import { getHypoVaultConfigForVault } from '../hypoVaultManagerConfigs/vaultToConfig'
-import { getMainnetV3AuthorizationArtifactsAtBlock } from '../mainnetV3Authorization'
+import { getMainnetVaultPoolConfigurationAtBlock } from '../mainnetVaultPoolHistory'
 import { buildManagerInputAtBlock } from '../utils/buildManagerInputAtBlock'
 import {
   getVaultPoolInfos,
@@ -78,12 +78,13 @@ function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
         })
       }
 
-      const authorization = getMainnetV3AuthorizationArtifactsAtBlock({
+      const historicalPoolConfiguration = getMainnetVaultPoolConfigurationAtBlock({
         chainId,
         vaultAddress,
         blockNumber,
       })
-      const poolInfos = authorization?.poolInfos ?? getVaultPoolInfos(vaultAddress, chainId)
+      const poolInfos =
+        historicalPoolConfiguration?.poolInfos ?? getVaultPoolInfos(vaultAddress, chainId)
       if (poolInfos.length === 0) {
         return DEFAULT_MANAGER_INPUT
       }

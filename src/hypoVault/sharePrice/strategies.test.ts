@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type * as MainnetV3AuthorizationModule from '../mainnetV3Authorization'
-import { getMainnetV3AuthorizationArtifactsAtBlock } from '../mainnetV3Authorization'
+import type * as MainnetVaultPoolHistoryModule from '../mainnetVaultPoolHistory'
+import { getMainnetVaultPoolConfigurationAtBlock } from '../mainnetVaultPoolHistory'
 import { verifyVaultOpenTokenIdsAtBlock } from '../utils/vaultManagerInput'
 import { getVaultApyStrategy, setVaultApyStrategyOverride } from './strategies'
 
@@ -34,9 +34,9 @@ vi.mock('../hypoVaultManagerConfigs/vaultToConfig', () => ({
   getHypoVaultConfigForVault: vi.fn(() => null),
 }))
 
-vi.mock('../mainnetV3Authorization', async (importOriginal) => ({
-  ...(await importOriginal<typeof MainnetV3AuthorizationModule>()),
-  getMainnetV3AuthorizationArtifactsAtBlock: vi.fn(() => null),
+vi.mock('../mainnetVaultPoolHistory', async (importOriginal) => ({
+  ...(await importOriginal<typeof MainnetVaultPoolHistoryModule>()),
+  getMainnetVaultPoolConfigurationAtBlock: vi.fn(() => null),
 }))
 
 vi.mock('../utils/buildManagerInputAtBlock', () => ({
@@ -186,7 +186,7 @@ describe('getVaultApyStrategy', () => {
         token1: '0x00000000000000000000000000000000000000cc',
       },
     ] as const
-    vi.mocked(getMainnetV3AuthorizationArtifactsAtBlock).mockReturnValueOnce({
+    vi.mocked(getMainnetVaultPoolConfigurationAtBlock).mockReturnValueOnce({
       poolInfos,
     } as never)
     const candidates = [
