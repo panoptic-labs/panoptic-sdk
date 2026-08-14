@@ -17,8 +17,8 @@ export const UsdcPlpVaultMainnetProdConfig: HypoVaultManagerConfig = {
   artifactSet: 'mainnet-prod',
   vaultAssetIndex: 0n,
   manageCycleIntervalMs: 600000,
-  vaultCapInUnderlying: 19_500_000_000n, // Fallback cap: 19,500 USDC if share-price-derived cap is unavailable
-  vaultCapInShares: 19_500_000_000_000_000n, // Active cap target: 19,500 USDC in share-cap mode
+  vaultCapInUnderlying: 350_000_000_000n, // Fallback cap: 350,000 USDC if share-price-derived cap is unavailable
+  vaultCapInShares: 350_000_000_000_000_000n, // Active cap target: 350,000 USDC in share-cap mode
   allowUnlimitedDepositRequestIfCapNotReached: true,
   maxBuyingPowerUsageBps: 2000,
   poolDeploymentBlock: 25_302_077,

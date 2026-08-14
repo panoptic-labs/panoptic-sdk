@@ -16,8 +16,8 @@ export const WethPlpVaultMainnetProdConfig: HypoVaultManagerConfig = {
   artifactSet: 'mainnet-prod',
   vaultAssetIndex: 1n,
   manageCycleIntervalMs: 600000,
-  vaultCapInUnderlying: 50_000_000_000_000_000_000n, // Fallback cap: 50 WETH if share-price-derived cap is unavailable
-  vaultCapInShares: 50_000_000_000_000_000_000_000_000n, // Active cap target: 50 WETH in share-cap mode
+  vaultCapInUnderlying: 75_000_000_000_000_000_000n, // Fallback cap: 75 WETH if share-price-derived cap is unavailable
+  vaultCapInShares: 75_000_000_000_000_000_000_000_000n, // Active cap target: 75 WETH in share-cap mode
   allowUnlimitedDepositRequestIfCapNotReached: true,
   maxBuyingPowerUsageBps: 6600,
   poolDeploymentBlock: 25_302_077,
