@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { InputListFailError, MissingPositionIdsError, SwapTokenMismatchError } from '../errors'
 import { createTokenIdBuilder } from '../tokenId/builder'
-import { swapExactIn, swapExactInAndWait, swapExactOut, swapExactOutAndWait } from './swap'
+import {
+  buildCreditSwapCall,
+  swapExactIn,
+  swapExactInAndWait,
+  swapExactOut,
+  swapExactOutAndWait,
+} from './swap'
 import { submitWrite } from './utils'
 
 /** Args the swap passed to `addCredit` on its most recent call. */
@@ -91,6 +97,48 @@ vi.mock('../tokenId/builder', () => ({
 
 const mockClient = {} as Parameters<typeof swapExactOut>[0]['client']
 const mockWalletClient = {} as Parameters<typeof swapExactOut>[0]['walletClient']
+
+describe('buildCreditSwapCall', () => {
+  const common = {
+    poolAddress: '0x0000000000000000000000000000000000000001' as const,
+    poolId: 1n,
+    currentTick: 200000n,
+    tickSpacing: 10n,
+    existingPositionIds: [7n, 8n],
+    tokenIndex: 1n as const,
+    slippageBps: 100n,
+  }
+
+  it('builds exact-in as no-swap mint followed by swap burn', () => {
+    const call = buildCreditSwapCall({ ...common, kind: 'exactIn', amountIn: 1000n })
+
+    expect(call.to).toBe(common.poolAddress)
+    expect(call.args[0]).toEqual([12345n, 12345n])
+    expect(call.args[1]).toEqual(common.existingPositionIds)
+    expect(call.args[2]).toEqual([1000n, 0n])
+    expect(call.args[3][0][0]).toBeLessThan(call.args[3][0][1])
+    expect(call.args[3][1][0]).toBeGreaterThan(call.args[3][1][1])
+  })
+
+  it('builds exact-out as swap mint followed by no-swap burn', () => {
+    const call = buildCreditSwapCall({ ...common, kind: 'exactOut', amountOut: 1000n })
+
+    expect(call.args[3][0][0]).toBeGreaterThan(call.args[3][0][1])
+    expect(call.args[3][1][0]).toBeLessThan(call.args[3][1][1])
+  })
+
+  it.each([0n, -1n])('rejects a non-positive swap amount (%s)', (amountIn) => {
+    expect(() => buildCreditSwapCall({ ...common, kind: 'exactIn', amountIn })).toThrow(
+      'credit swap amount must be positive',
+    )
+  })
+
+  it.each([-1n, 2n])('rejects invalid token index %s', (tokenIndex) => {
+    expect(() =>
+      buildCreditSwapCall({ ...common, tokenIndex, kind: 'exactOut', amountOut: 1n }),
+    ).toThrow('credit swap tokenIndex must be 0 or 1')
+  })
+})
 
 describe('swapExactOut', () => {
   beforeEach(() => {

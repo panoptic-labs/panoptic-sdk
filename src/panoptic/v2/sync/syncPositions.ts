@@ -5,13 +5,13 @@
 
 import type { Address, Hash, PublicClient } from 'viem'
 
-import { isRetryableRpcError } from '../bot'
-import { ProviderLagError, SyncTimeoutError } from '../errors'
+import { PositionSnapshotNotFoundError, ProviderLagError, SyncTimeoutError } from '../errors'
 import { getPoolMetadata } from '../reads/pool'
 import { getPositions } from '../reads/position'
 import type { StorageAdapter } from '../storage'
 import { getPoolMetaKey, getPositionMetaKey, getPositionsKey, jsonSerializer } from '../storage'
 import type { StoredPoolMeta, StoredPositionData } from '../types'
+import { getPoolDeploymentBlock, reconstructFromEvents } from './eventReconstruction'
 import { getOpenPositionIds } from './getTrackedPositionIds'
 import { detectReorg, loadCheckpoint, saveCheckpoint } from './reorgHandling'
 
@@ -164,71 +164,63 @@ export async function syncPositions(params: SyncPositionsParams): Promise<SyncPo
     fromBlock: checkpoint?.lastBlock ?? params.fromBlock,
   })
 
-  // If no dispatch events were found in the scanned range (null) but the
-  // checkpoint had positions, the user simply hasn't traded since the last
-  // sync — keep the cached list. An explicit empty array means a dispatch
-  // was found that authoritatively shows zero open positions.
+  // An explicit empty array is an authoritative snapshot. With no usable
+  // snapshot, reconstruct the complete history from account-indexed events:
+  // manager contracts can build dispatch calldata internally, so the outer
+  // transaction may contain no decodable finalPositionIdList even though its
+  // events identify the owner. Always rebuilding from the configured scan floor
+  // also repairs older empty or stale checkpoints made for such accounts.
   let positionIds: bigint[]
-  if (snapshotResult === null && checkpoint && checkpoint.positionIds.length > 0) {
-    positionIds = checkpoint.positionIds
-  } else {
-    positionIds = snapshotResult ?? []
-  }
+  if (snapshotResult === null) {
+    const fromBlock = params.fromBlock ?? (await getPoolDeploymentBlock(client, poolAddress))
+    if (fromBlock === null) {
+      throw new PositionSnapshotNotFoundError(new Error('Pool deployment block not found'))
+    }
 
-  // If no positions and no history, save empty checkpoint and return early
-  if (positionIds.length === 0) {
-    const hasAnyEvents = await accountHasPositionEvents({
+    const reconstruction = await reconstructFromEvents({
       client,
       poolAddress,
       account,
-      fromBlock: params.fromBlock,
+      fromBlock,
       toBlock,
+      batchSize: params.maxLogsPerQuery,
+      onProgress: (progress) => {
+        checkTimeout()
+        onUpdate?.({
+          type: 'progress',
+          blockNumber: progress.currentBlock,
+          progress: {
+            current: progress.currentBlock,
+            total: progress.targetBlock,
+          },
+        })
+      },
     })
+    positionIds = reconstruction.openPositions
+  } else {
+    positionIds = snapshotResult
+  }
 
-    if (!hasAnyEvents) {
-      const finalBlock = await client.getBlock({ blockNumber: toBlock })
+  const finalBlock = await client.getBlock({ blockNumber: toBlock })
 
-      const poolMetaKey = getPoolMetaKey(chainId, poolAddress)
-      const existingPoolMeta = await storage.get(poolMetaKey)
-      if (!existingPoolMeta) {
-        await fetchAndStorePoolMeta(client, poolAddress, poolMetaKey, storage)
-      }
+  // If no positions, persist an empty position list and return early.
+  if (positionIds.length === 0) {
+    await persistPoolAndCheckpoint(params, toBlock, finalBlock.hash, [])
 
-      await saveCheckpoint({
-        storage,
-        chainId,
-        poolAddress,
-        account,
-        lastBlock: toBlock,
-        lastBlockHash: finalBlock.hash,
-        positionIds: [],
-      })
+    const positionsKey = getPositionsKey(chainId, poolAddress, account)
+    await storage.set(positionsKey, jsonSerializer.stringify([]))
 
-      const positionsKey = getPositionsKey(chainId, poolAddress, account)
-      await storage.set(positionsKey, jsonSerializer.stringify([]))
-
-      return {
-        lastSyncedBlock: toBlock,
-        lastSyncedBlockHash: finalBlock.hash,
-        positionCount: 0n,
-        positionIds: [],
-        incremental: false,
-        durationMs: BigInt(Date.now() - startTime),
-      }
+    return {
+      lastSyncedBlock: toBlock,
+      lastSyncedBlockHash: finalBlock.hash,
+      positionCount: 0n,
+      positionIds: [],
+      incremental: !!checkpoint,
+      durationMs: BigInt(Date.now() - startTime),
     }
   }
 
   checkTimeout()
-
-  // Get final block info
-  const finalBlock = await client.getBlock({ blockNumber: toBlock })
-
-  // Fetch and store pool metadata if not already stored
-  const poolMetaKey = getPoolMetaKey(chainId, poolAddress)
-  const existingPoolMeta = await storage.get(poolMetaKey)
-  if (!existingPoolMeta) {
-    await fetchAndStorePoolMeta(client, poolAddress, poolMetaKey, storage)
-  }
 
   // Fetch and store position data for all positions
   if (positionIds.length > 0) {
@@ -257,16 +249,7 @@ export async function syncPositions(params: SyncPositionsParams): Promise<SyncPo
     }
   }
 
-  // Save checkpoint
-  await saveCheckpoint({
-    storage,
-    chainId,
-    poolAddress,
-    account,
-    lastBlock: toBlock,
-    lastBlockHash: finalBlock.hash,
-    positionIds,
-  })
+  await persistPoolAndCheckpoint(params, toBlock, finalBlock.hash, positionIds)
 
   // Save positions to storage
   const positionsKey = getPositionsKey(chainId, poolAddress, account)
@@ -282,116 +265,28 @@ export async function syncPositions(params: SyncPositionsParams): Promise<SyncPo
   }
 }
 
-/**
- * Quick check if an account has ANY position events.
- * Checks OptionMinted, OptionBurnt, ForcedExercised (user), and AccountLiquidated (liquidatee).
- * All checked fields are indexed so this is fast.
- *
- * **Warning:** RPC index lag can cause false negatives for recently minted positions.
- * If the RPC node's event index is behind the chain tip, this function may return
- * `false` even though the account has just minted a position. Callers should either
- * wait a few blocks after minting before calling syncPositions, or skip this
- * optimization (by providing a `snapshotTxHash`) when freshness is critical.
- *
- * @param params - Check parameters
- * @returns true if account has any position events, false otherwise
- */
-async function accountHasPositionEvents(params: {
-  client: PublicClient
-  poolAddress: Address
-  account: Address
-  fromBlock?: bigint
-  toBlock: bigint
-}): Promise<boolean> {
-  const { client, poolAddress, account, fromBlock = 0n, toBlock } = params
+async function persistPoolAndCheckpoint(
+  params: SyncPositionsParams,
+  lastBlock: bigint,
+  lastBlockHash: Hash,
+  positionIds: bigint[],
+): Promise<void> {
+  const { account, chainId, client, poolAddress, storage } = params
+  const poolMetaKey = getPoolMetaKey(chainId, poolAddress)
+  const existingPoolMeta = await storage.get(poolMetaKey)
+  if (!existingPoolMeta) {
+    await fetchAndStorePoolMeta(client, poolAddress, poolMetaKey, storage)
+  }
 
-  const [mintEvents, burnEvents, forceExerciseEvents, liquidationEvents] = await Promise.all([
-    withRetry(() =>
-      client.getLogs({
-        address: poolAddress,
-        event: {
-          type: 'event',
-          name: 'OptionMinted',
-          inputs: [
-            { type: 'address', name: 'recipient', indexed: true },
-            { type: 'uint256', name: 'tokenId', indexed: true },
-            { type: 'uint256', name: 'balanceData', indexed: false },
-          ],
-        },
-        args: {
-          recipient: account,
-        },
-        fromBlock,
-        toBlock,
-      }),
-    ),
-    withRetry(() =>
-      client.getLogs({
-        address: poolAddress,
-        event: {
-          type: 'event',
-          name: 'OptionBurnt',
-          inputs: [
-            { type: 'address', name: 'recipient', indexed: true },
-            { type: 'uint256', name: 'tokenId', indexed: true },
-            { type: 'uint256', name: 'positionSize', indexed: false },
-            { type: 'int256[4]', name: 'premiaByLeg', indexed: false },
-          ],
-        },
-        args: {
-          recipient: account,
-        },
-        fromBlock,
-        toBlock,
-      }),
-    ),
-    withRetry(() =>
-      client.getLogs({
-        address: poolAddress,
-        event: {
-          type: 'event',
-          name: 'ForcedExercised',
-          inputs: [
-            { type: 'address', name: 'exercisor', indexed: true },
-            { type: 'address', name: 'user', indexed: true },
-            { type: 'uint256', name: 'tokenId', indexed: true },
-            { type: 'int256', name: 'exerciseFee', indexed: false },
-          ],
-        },
-        args: {
-          user: account,
-        },
-        fromBlock,
-        toBlock,
-      }),
-    ),
-    withRetry(() =>
-      client.getLogs({
-        address: poolAddress,
-        event: {
-          type: 'event',
-          name: 'AccountLiquidated',
-          inputs: [
-            { type: 'address', name: 'liquidator', indexed: true },
-            { type: 'address', name: 'liquidatee', indexed: true },
-            { type: 'int256', name: 'bonusAmounts', indexed: false },
-          ],
-        },
-        args: {
-          liquidatee: account,
-        },
-        fromBlock,
-        toBlock,
-      }),
-    ),
-  ])
-
-  return (
-    mintEvents.length > 0 ||
-    burnEvents.length > 0 ||
-    forceExerciseEvents.length > 0 ||
-    liquidationEvents.length > 0
-  )
+  await saveCheckpoint({
+    storage,
+    chainId,
+    poolAddress,
+    account,
+    lastBlock,
+    lastBlockHash,
+    positionIds,
+  })
 }
 
 /**
@@ -422,29 +317,4 @@ async function fetchAndStorePoolMeta(
   }
 
   await storage.set(poolMetaKey, jsonSerializer.stringify(poolMeta))
-}
-
-/**
- * Retry helper with exponential backoff for transient RPC errors.
- *
- * @param fn - Async function to retry
- * @param maxRetries - Maximum number of retries (default: 3)
- * @returns The result of the function
- */
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
-  let lastError: unknown
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn()
-    } catch (error) {
-      lastError = error
-      if (attempt < maxRetries && isRetryableRpcError(error)) {
-        // Exponential backoff: 1s, 2s, 4s
-        await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt))
-        continue
-      }
-      throw error
-    }
-  }
-  throw lastError
 }

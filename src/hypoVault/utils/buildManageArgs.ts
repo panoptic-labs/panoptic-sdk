@@ -107,6 +107,40 @@ export function findLeafForTarget<
 }
 
 /**
+ * Finds one authorization leaf by execution semantics rather than its human
+ * description. Address arguments disambiguate calls such as ERC-20 approvals
+ * where one token target can authorize multiple spenders.
+ */
+export function findLeafForTargetAndSignature(
+  artifact: StrategistLeavesArtifact,
+  target: Address,
+  functionSignature: string,
+  addressArguments: readonly Address[] = [],
+): StrategistLeaf {
+  const normalizedTarget = target.toLowerCase()
+  const normalizedArguments = addressArguments.map((address) => address.toLowerCase())
+  const matches = artifact.leafs.filter(
+    (candidate) =>
+      candidate.TargetAddress.toLowerCase() === normalizedTarget &&
+      candidate.FunctionSignature === functionSignature &&
+      candidate.AddressArguments.length === normalizedArguments.length &&
+      candidate.AddressArguments.every(
+        (address, index) => address.toLowerCase() === normalizedArguments[index],
+      ),
+  )
+  if (matches.length !== 1) {
+    throw new Error(
+      `Expected exactly one leaf for target ${target}, signature ${functionSignature}, and address arguments [${addressArguments.join(', ')}]; found ${matches.length}`,
+    )
+  }
+  const [leaf] = matches
+  if (leaf === undefined) {
+    throw new Error('Leaf resolution invariant failed')
+  }
+  return leaf
+}
+
+/**
  * Represents a single action to execute via manageVaultWithMerkleVerification.
  * Pairs a strategist leaf with the encoded call data for that action.
  */

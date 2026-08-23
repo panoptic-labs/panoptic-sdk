@@ -10,7 +10,7 @@ const BASE_PANOPTIC_POOL_ADDRESSES = BASE_DEPLOYMENT.panoptic.pool
 export const UsdcPlpVaultBaseProdConfig: HypoVaultManagerConfig = {
   deployment: 'prod',
   vaultAssetIndex: 0n,
-  manageCycleIntervalMs: 600_000,
+  manageCycleIntervalMs: 86_400_000,
   vaultCapInUnderlying: 300_000_000n, // 300 USDC
   vaultCapInShares: 3_000_000_000_000_000n, // ~300 USDC (verify share scaling on-chain)
   allowUnlimitedDepositRequestIfCapNotReached: true,
@@ -24,6 +24,10 @@ export const UsdcPlpVaultBaseProdConfig: HypoVaultManagerConfig = {
     hypoVaultManagerWithMerkleVerification: BASE_HYPOVAULT_MANAGER_ADDRESSES.usdcPlpVaultManager,
     hypoVault: BASE_HYPOVAULT_ADDRESSES.usdcPlpVault,
     underlyingToken: BASE_ETH_USDC_5BPS_MARKET.currency1,
+  },
+  automation: {
+    primaryPool: BASE_PANOPTIC_POOL_ADDRESSES.panopticPool,
+    windDownPools: [],
   },
   manualTxDefaults: {
     collateralAllocations: [

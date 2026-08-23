@@ -6,6 +6,9 @@
 // Meta types
 export type { BlockMeta } from './meta'
 
+// Mint-time margin buffer types
+export type { MintBufferRatio } from './mintBuffer'
+
 // Pool types
 export type {
   CollateralTracker,

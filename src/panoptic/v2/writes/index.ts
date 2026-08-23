@@ -114,8 +114,11 @@ export {
 
 // Swap operations
 export {
+  type CreditSwapCall,
+  type CreditSwapCallParams,
   type SwapExactInParams,
   type SwapExactOutParams,
+  buildCreditSwapCall,
   swapExactIn,
   swapExactInAndWait,
   swapExactOut,

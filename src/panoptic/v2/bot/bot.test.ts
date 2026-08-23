@@ -107,6 +107,7 @@ function createSafeMode(
   overrides: Partial<SafeModeState> = {},
 ): SafeModeState {
   const defaults: SafeModeState = {
+    level: mode === 'normal' ? 0n : mode === 'restricted' ? 1n : 3n,
     mode,
     canMint: mode !== 'emergency',
     canBurn: mode !== 'emergency',

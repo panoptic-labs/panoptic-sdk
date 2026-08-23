@@ -195,6 +195,30 @@ export const queryKeys = {
     ] as const,
 
   /**
+   * Key for a position's collateral strategy breakdown.
+   */
+  collateralBreakdown: (
+    chainId: bigint,
+    poolAddress: Address,
+    tokenId: bigint,
+    positionSize: bigint,
+    queryAddress: Address,
+    atTick?: bigint,
+    authoritativeRequired0?: bigint,
+  ) =>
+    [
+      ...queryKeys.all,
+      'collateralBreakdown',
+      chainId.toString(),
+      poolAddress,
+      tokenId.toString(),
+      positionSize.toString(),
+      queryAddress,
+      atTick?.toString(),
+      authoritativeRequired0?.toString(),
+    ] as const,
+
+  /**
    * Key for max position size.
    */
   maxPositionSize: (chainId: bigint, poolAddress: Address, account: Address, tokenId: bigint) =>

@@ -29,6 +29,7 @@ import { panopticQueryAbi } from '../abis/panopticQuery'
 import { tickToSqrtPriceX96 } from '../formatters/tick'
 import type { BlockMeta } from '../types'
 import { decodeLeftRightUnsigned } from '../writes/utils'
+import { type MintBufferRatio, mintableAfterBuffer } from './mintBuffer'
 import { type MulticallBlockCall, readBlockAndAggregate, requireReturnData } from './multicallBlock'
 
 // Sentinel ticks used by PanopticQuery to indicate "no liquidation at this boundary"
@@ -44,13 +45,11 @@ const MAX_USAGE_BPS = 1_000_000n
 const bigintMax = (a: bigint, b: bigint): bigint => (a > b ? a : b)
 const bigintMin = (a: bigint, b: bigint): bigint => (a < b ? a : b)
 
-/**
- * `RiskEngine.BP_DECREASE_BUFFER` over `PanopticPool.NO_BUFFER` — the extra
- * margin the solvency check demands at mint (and on collateral withdrawal),
- * above the maintenance requirement that governs liquidation.
- */
-const MINT_BUFFER = 10_666_667n
-const MINT_BUFFER_DENOMINATOR = 10_000_000n
+// `RiskEngine.BP_DECREASE_BUFFER / DECIMALS` — the extra margin the solvency
+// check demands at mint (and on collateral withdrawal), above the maintenance
+// requirement that governs liquidation. It lives in `./mintBuffer` so the SDK
+// and every UI surface share one implementation: applied per token, rounding
+// up, before any price conversion.
 
 /**
  * Convert a token0 amount to its token1-equivalent at the given sqrtPriceX96.
@@ -102,6 +101,8 @@ export interface GetMarginBufferParams {
   blockNumber?: bigint
   /** Optional pre-fetched block metadata (skips getBlockMeta RPC call) */
   _meta?: BlockMeta
+  /** Optional live mint buffer returned by getRiskParameters. */
+  mintBuffer?: MintBufferRatio
 }
 
 /**
@@ -207,7 +208,7 @@ export interface MarginBuffer {
  * @returns Margin buffer with liquidation distance and block metadata
  */
 export async function getMarginBuffer(params: GetMarginBufferParams): Promise<MarginBuffer> {
-  const { client, poolAddress, account, tokenIds, queryAddress, blockNumber } = params
+  const { client, poolAddress, account, tokenIds, queryAddress, blockNumber, mintBuffer } = params
 
   const targetBlockNumber =
     blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
@@ -377,12 +378,10 @@ export async function getMarginBuffer(params: GetMarginBufferParams): Promise<Ma
     // because the mint must satisfy BOTH. Both sides are already in
     // `denominatedInToken` units (checkCollateral branches on the same
     // sqrtPriceX96 < FP96 test), so the min is well defined.
-    const mintable = (balance: bigint | undefined, required: bigint | undefined): bigint | null => {
-      if (balance === undefined || required === undefined) return null
-      const requiredAtMint =
-        (required * MINT_BUFFER + MINT_BUFFER_DENOMINATOR - 1n) / MINT_BUFFER_DENOMINATOR
-      return balance > requiredAtMint ? balance - requiredAtMint : 0n
-    }
+    const mintable = (balance: bigint | undefined, required: bigint | undefined): bigint | null =>
+      balance === undefined || required === undefined
+        ? null
+        : mintableAfterBuffer(balance, required, mintBuffer)
     const mintable0 = mintable(balances0[0], requireds0[0])
     const mintable1 = mintable(balances1[0], requireds1[0])
     if (mintable0 !== null || mintable1 !== null) {

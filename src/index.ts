@@ -214,8 +214,11 @@ export {
 export {
   getVaultApyErrorMessage,
   isExpectedHistoricalReadMiss,
+  isIncorrectPositionListReadError,
   isStaleOraclePriceError,
   isStaleOraclePriceReadError,
+  isTrustedVaultSharePriceStatus,
+  TRUSTED_VAULT_SHARE_PRICE_STATUSES,
   VaultApyPreInceptionBlockError,
 } from './hypoVault/sharePrice/errors'
 export { fetchFirstDepositTimestampByVaultId } from './hypoVault/sharePrice/firstDeposit'
@@ -224,14 +227,26 @@ export {
   computeSharePriceFromNavSnapshot,
 } from './hypoVault/sharePrice/math'
 export {
+  type VaultSharePriceStatus,
+  createVaultSharePriceProcessor,
+  statusForVaultSharePriceSnapshot,
+} from './hypoVault/sharePrice/processor'
+export {
+  type FetchVaultSharePriceSnapshotParams,
   type ReadContractFn,
   type ReadContractParams,
   fetchVaultSharePriceSnapshot,
+  fetchVaultSharePriceSnapshotWithCandidateRecovery,
 } from './hypoVault/sharePrice/snapshot'
-export { getVaultApyStrategy, setVaultApyStrategyOverride } from './hypoVault/sharePrice/strategies'
+export {
+  clearVaultApyStrategyOverride,
+  getVaultApyStrategy,
+  setVaultApyStrategyOverride,
+} from './hypoVault/sharePrice/strategies'
 export { deriveVaultApyTimeseriesFromSharePrices } from './hypoVault/sharePrice/timeseries'
 export type {
   BorrowRateApyConfig,
+  CandidateRecoveryContext,
   CandidateResolverContext,
   ManagerInputProviderContext,
   ManagerInputProviderDiagnostics,
@@ -254,6 +269,20 @@ export {
   getStaleOracleStateOverrideForAccountant,
 } from './hypoVault/staleOracleOverride'
 export {
+  type VaultSignedTransactionFeeCaps,
+  type VaultSignedTransactionFeeValidationResult,
+  type VaultTransactionFeeQuote,
+  applyVaultTransactionGasCostLimit,
+  bufferVaultTransactionGasEstimate,
+  getVaultTransactionFeeQuote,
+  MAX_VAULT_PRIORITY_FEE_PER_GAS,
+  MAX_VAULT_TRANSACTION_GAS_COST,
+  MIN_VAULT_PRIORITY_FEE_PER_GAS,
+  validateVaultSignedTransactionFeeCaps,
+  VaultTransactionFeeEstimationError,
+  VaultTransactionGasCostLimitError,
+} from './hypoVault/transactionFees'
+export {
   type InferLeaf,
   type LeafDescription,
   type ManageAction,
@@ -263,11 +292,13 @@ export {
   buildManageArgs,
   findLeaf,
   findLeafForTarget,
+  findLeafForTargetAndSignature,
 } from './hypoVault/utils/buildManageArgs'
 export {
   type BuildManagerInputParams,
   type PoolInfo,
   buildManagerInput,
+  resolvePositionScanFromBlock,
 } from './hypoVault/utils/buildManagerInput'
 export {
   type BuildManagerInputAtBlockParams,
@@ -285,6 +316,7 @@ export {
   buildVaultManagerInput,
   buildVaultManagerInputAtBlock,
   getVaultPoolInfos,
+  recoverVaultCandidateTokenIdsByPool,
   resolveVaultHistoricalCandidatesByPool,
   resolveVaultTokenIdsByPool,
   verifyVaultOpenTokenIdsAtBlock,

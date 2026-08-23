@@ -5,6 +5,10 @@ const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
 const MAINNET_HYPOVAULT_ADDRESSES = MAINNET_DEPLOYMENT.hypovault.vaults
 const MAINNET_HYPOVAULT_MANAGER_ADDRESSES = MAINNET_DEPLOYMENT.hypovault.managers
 const MAINNET_PANOPTIC_POOL_ADDRESSES = MAINNET_DEPLOYMENT.panoptic.pool
+const MAINNET_V3_POOL_ADDRESSES = MAINNET_DEPLOYMENT.panoptic.additionalPools?.ethUsdc5bpsV3
+if (MAINNET_V3_POOL_ADDRESSES === undefined) {
+  throw new Error('Missing mainnet ETH/USDC 5bps v3 Panoptic pool deployment')
+}
 const MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES = {
   panopticPool: '0x000000007588B488d180899cDEa2080a886D2441',
   collateralTracker0: '0x6cd0186Fb4c32B6fD23279bBE0022506958216f9',
@@ -30,10 +34,14 @@ export const WethPlpVaultMainnetProdConfig: HypoVaultManagerConfig = {
     hypoVault: MAINNET_HYPOVAULT_ADDRESSES.wethPlpVault,
     underlyingToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
   },
+  automation: {
+    primaryPool: MAINNET_V3_POOL_ADDRESSES.panopticPool,
+    windDownPools: [MAINNET_PANOPTIC_POOL_ADDRESSES.panopticPool],
+  },
   manualTxDefaults: {
     collateralAllocations: [
       {
-        trackerAddress: MAINNET_PANOPTIC_POOL_ADDRESSES.collateralTracker0,
+        trackerAddress: MAINNET_V3_POOL_ADDRESSES.collateralTracker1,
         allocationBps: 10000,
       },
     ],
@@ -60,6 +68,10 @@ export const WethPlpVaultMainnetLegacyConfig: HypoVaultManagerConfig = {
     ethUsdc500bpsV4PanopticPool: MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES.panopticPool,
     hypoVaultManagerWithMerkleVerification: '0xcc80f113298DdF9D399323D5288aE5Eeaed20D44',
     hypoVault: '0x779a2aa634A004b3a3f3b322083744869BBC6D66',
+  },
+  automation: {
+    primaryPool: MAINNET_LEGACY_PANOPTIC_POOL_ADDRESSES.panopticPool,
+    windDownPools: [],
   },
   manualTxDefaults: {
     collateralAllocations: [

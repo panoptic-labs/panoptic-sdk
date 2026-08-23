@@ -9,7 +9,7 @@ const BASE_PANOPTIC_POOL_ADDRESSES = BASE_DEPLOYMENT.panoptic.pool
 export const WethPlpVaultBaseProdConfig: HypoVaultManagerConfig = {
   deployment: 'prod',
   vaultAssetIndex: 1n,
-  manageCycleIntervalMs: 600_000,
+  manageCycleIntervalMs: 86_400_000,
   vaultCapInUnderlying: 1_000_000_000_000_000_000n, // 1 WETH
   vaultCapInShares: 1_000_000_000_000_000_000_000_000n, // ~1 WETH (verify share scaling on-chain)
   allowUnlimitedDepositRequestIfCapNotReached: true,
@@ -23,6 +23,10 @@ export const WethPlpVaultBaseProdConfig: HypoVaultManagerConfig = {
     hypoVaultManagerWithMerkleVerification: BASE_HYPOVAULT_MANAGER_ADDRESSES.wethPlpVaultManager,
     hypoVault: BASE_HYPOVAULT_ADDRESSES.wethPlpVault,
     underlyingToken: '0x4200000000000000000000000000000000000006',
+  },
+  automation: {
+    primaryPool: BASE_PANOPTIC_POOL_ADDRESSES.panopticPool,
+    windDownPools: [],
   },
   manualTxDefaults: {
     collateralAllocations: [

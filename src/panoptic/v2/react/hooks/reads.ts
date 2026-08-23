@@ -23,6 +23,7 @@ import {
   type SimulateDeployNewPoolParams,
   type UniswapV4PoolKey,
   createFlowNeutralTokenId,
+  estimateCollateralBreakdown,
   estimateCollateralRequired,
   getAccountCollateral,
   getAccountGreeks,
@@ -900,6 +901,53 @@ export function useEstimateCollateralRequired(
         positionSize,
         queryAddress,
         atTick: options?.atTick,
+      }),
+    enabled: options?.enabled ?? true,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+/**
+ * Classify a position into the strategies the RiskEngine recognizes, and split
+ * an authoritative requirement across them.
+ *
+ * Account-agnostic, like the `getRequiredBase` estimate it builds on — a
+ * disconnected or view-only user gets the same breakdown. Pass
+ * `authoritativeRequired0` (the total the UI already displays) to get an
+ * apportionment; omit it for classification and isolated prices only.
+ */
+export function useCollateralBreakdown(
+  poolAddress: Address,
+  tokenId: bigint,
+  positionSize: bigint,
+  queryAddress: Address,
+  options?: QueryOptions & { atTick?: bigint; authoritativeRequired0?: bigint },
+) {
+  const ctx = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.collateralBreakdown(
+        ctx.chainId,
+        poolAddress,
+        tokenId,
+        positionSize,
+        queryAddress,
+        options?.atTick,
+        options?.authoritativeRequired0,
+      ),
+      getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
+    ],
+    queryFn: () =>
+      estimateCollateralBreakdown({
+        client: ctx.publicClient,
+        poolAddress,
+        queryAddress,
+        tokenId,
+        positionSize,
+        atTick: options?.atTick,
+        authoritativeRequired0: options?.authoritativeRequired0,
       }),
     enabled: options?.enabled ?? true,
     refetchInterval: options?.refetchInterval,

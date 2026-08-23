@@ -59,8 +59,8 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     const baseWeth = HypoVaultManagerConfigSchema.parse(WethPlpVaultBaseProdConfig)
     const mainnetUsdc = HypoVaultManagerConfigSchema.parse(UsdcPlpVaultMainnetProdConfig)
 
-    expect(baseUsdc.manageCycleIntervalMs).toBe(600_000)
-    expect(baseWeth.manageCycleIntervalMs).toBe(600_000)
+    expect(baseUsdc.manageCycleIntervalMs).toBe(86_400_000)
+    expect(baseWeth.manageCycleIntervalMs).toBe(86_400_000)
     expect(baseUsdc.deltaHedge?.deltaThresholdBps).toBe(200n)
     expect(baseUsdc.deltaHedge?.timedRehedge).toEqual({
       elapsedMinutes: 1440,
@@ -217,6 +217,7 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     expect(MainnetWETHPLPVaultPoolInfos.poolInfos[0]?.pool).toBe(
       deployment.panoptic.pool.panopticPool,
     )
+    expect(MainnetWETHPLPVaultPoolInfos.poolInfos[0]?.positionScanFromBlock).toBe(25_302_077n)
     expect(MainnetUSDCPLPVaultPoolInfos.poolInfos[0]?.pool).toBe(
       deployment.panoptic.pool.panopticPool,
     )
@@ -228,12 +229,14 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
       token0: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
       token1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
       maxPriceDeviation: 100,
+      positionScanFromBlock: 25_631_480n,
     })
     expect(MainnetUSDCPLPVaultPoolInfos.poolInfos[2]).toMatchObject({
       pool: '0x00000000009C7B687e833559e34503f64d7ed7c4',
       token0: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
       token1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
       maxPriceDeviation: 100,
+      positionScanFromBlock: 25_631_480n,
     })
   })
 
@@ -296,6 +299,7 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     expect(MainnetWETHPLPLegacyVaultPoolInfos.poolInfos[0]?.pool).toBe(
       '0x000000007588B488d180899cDEa2080a886D2441',
     )
+    expect(MainnetWETHPLPLegacyVaultPoolInfos.poolInfos[0]?.positionScanFromBlock).toBe(24_822_309n)
     expect(MainnetUSDCPLPLegacyVaultPoolInfos.poolInfos[0]?.pool).toBe(
       '0x000000007588B488d180899cDEa2080a886D2441',
     )

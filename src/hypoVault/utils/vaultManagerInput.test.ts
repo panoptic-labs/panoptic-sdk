@@ -6,12 +6,20 @@ import {
 } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
-import { resolveVaultTokenIdsByPool } from './vaultManagerInput'
+import {
+  recoverVaultCandidateTokenIdsByPool,
+  resolveVaultTokenIdsByPool,
+} from './vaultManagerInput'
 
 const readContractMock = vi.fn()
+const getOpenPositionIdsMock = vi.fn()
 
 vi.mock('viem/actions', () => ({
   readContract: (...args: unknown[]) => readContractMock(...args),
+}))
+
+vi.mock('../../panoptic/v2/sync/getTrackedPositionIds', () => ({
+  getOpenPositionIds: (...args: unknown[]) => getOpenPositionIdsMock(...args),
 }))
 
 /**
@@ -226,5 +234,108 @@ describe('resolveVaultTokenIdsByPool', () => {
 
     expect(result).toEqual([[20n]])
     expect(readContractMock).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('recoverVaultCandidateTokenIdsByPool', () => {
+  const vaultAddress = '0xCd70829727D5524Dee39DA7E824BCfe0F0879Ff4' as const
+  const pool0 = '0x0000000000000000000000000000000000000010' as const
+  const pool1 = '0x0000000000000000000000000000000000000020' as const
+  const poolInfos = [
+    {
+      pool: pool0,
+      token0: '0x0000000000000000000000000000000000000001' as const,
+      token1: '0x0000000000000000000000000000000000000002' as const,
+      maxPriceDeviation: 100,
+      positionScanFromBlock: 50n,
+    },
+    {
+      pool: pool1,
+      token0: '0x0000000000000000000000000000000000000001' as const,
+      token1: '0x0000000000000000000000000000000000000002' as const,
+      maxPriceDeviation: 100,
+    },
+  ]
+
+  it('merges recovered IDs and preserves an unchanged pool', async () => {
+    getOpenPositionIdsMock.mockReset()
+    getOpenPositionIdsMock.mockResolvedValueOnce([3n, 1n]).mockResolvedValueOnce([])
+
+    const result = await recoverVaultCandidateTokenIdsByPool({
+      viemClient: {} as unknown as PublicClient,
+      chainId: 1,
+      vaultAddress,
+      candidatesByPool: [
+        { poolAddress: pool0, candidates: [1n, 2n] },
+        { poolAddress: pool1, candidates: [9n] },
+      ],
+      poolInfos,
+      blockNumber: 200n,
+      fromBlock: 100n,
+    })
+
+    expect(result).toEqual([
+      { poolAddress: pool0, candidates: [1n, 2n, 3n] },
+      { poolAddress: pool1, candidates: [9n] },
+    ])
+    expect(getOpenPositionIdsMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ fromBlock: 100n, toBlock: 200n }),
+    )
+  })
+
+  it('uses each configured pool scan start when no trusted block exists', async () => {
+    getOpenPositionIdsMock.mockReset()
+    getOpenPositionIdsMock.mockResolvedValue([])
+
+    await expect(
+      recoverVaultCandidateTokenIdsByPool({
+        viemClient: {} as unknown as PublicClient,
+        chainId: 1,
+        vaultAddress,
+        candidatesByPool: [],
+        poolInfos,
+        blockNumber: 200n,
+      }),
+    ).rejects.toThrow('no recovery lower bound configured')
+
+    expect(getOpenPositionIdsMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ fromBlock: 50n }),
+    )
+    expect(getOpenPositionIdsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces a missing authoritative snapshot instead of treating it as empty', async () => {
+    getOpenPositionIdsMock.mockReset()
+    getOpenPositionIdsMock.mockResolvedValue(null)
+
+    await expect(
+      recoverVaultCandidateTokenIdsByPool({
+        viemClient: {} as unknown as PublicClient,
+        chainId: 1,
+        vaultAddress,
+        candidatesByPool: [],
+        poolInfos: poolInfos.slice(0, 1),
+        blockNumber: 200n,
+      }),
+    ).rejects.toThrow('Could not recover an authoritative position list')
+  })
+
+  it('surfaces recovery failures instead of returning an incomplete list', async () => {
+    getOpenPositionIdsMock.mockReset()
+    getOpenPositionIdsMock.mockRejectedValue(new Error('RPC unavailable'))
+
+    await expect(
+      recoverVaultCandidateTokenIdsByPool({
+        viemClient: {} as unknown as PublicClient,
+        chainId: 1,
+        vaultAddress,
+        candidatesByPool: [],
+        poolInfos,
+        blockNumber: 200n,
+        fromBlock: 100n,
+      }),
+    ).rejects.toThrow('RPC unavailable')
   })
 })

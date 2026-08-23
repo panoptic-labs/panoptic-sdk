@@ -75,53 +75,57 @@ export async function getSafeMode(params: GetSafeModeParams): Promise<SafeModeSt
     params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
   ])
 
-  // isSafeMode returns uint8:
-  // 0 = normal, 1 = no leverage, 2 = no swap, 3 = close only
-  const status = BigInt(safeModeRaw) as SafeModeStatusValue
+  // isSafeMode is additive: 0 = normal, 1 = cash-account collateral,
+  // 2 = no swapAtMint, and every value >=3 is close-only.
+  const level = BigInt(safeModeRaw)
 
-  switch (status) {
-    case SafeModeStatus.NO_LEVERAGE:
-      return {
-        mode: 'restricted',
-        canMint: true,
-        canBurn: true,
-        canForceExercise: true,
-        canLiquidate: true,
-        canSwapAtMint: true,
-        reason: 'All positions require 100% collateral',
-        _meta,
-      }
-    case SafeModeStatus.NO_SWAP:
-      return {
-        mode: 'restricted',
-        canMint: true,
-        canBurn: true,
-        canForceExercise: true,
-        canLiquidate: true,
-        canSwapAtMint: false,
-        reason: 'Swaps are disabled',
-        _meta,
-      }
-    case SafeModeStatus.CLOSE_ONLY:
-      return {
-        mode: 'emergency',
-        canMint: false,
-        canBurn: true,
-        canForceExercise: true,
-        canLiquidate: true,
-        canSwapAtMint: false,
-        reason: 'Pool is in close-only mode',
-        _meta,
-      }
-    default:
-      return {
-        mode: 'normal',
-        canMint: true,
-        canBurn: true,
-        canForceExercise: true,
-        canLiquidate: true,
-        canSwapAtMint: true,
-        _meta,
-      }
+  if (level >= SafeModeStatus.CLOSE_ONLY) {
+    return {
+      level,
+      mode: 'emergency',
+      canMint: false,
+      canBurn: true,
+      canForceExercise: true,
+      canLiquidate: true,
+      canSwapAtMint: false,
+      reason: 'Pool is in close-only mode',
+      _meta,
+    }
+  }
+  if (level >= SafeModeStatus.NO_SWAP) {
+    return {
+      level,
+      mode: 'restricted',
+      canMint: true,
+      canBurn: true,
+      canForceExercise: true,
+      canLiquidate: true,
+      canSwapAtMint: false,
+      reason: 'All positions require 100% collateral; swaps are disabled',
+      _meta,
+    }
+  }
+  if (level >= SafeModeStatus.NO_LEVERAGE) {
+    return {
+      level,
+      mode: 'restricted',
+      canMint: true,
+      canBurn: true,
+      canForceExercise: true,
+      canLiquidate: true,
+      canSwapAtMint: true,
+      reason: 'All positions require 100% collateral',
+      _meta,
+    }
+  }
+  return {
+    level,
+    mode: 'normal',
+    canMint: true,
+    canBurn: true,
+    canForceExercise: true,
+    canLiquidate: true,
+    canSwapAtMint: true,
+    _meta,
   }
 }

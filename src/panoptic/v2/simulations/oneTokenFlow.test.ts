@@ -143,6 +143,24 @@ describe('buildCreditWrappedDispatch', () => {
     })
   })
 
+  it('prepends an exact-input swap so existing collateral funds later user ops', () => {
+    expect(
+      buildCreditWrappedDispatch({ ...args, direction: 'exact-in', placement: 'prepend' }),
+    ).toEqual({
+      positionIdList: [99n, 99n, 11n, 12n],
+      finalPositionIdList: [9n, 12n],
+      positionSizes: [5n, 0n, 100n, 0n],
+      tickAndSpreadLimits: [
+        [-100n, 100n, 0n],
+        [100n, -100n, 0n],
+        [10n, 20n, 30n],
+        [40n, 50n, 0n],
+      ],
+      usePremiaAsCollateral: true,
+      builderCode: 77n,
+    })
+  })
+
   it('does not mutate the base dispatch arrays', () => {
     buildCreditWrappedDispatch({ ...args, direction: 'exact-in', placement: 'append' })
     expect(baseDispatch.positionIdList).toEqual([11n, 12n])
@@ -301,6 +319,8 @@ describe('quoteOneTokenFlow', () => {
     if (!result.available) return
     expect(result.quote.direction).toBe('exact-out')
     expect(result.quote.swapAmount).toBe(6n)
+    const recoverySwapLimits = vi.mocked(simulateDispatch).mock.calls[1]?.[0].tickAndSpreadLimits
+    expect(recoverySwapLimits?.[0]).toEqual([50n, -50n, 0n])
   })
 
   it('gives up when the base dispatch reverts for an unrelated reason', async () => {

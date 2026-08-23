@@ -35,10 +35,12 @@ export type CreditWrapDirection = 'exact-in' | 'exact-out'
  *
  * - `straddle`: mint first, user ops, burn last. Required for `exact-out`, where
  *   the sourced token must be available while the user's ops run.
- * - `append`: both legs after the user's ops. Required for `exact-in`, where the
- *   token being sold does not exist until those ops have run.
+ * - `prepend`: both legs before the user's ops. Used by bootstrap recovery when
+ *   the account can sell one collateral token but holds none of the token it needs.
+ * - `append`: both legs after the user's ops, for flows where the token being
+ *   sold does not exist until those operations run.
  */
-export type CreditWrapPlacement = 'append' | 'straddle'
+export type CreditWrapPlacement = 'append' | 'prepend' | 'straddle'
 
 export interface BuildCreditWrappedDispatchParams {
   dispatch: DispatchIntent
@@ -75,20 +77,30 @@ export function buildCreditWrappedDispatch(
   const mintLimits = direction === 'exact-out' ? swapping : notSwapping
   const burnLimits = direction === 'exact-out' ? notSwapping : swapping
 
+  const positionIdList =
+    placement === 'straddle'
+      ? [creditTokenId, ...dispatch.positionIdList, creditTokenId]
+      : placement === 'prepend'
+        ? [creditTokenId, creditTokenId, ...dispatch.positionIdList]
+        : [...dispatch.positionIdList, creditTokenId, creditTokenId]
+  const positionSizes =
+    placement === 'straddle'
+      ? [creditPositionSize, ...dispatch.positionSizes, 0n]
+      : placement === 'prepend'
+        ? [creditPositionSize, 0n, ...dispatch.positionSizes]
+        : [...dispatch.positionSizes, creditPositionSize, 0n]
+  const tickAndSpreadLimits =
+    placement === 'straddle'
+      ? [mintLimits, ...dispatch.tickAndSpreadLimits, burnLimits]
+      : placement === 'prepend'
+        ? [mintLimits, burnLimits, ...dispatch.tickAndSpreadLimits]
+        : [...dispatch.tickAndSpreadLimits, mintLimits, burnLimits]
+
   const wrapped: DispatchIntent = {
-    positionIdList:
-      placement === 'straddle'
-        ? [creditTokenId, ...dispatch.positionIdList, creditTokenId]
-        : [...dispatch.positionIdList, creditTokenId, creditTokenId],
+    positionIdList,
     finalPositionIdList: [...dispatch.finalPositionIdList],
-    positionSizes:
-      placement === 'straddle'
-        ? [creditPositionSize, ...dispatch.positionSizes, 0n]
-        : [...dispatch.positionSizes, creditPositionSize, 0n],
-    tickAndSpreadLimits:
-      placement === 'straddle'
-        ? [mintLimits, ...dispatch.tickAndSpreadLimits, burnLimits]
-        : [...dispatch.tickAndSpreadLimits, mintLimits, burnLimits],
+    positionSizes,
+    tickAndSpreadLimits,
     usePremiaAsCollateral: dispatch.usePremiaAsCollateral,
     builderCode: dispatch.builderCode,
   }

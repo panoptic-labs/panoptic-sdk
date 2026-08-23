@@ -1,3 +1,4 @@
+import { hashKey } from '@tanstack/react-query'
 import type { Address } from 'viem'
 import { describe, expect, it } from 'vitest'
 
@@ -96,6 +97,49 @@ describe('queryKeys', () => {
         '1000',
         account,
       ])
+    })
+  })
+
+  describe('collateralBreakdown', () => {
+    it('includes the complete input and serializes every bigint', () => {
+      const queryAddress = '0x3333333333333333333333333333333333333333' as Address
+      const key = queryKeys.collateralBreakdown(
+        11155111n,
+        poolAddress,
+        tokenId,
+        1_000_000n,
+        queryAddress,
+        -123n,
+        456_789n,
+      )
+
+      expect(key).toEqual([
+        'panoptic-v2',
+        'collateralBreakdown',
+        '11155111',
+        poolAddress,
+        tokenId.toString(),
+        '1000000',
+        queryAddress,
+        '-123',
+        '456789',
+      ])
+      expect(key.every((part) => typeof part !== 'bigint')).toBe(true)
+      expect(() => hashKey(key)).not.toThrow()
+    })
+
+    it('preserves absent optional inputs without adding bigint values', () => {
+      const queryAddress = '0x3333333333333333333333333333333333333333' as Address
+      const key = queryKeys.collateralBreakdown(
+        chainId,
+        poolAddress,
+        tokenId,
+        1_000_000n,
+        queryAddress,
+      )
+
+      expect(key.slice(-2)).toEqual([undefined, undefined])
+      expect(key.every((part) => typeof part !== 'bigint')).toBe(true)
     })
   })
 

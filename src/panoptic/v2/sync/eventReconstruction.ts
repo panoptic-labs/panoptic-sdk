@@ -4,15 +4,19 @@
  */
 
 import type { Address, Hash, PublicClient } from 'viem'
+import { getAbiItem } from 'viem'
 
+import { panopticPoolV2Abi } from '../../../generated'
 import type { SyncEvent } from '../types'
+
+type EventReconstructionClient = Pick<PublicClient, 'getBlock' | 'getLogs'>
 
 /**
  * Parameters for event reconstruction.
  */
 export interface EventReconstructionParams {
   /** viem public client */
-  client: PublicClient
+  client: EventReconstructionClient
   /** Pool address */
   poolAddress: Address
   /** Account to reconstruct positions for */
@@ -90,51 +94,24 @@ export async function reconstructFromEvents(
 
   const mintEvents: MintEvent[] = []
   const burnEvents: BurnEvent[] = []
+  const totalBlocks = toBlock - fromBlock + 1n
+  const safeBatchSize = batchSize > 0n ? batchSize : 10000n
 
-  let currentBlock = fromBlock
-  const totalBlocks = toBlock - fromBlock
-
-  // Scan in batches
-  while (currentBlock <= toBlock) {
-    const endBlock =
-      currentBlock + batchSize - 1n > toBlock ? toBlock : currentBlock + batchSize - 1n
-
-    // Fetch mint events for this batch
+  const scanRange = async (rangeFromBlock: bigint, rangeToBlock: bigint) => {
     const [mints, burns] = await Promise.all([
       client.getLogs({
         address: poolAddress,
-        event: {
-          type: 'event',
-          name: 'OptionMinted',
-          inputs: [
-            { type: 'address', name: 'recipient', indexed: true },
-            { type: 'uint256', name: 'tokenId', indexed: true },
-            { type: 'uint256', name: 'balanceData', indexed: false },
-          ],
-        },
-        args: {
-          recipient: account,
-        },
-        fromBlock: currentBlock,
-        toBlock: endBlock,
+        event: OPTION_MINTED_EVENT,
+        args: { recipient: account },
+        fromBlock: rangeFromBlock,
+        toBlock: rangeToBlock,
       }),
       client.getLogs({
         address: poolAddress,
-        event: {
-          type: 'event',
-          name: 'OptionBurnt',
-          inputs: [
-            { type: 'address', name: 'recipient', indexed: true },
-            { type: 'uint256', name: 'tokenId', indexed: true },
-            { type: 'uint256', name: 'positionSize', indexed: false },
-            { type: 'int256[4]', name: 'premiaByLeg', indexed: false },
-          ],
-        },
-        args: {
-          recipient: account,
-        },
-        fromBlock: currentBlock,
-        toBlock: endBlock,
+        event: OPTION_BURNT_EVENT,
+        args: { recipient: account },
+        fromBlock: rangeFromBlock,
+        toBlock: rangeToBlock,
       }),
     ])
 
@@ -166,20 +143,31 @@ export async function reconstructFromEvents(
       })
     }
 
-    // Report progress
-    if (onProgress) {
-      const blocksProcessed = endBlock - fromBlock + 1n
-      const progress = totalBlocks > 0n ? (blocksProcessed * 100n) / totalBlocks : 100n
+    const blocksProcessed = rangeToBlock - fromBlock + 1n
+    const progress = totalBlocks > 0n ? (blocksProcessed * 100n) / totalBlocks : 100n
+    onProgress?.({
+      currentBlock: rangeToBlock,
+      targetBlock: toBlock,
+      positionsFound: BigInt(mintEvents.length),
+      progress: progress > 100n ? 100n : progress,
+    })
+  }
 
-      onProgress({
-        currentBlock: endBlock,
-        targetBlock: toBlock,
-        positionsFound: BigInt(mintEvents.length),
-        progress,
-      })
+  // Account and pool topics make this query selective enough for providers that
+  // permit wide eth_getLogs ranges. This keeps the fallback practical on mainnet.
+  // Providers with an explicit range cap fall back to bounded requests.
+  try {
+    await scanRange(fromBlock, toBlock)
+  } catch (error) {
+    if (!isRangeLimitError(error)) throw error
+
+    let currentBlock = fromBlock
+    while (currentBlock <= toBlock) {
+      const endBlock =
+        currentBlock + safeBatchSize - 1n > toBlock ? toBlock : currentBlock + safeBatchSize - 1n
+      await scanRange(currentBlock, endBlock)
+      currentBlock = endBlock + 1n
     }
-
-    currentBlock = endBlock + 1n
   }
 
   // Build position map: tokenId -> net position size
@@ -228,6 +216,36 @@ export async function reconstructFromEvents(
     lastBlock: toBlock,
     lastBlockHash: lastBlock.hash,
   }
+}
+
+const OPTION_MINTED_EVENT = getAbiItem({ abi: panopticPoolV2Abi, name: 'OptionMinted' })
+const OPTION_BURNT_EVENT = getAbiItem({ abi: panopticPoolV2Abi, name: 'OptionBurnt' })
+
+function isRangeLimitError(error: unknown): boolean {
+  const messages: string[] = []
+  let current: unknown = error
+  for (let depth = 0; current && typeof current === 'object' && depth < 5; depth += 1) {
+    if ('message' in current && typeof current.message === 'string') {
+      messages.push(current.message)
+    }
+    if ('details' in current && typeof current.details === 'string') {
+      messages.push(current.details)
+    }
+    current = 'cause' in current ? current.cause : undefined
+  }
+  if (typeof error === 'string') messages.push(error)
+
+  const message = messages.join(' ').toLowerCase()
+  return (
+    message.includes('block range') ||
+    message.includes('range is too large') ||
+    message.includes('range too large') ||
+    message.includes('query returned more than') ||
+    message.includes('too many results') ||
+    message.includes('log response size exceeded') ||
+    message.includes('exceeds the limit') ||
+    (message.includes('range') && message.includes('limit'))
+  )
 }
 
 /**

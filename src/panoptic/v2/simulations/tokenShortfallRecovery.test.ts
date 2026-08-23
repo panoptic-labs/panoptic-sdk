@@ -1,9 +1,9 @@
-import type { PublicClient } from 'viem'
+import { type PublicClient, createPublicClient, custom, zeroAddress } from 'viem'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { NotEnoughTokensError } from '../errors'
+import { NotEnoughTokensError, PanopticError } from '../errors'
 import { getPool } from '../reads/pool'
-import { MAX_TICK, MIN_TICK } from '../utils/constants'
+import type { Pool } from '../types'
 import { simulateDispatch } from './simulateDispatch'
 import {
   type DispatchIntent,
@@ -26,6 +26,156 @@ const baseDispatch: DispatchIntent = {
   usePremiaAsCollateral: true,
   builderCode: 77n,
 }
+
+const PREFIX_TOKEN0 = '0x0000000000000000000000000000000000000010'
+const PREFIX_TOKEN1 = '0x0000000000000000000000000000000000000011'
+const PREFIX_TRACKER0 = '0x0000000000000000000000000000000000000020'
+const PREFIX_TRACKER1 = '0x0000000000000000000000000000000000000021'
+const PREFIX_META = { blockNumber: 123n, blockTimestamp: 456n, blockHash: '0x01' as const }
+const PREFIX_POOL_ADDRESS = '0x0000000000000000000000000000000000000030'
+const PREFIX_RISK_ENGINE = '0x0000000000000000000000000000000000000050'
+
+const collateralTracker = (address: `0x${string}`, token: `0x${string}`, symbol: string) => ({
+  address,
+  token,
+  symbol,
+  decimals: 18n,
+  totalAssets: 1_000n,
+  insideAMM: 0n,
+  creditedShares: 0n,
+  totalShares: 1_000n,
+  utilization: 0n,
+  borrowRate: 0n,
+  supplyRate: 0n,
+})
+
+const PREFIX_POOL: Pool = {
+  address: PREFIX_POOL_ADDRESS,
+  chainId: 1n,
+  poolId: 1n,
+  poolKey: {
+    currency0: PREFIX_TOKEN0,
+    currency1: PREFIX_TOKEN1,
+    fee: 3_000n,
+    tickSpacing: 10n,
+    hooks: zeroAddress,
+  },
+  tickSpacing: 10n,
+  collateralTracker0: collateralTracker(PREFIX_TRACKER0, PREFIX_TOKEN0, 'TOKEN0'),
+  collateralTracker1: collateralTracker(PREFIX_TRACKER1, PREFIX_TOKEN1, 'TOKEN1'),
+  riskEngine: {
+    address: PREFIX_RISK_ENGINE,
+    collateralRequirement: 0n,
+    maintenanceMargin: 0n,
+    commissionRate: 0n,
+    premiumFeeRate: 0n,
+    vegoid: 0n,
+    maxSpread: 0n,
+  },
+  currentTick: 0n,
+  sqrtPriceX96: 1n << 96n,
+  uniswapPoolLiquidity: 1_000n,
+  healthStatus: 'active',
+  metadata: {
+    poolKeyBytes: '0x',
+    poolId: 1n,
+    collateralToken0Address: PREFIX_TRACKER0,
+    collateralToken1Address: PREFIX_TRACKER1,
+    riskEngineAddress: PREFIX_RISK_ENGINE,
+    token0Asset: PREFIX_TOKEN0,
+    token1Asset: PREFIX_TOKEN1,
+    token0Symbol: 'TOKEN0',
+    token1Symbol: 'TOKEN1',
+    token0Decimals: 18n,
+    token1Decimals: 18n,
+    token0Name: 'Token 0',
+    token1Name: 'Token 1',
+    underlyingPoolId: PREFIX_POOL_ADDRESS,
+    isV4: false,
+    tickSpacing: 10n,
+    fee: 3_000n,
+    sfpmAddress: zeroAddress,
+  },
+  _meta: PREFIX_META,
+}
+
+function mockPrefixedPool() {
+  vi.mocked(getPool).mockResolvedValue(PREFIX_POOL)
+}
+
+function prefixedClient(): PublicClient {
+  return createPublicClient({
+    transport: custom({ request: vi.fn().mockResolvedValue('0x7b') }),
+  })
+}
+
+function malformedNotEnoughTokensError(): NotEnoughTokensError {
+  const error = new NotEnoughTokensError(PREFIX_TRACKER0, 1n, 0n)
+  Object.defineProperties(error, {
+    tokenAddress: { value: undefined },
+    assetsRequested: { value: undefined },
+    assetBalance: { value: undefined },
+  })
+  return error
+}
+
+function prefixedSuccess({
+  delta0,
+  delta1,
+  balanceBefore0 = 0n,
+  balanceBefore1 = 100n,
+}: {
+  delta0: bigint
+  delta1: bigint
+  balanceBefore0?: bigint
+  balanceBefore1?: bigint
+}) {
+  return {
+    success: true as const,
+    data: {
+      netAmount0: delta0,
+      netAmount1: delta1,
+      positionsCreated: [],
+      positionsClosed: [],
+      postCollateral0: balanceBefore0 + delta0,
+      postCollateral1: balanceBefore1 + delta1,
+      preMarginExcess0: null,
+      preMarginExcess1: null,
+      postMarginExcess0: null,
+      postMarginExcess1: null,
+    },
+    gasEstimate: 1n,
+    tokenFlow: {
+      delta0,
+      delta1,
+      balanceBefore0,
+      balanceBefore1,
+      balanceAfter0: balanceBefore0 + delta0,
+      balanceAfter1: balanceBefore1 + delta1,
+      tickBefore: 0n,
+      tickAfter: 0n,
+    },
+    _meta: PREFIX_META,
+  }
+}
+
+const bootstrapFailure = () => ({
+  success: false as const,
+  error: new NotEnoughTokensError(PREFIX_TRACKER0, 1n, 0n),
+  _meta: PREFIX_META,
+})
+
+const quotePrefixedRecovery = () =>
+  quoteTokenShortfallRecovery({
+    client: prefixedClient(),
+    poolAddress: PREFIX_POOL_ADDRESS,
+    account: '0x0000000000000000000000000000000000000040',
+    chainId: 1n,
+    existingPositionIds: [],
+    dispatch: baseDispatch,
+    error: new NotEnoughTokensError(PREFIX_TRACKER0, 6n, 0n),
+    slippageBps: 50n,
+  })
 
 describe('buildTokenShortfallRecoveryDispatch', () => {
   it('wraps the original operations in an exact-output temporary credit', () => {
@@ -79,12 +229,16 @@ describe('getNotEnoughTokensError', () => {
   it('ignores selector-only decodes with undefined args', () => {
     // parsePanopticError's fallback path constructs the error with no args when
     // it can only match the 4-byte selector (e.g. from a multicall error string).
-    const partial = new NotEnoughTokensError(
-      undefined as unknown as `0x${string}`,
-      undefined as unknown as bigint,
-      undefined as unknown as bigint,
-    )
+    const partial = malformedNotEnoughTokensError()
     expect(getNotEnoughTokensError(partial)).toBeNull()
+  })
+
+  it('continues through a partial decode to a complete cause', () => {
+    const complete = new NotEnoughTokensError('0x0000000000000000000000000000000000000001', 10n, 4n)
+    const partial = malformedNotEnoughTokensError()
+    Object.defineProperty(partial, 'cause', { value: complete })
+
+    expect(getNotEnoughTokensError(partial)).toBe(complete)
   })
 })
 
@@ -192,6 +346,150 @@ describe('quoteTokenShortfallRecovery', () => {
     ])
     expect(result.quote.dispatch.finalPositionIdList).toEqual(baseDispatch.finalPositionIdList)
     expect(simulateDispatch).toHaveBeenCalledTimes(2)
+  })
+
+  it('prepends an exact-input swap when zero output balance cannot pay the credit fee', async () => {
+    const token0 = '0x0000000000000000000000000000000000000010'
+    const token1 = '0x0000000000000000000000000000000000000011'
+    const tracker0 = '0x0000000000000000000000000000000000000020'
+    const tracker1 = '0x0000000000000000000000000000000000000021'
+    vi.mocked(getPool).mockResolvedValue({
+      poolId: 1n,
+      currentTick: 0n,
+      sqrtPriceX96: 1n << 96n,
+      tickSpacing: 10n,
+      collateralTracker0: { address: tracker0, token: token0 },
+      collateralTracker1: { address: tracker1, token: token1 },
+    } as unknown as Awaited<ReturnType<typeof getPool>>)
+
+    const meta = { blockNumber: 123n, blockTimestamp: 456n, blockHash: '0x01' as const }
+    const successful = (delta0: bigint, delta1: bigint) => ({
+      success: true as const,
+      data: {
+        netAmount0: delta0,
+        netAmount1: delta1,
+        positionsCreated: [],
+        positionsClosed: [],
+        postCollateral0: 10n + delta0,
+        postCollateral1: 100n + delta1,
+        preMarginExcess0: null,
+        preMarginExcess1: null,
+        postMarginExcess0: null,
+        postMarginExcess1: null,
+      },
+      gasEstimate: 1n,
+      tokenFlow: {
+        delta0,
+        delta1,
+        balanceBefore0: 10n,
+        balanceBefore1: 100n,
+        balanceAfter0: 10n + delta0,
+        balanceAfter1: 100n + delta1,
+        tickBefore: 0n,
+        tickAfter: 0n,
+      },
+      _meta: meta,
+    })
+    vi.mocked(simulateDispatch)
+      // Exact-output bootstrap fails because the account owns no token0.
+      .mockResolvedValueOnce({
+        success: false,
+        error: new NotEnoughTokensError(tracker0, 1n, 0n),
+        _meta: meta,
+      })
+      // A token1-denominated exact-input credit successfully sources token0 first.
+      .mockResolvedValueOnce(successful(6n, -7n))
+      .mockResolvedValueOnce(successful(0n, -7n))
+
+    const result = await quoteTokenShortfallRecovery({
+      client: { getBlockNumber: vi.fn().mockResolvedValue(123n) } as unknown as PublicClient,
+      poolAddress: '0x0000000000000000000000000000000000000030',
+      account: '0x0000000000000000000000000000000000000040',
+      chainId: 1n,
+      existingPositionIds: [],
+      dispatch: baseDispatch,
+      error: new NotEnoughTokensError(tracker0, 6n, 0n),
+      slippageBps: 50n,
+    })
+
+    expect(result.available).toBe(true)
+    if (!result.available) return
+    expect(result.quote.direction).toBe('exact-in')
+    expect(result.quote.estimatedAmountOut).toBe(6n)
+    expect(result.quote.dispatch.positionIdList).toEqual([
+      result.quote.creditTokenId,
+      result.quote.creditTokenId,
+      ...baseDispatch.positionIdList,
+    ])
+    expect(simulateDispatch).toHaveBeenCalledTimes(3)
+  })
+
+  it('rejects a prefixed swap whose input exceeds the source balance', async () => {
+    mockPrefixedPool()
+    vi.mocked(simulateDispatch)
+      .mockResolvedValueOnce(bootstrapFailure())
+      .mockResolvedValueOnce(prefixedSuccess({ delta0: 6n, delta1: -7n, balanceBefore1: 6n }))
+
+    await expect(quotePrefixedRecovery()).resolves.toMatchObject({
+      available: false,
+      reason: 'swap-unavailable',
+    })
+  })
+
+  it('reports a failed prefixed swap simulation as swap-unavailable', async () => {
+    mockPrefixedPool()
+    vi.mocked(simulateDispatch)
+      .mockResolvedValueOnce(bootstrapFailure())
+      .mockResolvedValueOnce({
+        success: false,
+        error: new PanopticError('prefixed swap failed'),
+        _meta: PREFIX_META,
+      })
+
+    await expect(quotePrefixedRecovery()).resolves.toMatchObject({
+      available: false,
+      reason: 'swap-unavailable',
+    })
+  })
+
+  it('grows an under-delivering prefixed swap before succeeding', async () => {
+    mockPrefixedPool()
+    vi.mocked(simulateDispatch)
+      .mockResolvedValueOnce(bootstrapFailure())
+      .mockResolvedValueOnce(prefixedSuccess({ delta0: 3n, delta1: -7n }))
+      .mockResolvedValueOnce(prefixedSuccess({ delta0: 6n, delta1: -15n }))
+      .mockResolvedValueOnce(prefixedSuccess({ delta0: 0n, delta1: -15n }))
+
+    const result = await quotePrefixedRecovery()
+
+    expect(result.available).toBe(true)
+    expect(simulateDispatch).toHaveBeenCalledTimes(4)
+    const firstSize = vi.mocked(simulateDispatch).mock.calls[1]?.[0].positionSizes[0]
+    const secondSize = vi.mocked(simulateDispatch).mock.calls[2]?.[0].positionSizes[0]
+    expect(firstSize).toBeDefined()
+    expect(secondSize).toBeDefined()
+    if (firstSize === undefined || secondSize === undefined) return
+    expect(secondSize).toBeGreaterThan(firstSize)
+  })
+
+  it('returns recovery-unavailable after exhausting prefixed recovery retries', async () => {
+    mockPrefixedPool()
+    const simulation = vi.mocked(simulateDispatch).mockResolvedValueOnce(bootstrapFailure())
+    for (let attempt = 0; attempt < 8; attempt++) {
+      simulation
+        .mockResolvedValueOnce(prefixedSuccess({ delta0: 100n, delta1: -7n }))
+        .mockResolvedValueOnce({
+          success: false,
+          error: new NotEnoughTokensError(PREFIX_TRACKER0, 1n, 0n),
+          _meta: PREFIX_META,
+        })
+    }
+
+    await expect(quotePrefixedRecovery()).resolves.toMatchObject({
+      available: false,
+      reason: 'recovery-unavailable',
+    })
+    expect(simulateDispatch).toHaveBeenCalledTimes(17)
   })
 
   it('increases exact output through decoded and share-rounding shortfalls', async () => {
@@ -316,7 +614,7 @@ describe('quoteTokenShortfallRecovery', () => {
     expect(getPool).not.toHaveBeenCalled()
   })
 
-  it('defaults the loan legs to the full tick range', async () => {
+  it('defaults recovery swaps to slippage-bounded ticks', async () => {
     const token0 = '0x0000000000000000000000000000000000000010'
     const token1 = '0x0000000000000000000000000000000000000011'
     const tracker0 = '0x0000000000000000000000000000000000000020'
@@ -376,7 +674,7 @@ describe('quoteTokenShortfallRecovery', () => {
     expect(result.available).toBe(true)
     if (!result.available) return
     const limits = result.quote.dispatch.tickAndSpreadLimits
-    expect(limits[0]).toEqual([MAX_TICK, MIN_TICK, 0n])
-    expect(limits[limits.length - 1]).toEqual([MIN_TICK, MAX_TICK, 0n])
+    expect(limits[0]).toEqual([50n, -50n, 0n])
+    expect(limits[limits.length - 1]).toEqual([-50n, 50n, 0n])
   })
 })

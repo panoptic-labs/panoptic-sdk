@@ -23,6 +23,10 @@ export const UsdcPlpVaultSepoliaDevConfig: HypoVaultManagerConfig = {
     hypoVault: SEPOLIA_HYPOVAULT_ADDRESSES.usdcPlpVault,
     underlyingToken: SEPOLIA_ETH_USDC_5BPS_MARKET.currency1,
   },
+  automation: {
+    primaryPool: SEPOLIA_PANOPTIC_POOL_ADDRESSES.panopticPool,
+    windDownPools: [],
+  },
   manualTxDefaults: {
     collateralAllocations: [
       {

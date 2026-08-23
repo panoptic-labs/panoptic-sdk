@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildManageArgs, findLeafForTarget } from '../utils/buildManageArgs'
+import {
+  buildManageArgs,
+  findLeafForTarget,
+  findLeafForTargetAndSignature,
+} from '../utils/buildManageArgs'
 import {
   type StrategistLeafDefinition,
   createStrategistLeavesArtifact,
@@ -133,6 +137,55 @@ describe('mainnet strategist leaves', () => {
         NEW_POOL.toLowerCase(),
       ])
     }
+  })
+
+  it('selects duplicate ERC-20 signatures by authorized address arguments', () => {
+    const currentApproval = findLeafForTargetAndSignature(
+      MainnetUSDCPLPStrategistLeaves,
+      USDC,
+      'approve(address,uint256)',
+      [CURRENT_PO_USDC],
+    )
+    const v3Approval = findLeafForTargetAndSignature(
+      MainnetUSDCPLPStrategistLeaves,
+      USDC,
+      'approve(address,uint256)',
+      [NEW_PO_USDC],
+    )
+
+    expect(currentApproval.LeafDigest).not.toBe(v3Approval.LeafDigest)
+    expect(currentApproval.AddressArguments[0]?.toLowerCase()).toBe(CURRENT_PO_USDC.toLowerCase())
+    expect(v3Approval.AddressArguments[0]?.toLowerCase()).toBe(NEW_PO_USDC.toLowerCase())
+  })
+
+  it('rejects missing semantic leaf matches', () => {
+    expect(() =>
+      findLeafForTargetAndSignature(
+        MainnetUSDCPLPStrategistLeaves,
+        '0x0000000000000000000000000000000000000001',
+        'approve(address,uint256)',
+        [CURRENT_PO_USDC],
+      ),
+    ).toThrow('found 0')
+  })
+
+  it('rejects ambiguous semantic leaf matches', () => {
+    const currentApproval = findLeafForTargetAndSignature(
+      MainnetUSDCPLPStrategistLeaves,
+      USDC,
+      'approve(address,uint256)',
+      [CURRENT_PO_USDC],
+    )
+    const duplicateArtifact = {
+      ...MainnetUSDCPLPStrategistLeaves,
+      leafs: [...MainnetUSDCPLPStrategistLeaves.leafs, currentApproval],
+    }
+
+    expect(() =>
+      findLeafForTargetAndSignature(duplicateArtifact, USDC, 'approve(address,uint256)', [
+        CURRENT_PO_USDC,
+      ]),
+    ).toThrow('found 2')
   })
 
   it('authorizes complete two-sided lifecycles for the existing ETH/USDC pool', () => {

@@ -6,10 +6,17 @@
 import type { PublicClient } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
+import { PanopticValidationError } from '../errors'
 import { getAccountCollateral, getLiquidationPrices, getNetLiquidationValue } from './account'
 import { getCollateralData, getCurrentRates } from './collateral'
 import { getDeltaHedgeParams } from './hedge'
-import { getOracleState, getRiskParameters, getUtilization } from './pool'
+import {
+  getOracleRiskParameters,
+  getOracleState,
+  getPool,
+  getRiskParameters,
+  getUtilization,
+} from './pool'
 import { getPosition, getPositionGreeks, getPositions } from './position'
 import { getAccountPremia, getPositionsWithPremia } from './premia'
 import { getSafeMode } from './safeMode'
@@ -43,6 +50,46 @@ function createMockClient(): PublicClient {
 }
 
 describe('Pool Read Functions', () => {
+  describe('getOracleRiskParameters', () => {
+    it('reads and decodes constants from the selected RiskEngine deployment', async () => {
+      const client = createMockClient()
+      vi.mocked(client.multicall).mockResolvedValueOnce([
+        120n | (240n << 24n) | (600n << 48n) | (1_800n << 72n),
+        953n,
+        149,
+      ])
+
+      const result = await getOracleRiskParameters({
+        client,
+        riskEngineAddress: RISK_ENGINE_ADDRESS,
+        blockNumber: MOCK_BLOCK.number,
+      })
+
+      expect(result).toEqual({
+        emaPeriods: { spot: 120n, fast: 240n, slow: 600n, eons: 1_800n },
+        maxTicksDelta: 953n,
+        maxClampDelta: 149n,
+        _meta: {
+          blockNumber: MOCK_BLOCK.number,
+          blockTimestamp: MOCK_BLOCK.timestamp,
+          blockHash: MOCK_BLOCK.hash,
+        },
+      })
+      expect(client.multicall).toHaveBeenCalledWith(
+        expect.objectContaining({ blockNumber: MOCK_BLOCK.number, allowFailure: false }),
+      )
+    })
+
+    it('rejects invalid constants returned by the RiskEngine', async () => {
+      const client = createMockClient()
+      vi.mocked(client.multicall).mockResolvedValueOnce([0n, 953n, 149])
+
+      await expect(
+        getOracleRiskParameters({ client, riskEngineAddress: RISK_ENGINE_ADDRESS }),
+      ).rejects.toBeInstanceOf(PanopticValidationError)
+    })
+  })
+
   describe('getUtilization', () => {
     it('should return utilization for both tokens', async () => {
       const client = createMockClient()
@@ -132,26 +179,103 @@ describe('Pool Read Functions', () => {
   })
 
   describe('getOracleState', () => {
-    it('should return oracle state with ticks', async () => {
+    it('should reuse caller-provided metadata with one aggregate read at the target block', async () => {
       const client = createMockClient()
+      const targetBlockNumber = 10000000n
+      const targetBlockMeta = {
+        blockNumber: targetBlockNumber,
+        blockTimestamp: MOCK_BLOCK.timestamp,
+        blockHash: MOCK_BLOCK.hash,
+      }
+      const signed22 = (value: bigint) => value & ((1n << 22n) - 1n)
+      const epoch = (MOCK_BLOCK.timestamp / 64n) & ((1n << 24n) - 1n)
+      const oraclePack =
+        (epoch << 232n) |
+        (signed22(-99n) << 96n) |
+        (signed22(101n) << 120n) |
+        (signed22(-103n) << 142n) |
+        (signed22(104n) << 164n) |
+        (signed22(-105n) << 186n)
 
-      vi.mocked(client.readContract).mockResolvedValue([
-        100, // currentTick
-        101, // spotTick
-        102, // medianTick
-        103, // latestTick
-        (1n << 208n) | (1700000000n << 176n), // oraclePack with epoch and timestamp
+      vi.mocked(client.multicall).mockResolvedValueOnce([
+        [
+          100, // currentTick
+          101, // spotTick
+          102, // medianTick
+          103, // latestTick
+          oraclePack,
+        ],
+        104,
       ])
 
       const result = await getOracleState({
         client,
         poolAddress: POOL_ADDRESS,
+        blockNumber: targetBlockNumber,
+        _meta: targetBlockMeta,
       })
 
       expect(result.referenceTick).toBe(100n)
+      expect(result.currentTick).toBe(100n)
+      expect(result.oracleReferenceTick).toBe(-99n)
+      expect(result.latestTick).toBe(103n)
+      expect(result.twapTick).toBe(104n)
       expect(result.spotEMA).toBe(101n)
+      expect(result.fastEMA).toBe(-103n)
+      expect(result.slowEMA).toBe(104n)
+      expect(result.eonsEMA).toBe(-105n)
       expect(result.medianTick).toBe(102n)
-      expect(result._meta.blockNumber).toBe(12345678n)
+      expect(result.epoch).toBe(epoch)
+      expect(result.lastUpdateTimestamp).toBe(MOCK_BLOCK.timestamp - (MOCK_BLOCK.timestamp % 64n))
+      expect(result._meta).toEqual(targetBlockMeta)
+      expect(client.multicall).toHaveBeenCalledTimes(1)
+      expect(client.multicall).toHaveBeenCalledWith({
+        contracts: [
+          expect.objectContaining({
+            address: POOL_ADDRESS,
+            functionName: 'getOracleTicks',
+          }),
+          expect.objectContaining({
+            address: POOL_ADDRESS,
+            functionName: 'getTWAP',
+          }),
+        ],
+        allowFailure: false,
+        blockNumber: targetBlockNumber,
+      })
+      expect(client.readContract).not.toHaveBeenCalled()
+      expect(client.getBlock).not.toHaveBeenCalled()
+    })
+
+    it('should fetch complete metadata for the target block when metadata is omitted', async () => {
+      const client = createMockClient()
+      const targetBlockNumber = 10000000n
+      const targetBlock = {
+        number: targetBlockNumber,
+        timestamp: 1700000010n,
+        hash: '0x1111111111111111111111111111111111111111111111111111111111111111' as const,
+      }
+      vi.mocked(client.getBlock).mockResolvedValue(targetBlock as never)
+      vi.mocked(client.multicall).mockResolvedValueOnce([[100, 101, 102, 103, 123n << 232n], 104])
+
+      const result = await getOracleState({
+        client,
+        poolAddress: POOL_ADDRESS,
+        blockNumber: targetBlockNumber,
+      })
+
+      expect(result._meta).toEqual({
+        blockNumber: targetBlockNumber,
+        blockTimestamp: targetBlock.timestamp,
+        blockHash: targetBlock.hash,
+      })
+      expect(client.multicall).toHaveBeenCalledWith(
+        expect.objectContaining({ blockNumber: targetBlockNumber }),
+      )
+      expect(client.getBlock).toHaveBeenCalledWith({
+        blockNumber: targetBlockNumber,
+        includeTransactions: false,
+      })
     })
   })
 
@@ -168,6 +292,8 @@ describe('Pool Read Functions', () => {
         10, // NOTIONAL_FEE
         5000n, // TARGET_POOL_UTIL
         9000n, // SATURATED_POOL_UTIL
+        10_666_667n, // BP_DECREASE_BUFFER
+        10_000_000n, // DECIMALS
         [0n, 0], // getRiskParameters result
       ])
 
@@ -181,7 +307,33 @@ describe('Pool Read Functions', () => {
       expect(result.commissionRate).toBe(10n)
       expect(result.targetUtilization).toBe(5000n)
       expect(result.saturatedUtilization).toBe(9000n)
+      expect(result.mintBuffer).toEqual({ numerator: 10_666_667n, denominator: 10_000_000n })
       expect(result._meta.blockNumber).toBe(12345678n)
+    })
+
+    it('should fall back to the complete compiled-in ratio when DECIMALS reads 0', async () => {
+      const client = createMockClient()
+
+      vi.mocked(client.readContract).mockResolvedValue(RISK_ENGINE_ADDRESS)
+
+      vi.mocked(client.multicall).mockResolvedValue([
+        2000n,
+        1000n,
+        500n,
+        10,
+        5000n,
+        9000n,
+        10_666_667n, // BP_DECREASE_BUFFER
+        0n, // DECIMALS — pathological; must not turn into a divide-by-zero
+        [0n, 0],
+      ])
+
+      const result = await getRiskParameters({
+        client,
+        poolAddress: POOL_ADDRESS,
+      })
+
+      expect(result.mintBuffer).toEqual({ numerator: 10_666_667n, denominator: 10_000_000n })
     })
   })
 
@@ -196,12 +348,26 @@ describe('Pool Read Functions', () => {
       })
 
       expect(result.mode).toBe('normal')
+      expect(result.level).toBe(0n)
       expect(result.canMint).toBe(true)
       expect(result.canBurn).toBe(true)
       expect(result.canForceExercise).toBe(true)
       expect(result.canLiquidate).toBe(true)
       expect(result.reason).toBeUndefined()
       expect(result._meta.blockNumber).toBe(12345678n)
+    })
+
+    it('composes additive restrictions at level 2', async () => {
+      const client = createMockClient()
+      vi.mocked(client.readContract).mockResolvedValue(2)
+
+      const result = await getSafeMode({ client, poolAddress: POOL_ADDRESS })
+
+      expect(result.mode).toBe('restricted')
+      expect(result.canMint).toBe(true)
+      expect(result.canSwapAtMint).toBe(false)
+      expect(result.reason).toContain('100% collateral')
+      expect(result.reason).toContain('swaps are disabled')
     })
 
     it('should map close-only status to emergency mode', async () => {
@@ -214,12 +380,25 @@ describe('Pool Read Functions', () => {
       })
 
       expect(result.mode).toBe('emergency')
+      expect(result.level).toBe(3n)
       expect(result.canMint).toBe(false)
       expect(result.canBurn).toBe(true)
       expect(result.canForceExercise).toBe(true)
       expect(result.canLiquidate).toBe(true)
       expect(result.reason).toContain('close-only')
       expect(result._meta.blockNumber).toBe(12345678n)
+    })
+
+    it.each([4, 5, 6])('treats additive status %i as close-only', async (level) => {
+      const client = createMockClient()
+      vi.mocked(client.readContract).mockResolvedValue(level)
+
+      const result = await getSafeMode({ client, poolAddress: POOL_ADDRESS })
+
+      expect(result.level).toBe(BigInt(level))
+      expect(result.mode).toBe('emergency')
+      expect(result.canMint).toBe(false)
+      expect(result.canSwapAtMint).toBe(false)
     })
   })
 })
@@ -1024,9 +1203,14 @@ describe('Delta Hedge Functions', () => {
 
   const HEDGE_TOKEN_ID = buildShortPutTokenId()
 
-  // Helper to mock getPool multicalls (4 multicalls total)
-  // getPoolMetadata: 3 multicalls, getPool: 1 multicall
-  const mockGetPoolCalls = (client: PublicClient, currentTick = 0) => {
+  // Helper to mock getPool multicalls (5 multicalls total)
+  // getPoolMetadata: 4 multicalls, getPool: 1 multicall
+  const mockGetPoolCalls = (
+    client: PublicClient,
+    currentTick = 0,
+    token0Decimals = 18,
+    token1Decimals = 6,
+  ) => {
     // poolKeyBytes: 256-bit hex with currency0, currency1, fee, tickSpacing, hooks
     // Format: [currency0:160][currency1:160][fee:24][tickSpacing:24][hooks:160] = 528 bits
     // Simplified: just make it long enough for parsePoolKey
@@ -1054,18 +1238,15 @@ describe('Delta Hedge Functions', () => {
       // 3. getPoolMetadata: token symbols/decimals/names
       .mockResolvedValueOnce([
         'WETH', // token0Symbol
-        18, // token0Decimals
+        token0Decimals,
         'Wrapped Ether', // token0Name
         'USDC', // token1Symbol
-        6, // token1Decimals
+        token1Decimals,
         'USD Coin', // token1Name
       ])
-
-    // V3 pool fee() call via readContract
-    vi.mocked(client.readContract).mockResolvedValueOnce(500)
-
-    vi.mocked(client.multicall)
-      // 4. getPool: dynamic data (14 core values, allowFailure: true returns {status, result})
+      // 4. getPoolMetadata: V3 pool fee() and tickSpacing()
+      .mockResolvedValueOnce([500, 60])
+      // 5. getPool: dynamic data (14 core values, allowFailure: true returns {status, result})
       .mockResolvedValueOnce([
         { status: 'success', result: currentTick }, // getCurrentTick
         { status: 'success', result: 0 }, // isSafeMode (0 = active)
@@ -1085,6 +1266,20 @@ describe('Delta Hedge Functions', () => {
   }
 
   describe('getDeltaHedgeParams', () => {
+    it('preserves arbitrary 8- and 18-decimal token metadata', async () => {
+      const client = createMockClient()
+      mockGetPoolCalls(client, 0, 8, 18)
+
+      const pool = await getPool({
+        client,
+        poolAddress: POOL_ADDRESS,
+        chainId: 1n,
+      })
+
+      expect(pool.metadata.token0Decimals).toBe(8n)
+      expect(pool.metadata.token1Decimals).toBe(18n)
+    })
+
     it('should always return a loan with swapAtMint', async () => {
       const client = createMockClient()
       mockGetPoolCalls(client, 0)

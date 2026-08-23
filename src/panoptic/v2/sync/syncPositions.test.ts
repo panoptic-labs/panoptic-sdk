@@ -9,8 +9,15 @@ import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getPoolMetadata } from '../reads/pool'
 import { getPositions } from '../reads/position'
 import type { StorageAdapter } from '../storage'
-import { createMemoryStorage, getPoolMetaKey, getPositionMetaKey, jsonSerializer } from '../storage'
+import {
+  createMemoryStorage,
+  getPoolMetaKey,
+  getPositionMetaKey,
+  getPositionsKey,
+  jsonSerializer,
+} from '../storage'
 import type { StoredPoolMeta, StoredPositionData, TokenIdLeg } from '../types'
+import { getPoolDeploymentBlock, reconstructFromEvents } from './eventReconstruction'
 import { getOpenPositionIds } from './getTrackedPositionIds'
 import { detectReorg, loadCheckpoint, saveCheckpoint } from './reorgHandling'
 // Import after mocking
@@ -27,6 +34,11 @@ vi.mock('../reads/pool', () => ({
 
 vi.mock('./getTrackedPositionIds', () => ({
   getOpenPositionIds: vi.fn(),
+}))
+
+vi.mock('./eventReconstruction', () => ({
+  getPoolDeploymentBlock: vi.fn(),
+  reconstructFromEvents: vi.fn(),
 }))
 
 vi.mock('./reorgHandling', () => ({
@@ -117,6 +129,14 @@ describe('syncPositions - Position Data Storage', () => {
     // Default mock implementations
     ;(loadCheckpoint as Mock).mockResolvedValue(null)
     ;(getOpenPositionIds as Mock).mockResolvedValue([])
+    ;(reconstructFromEvents as Mock).mockResolvedValue({
+      openPositions: [],
+      closedPositions: [],
+      blocksScanned: 1001n,
+      lastBlock: 1000n,
+      lastBlockHash: TEST_BLOCK_HASH,
+    })
+    ;(getPoolDeploymentBlock as Mock).mockResolvedValue(100n)
     ;(saveCheckpoint as Mock).mockResolvedValue(undefined)
     ;(detectReorg as Mock).mockResolvedValue({ detected: false })
     ;(getPoolMetadata as Mock).mockResolvedValue(MOCK_POOL_METADATA)
@@ -199,6 +219,109 @@ describe('syncPositions - Position Data Storage', () => {
   })
 
   describe('Position Data Storage', () => {
+    it('reconstructs event history when manager calldata has no position snapshot', async () => {
+      const tokenId = 123n
+      ;(getOpenPositionIds as Mock).mockResolvedValue(null)
+      ;(reconstructFromEvents as Mock).mockResolvedValue({
+        openPositions: [tokenId],
+        closedPositions: [],
+        blocksScanned: 901n,
+        lastBlock: 1000n,
+        lastBlockHash: TEST_BLOCK_HASH,
+      })
+      ;(getPositions as Mock).mockResolvedValue({
+        positions: [
+          {
+            tokenId,
+            positionSize: 1000n,
+            legs: mockLegs,
+            tickAtMint: 100n,
+            poolUtilization0AtMint: 5000n,
+            poolUtilization1AtMint: 5000n,
+            timestampAtMint: 1700000000n,
+            blockNumberAtMint: 900n,
+            swapAtMint: false,
+          },
+        ],
+        _meta: { blockNumber: 1000n },
+      })
+
+      const result = await syncPositions({
+        client: mockClient,
+        chainId: TEST_CHAIN_ID,
+        poolAddress: TEST_POOL_ADDRESS,
+        account: TEST_ACCOUNT,
+        storage,
+        fromBlock: 100n,
+      })
+
+      expect(reconstructFromEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          account: TEST_ACCOUNT,
+          poolAddress: TEST_POOL_ADDRESS,
+          fromBlock: 100n,
+          toBlock: 1000n,
+        }),
+      )
+      expect(getPoolDeploymentBlock).not.toHaveBeenCalled()
+      expect(result.positionIds).toEqual([tokenId])
+      const positionsKey = getPositionsKey(TEST_CHAIN_ID, TEST_POOL_ADDRESS, TEST_ACCOUNT)
+      const storedPositions = await storage.get(positionsKey)
+      expect(storedPositions).not.toBeNull()
+      if (storedPositions === null) throw new Error('Expected stored positions')
+      expect(jsonSerializer.parse(storedPositions)).toEqual([tokenId])
+      expect(saveCheckpoint).toHaveBeenCalledWith(
+        expect.objectContaining({
+          account: TEST_ACCOUNT,
+          lastBlock: 1000n,
+          lastBlockHash: TEST_BLOCK_HASH,
+          positionIds: [tokenId],
+        }),
+      )
+    })
+
+    it('uses the pool deployment block when reconstruction has no explicit fromBlock', async () => {
+      ;(getOpenPositionIds as Mock).mockResolvedValue(null)
+      ;(getPoolDeploymentBlock as Mock).mockResolvedValue(321n)
+      ;(reconstructFromEvents as Mock).mockResolvedValue({
+        openPositions: [],
+        closedPositions: [],
+        blocksScanned: 680n,
+        lastBlock: 1000n,
+        lastBlockHash: TEST_BLOCK_HASH,
+      })
+
+      await syncPositions({
+        client: mockClient,
+        chainId: TEST_CHAIN_ID,
+        poolAddress: TEST_POOL_ADDRESS,
+        account: TEST_ACCOUNT,
+        storage,
+      })
+
+      expect(getPoolDeploymentBlock).toHaveBeenCalledWith(mockClient, TEST_POOL_ADDRESS)
+      expect(reconstructFromEvents).toHaveBeenCalledWith(
+        expect.objectContaining({ fromBlock: 321n }),
+      )
+    })
+
+    it('fails explicitly when reconstruction cannot find the pool deployment block', async () => {
+      ;(getOpenPositionIds as Mock).mockResolvedValue(null)
+      ;(getPoolDeploymentBlock as Mock).mockResolvedValue(null)
+
+      await expect(
+        syncPositions({
+          client: mockClient,
+          chainId: TEST_CHAIN_ID,
+          poolAddress: TEST_POOL_ADDRESS,
+          account: TEST_ACCOUNT,
+          storage,
+        }),
+      ).rejects.toThrow('Position snapshot not found')
+
+      expect(reconstructFromEvents).not.toHaveBeenCalled()
+    })
+
     it('should store position data for discovered positions', async () => {
       const tokenId1 = 123n
       const tokenId2 = 456n
@@ -331,6 +454,26 @@ describe('syncPositions - Position Data Storage', () => {
 
       // getPositions should not be called
       expect(getPositions).not.toHaveBeenCalled()
+    })
+
+    it('reports an empty sync as incremental when a checkpoint exists', async () => {
+      ;(loadCheckpoint as Mock).mockResolvedValue({
+        lastBlock: 900n,
+        lastBlockHash: TEST_BLOCK_HASH,
+        positionIds: [123n],
+      })
+      ;(getOpenPositionIds as Mock).mockResolvedValue([])
+
+      const result = await syncPositions({
+        client: mockClient,
+        chainId: TEST_CHAIN_ID,
+        poolAddress: TEST_POOL_ADDRESS,
+        account: TEST_ACCOUNT,
+        storage,
+      })
+
+      expect(result.incremental).toBe(true)
+      expect(saveCheckpoint).toHaveBeenCalledWith(expect.objectContaining({ positionIds: [] }))
     })
   })
 

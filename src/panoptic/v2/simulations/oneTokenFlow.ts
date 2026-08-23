@@ -29,7 +29,7 @@ import {
   buildCreditWrappedDispatch,
 } from './creditWrap'
 import { simulateDispatch } from './simulateDispatch'
-import { getNotEnoughTokensError } from './tokenShortfallRecovery'
+import { getNotEnoughTokensError, quoteTokenShortfallRecovery } from './tokenShortfallRecovery'
 
 const BPS_DENOMINATOR = 10_000n
 
@@ -276,8 +276,47 @@ export async function quoteOneTokenFlow(
         detail: `requested=${shortfall.assetsRequested} <= balance=${shortfall.assetBalance}`,
       }
     }
-    direction = 'exact-out'
-    swapAmount = pending
+    const recovery = await quoteTokenShortfallRecovery({
+      client: params.client,
+      poolAddress: params.poolAddress,
+      account: params.account,
+      chainId: params.chainId,
+      existingPositionIds: params.existingPositionIds,
+      dispatch: params.dispatch,
+      error: shortfall,
+      slippageBps: params.slippageBps,
+      tickLimitLow: params.tickLimitLow,
+      tickLimitHigh: params.tickLimitHigh,
+      blockNumber: targetBlockNumber,
+    })
+    if (!recovery.available) {
+      return {
+        available: false,
+        reason: recovery.reason === 'swap-unavailable' ? 'swap-unavailable' : 'wrap-unavailable',
+        detail: recovery.detail,
+        error: recovery.error,
+      }
+    }
+    return {
+      available: true,
+      quote: {
+        targetToken,
+        otherToken,
+        targetTokenIndex,
+        otherTokenIndex,
+        direction: recovery.quote.direction,
+        swapAmount: recovery.quote.amountOut,
+        estimatedCounterAmount: recovery.quote.estimatedAmountIn,
+        maximumAmountIn: recovery.quote.maximumAmountIn,
+        slippageBps: params.slippageBps,
+        netTargetChange: recovery.quote.netTokenInChange,
+        residualOtherChange: recovery.quote.netTokenOutChange,
+        creditTokenId: recovery.quote.creditTokenId,
+        dispatch: recovery.quote.dispatch,
+        tokenFlow: recovery.quote.tokenFlow,
+        _meta: recovery.quote._meta,
+      },
+    }
   }
 
   // Dust gate. The non-target flow is only worth swapping if it is material

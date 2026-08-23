@@ -14,6 +14,7 @@ export {
   useAccountSummaryRisk,
   useChunkSpreads,
   useClosedPositions,
+  useCollateralBreakdown,
   useCollateralData,
   useCurrentRates,
   useEstimateCollateralRequired,

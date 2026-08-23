@@ -32,6 +32,9 @@ import type {
   RiskParameters,
   Utilization,
 } from '../types'
+import { decodeOraclePack } from '../utils/oraclePack'
+import { type OracleRiskParameters, decodeOracleRiskParameters } from '../utils/oracleSafeMode'
+import { DEFAULT_MINT_BUFFER } from './mintBuffer'
 
 // ERC20 minimal ABI for token metadata
 const erc20Abi = [
@@ -237,14 +240,24 @@ export async function getPoolMetadata(params: GetPoolMetadataParams): Promise<Po
   const parsedPoolKey = parsePoolKey(poolKeyBytes)
   let underlyingPoolId: string
   let fee: bigint
+  let tickSpacing: bigint
 
   if (isV4) {
     underlyingPoolId = keccak256(poolKeyBytes)
     fee = parsedPoolKey.fee
+    tickSpacing = tickSpacingFromPoolId(poolId)
   } else {
     const v3PoolAddress = decodeAbiParameters([{ type: 'address' }], poolKeyBytes)[0]
     underlyingPoolId = v3PoolAddress
-    fee = await getV3PoolFee(client, v3PoolAddress)
+    const [v3Fee, v3TickSpacing] = await client.multicall({
+      contracts: [
+        { address: v3PoolAddress, abi: uniswapV3PoolAbi, functionName: 'fee' },
+        { address: v3PoolAddress, abi: uniswapV3PoolAbi, functionName: 'tickSpacing' },
+      ],
+      allowFailure: false,
+    })
+    fee = BigInt(v3Fee)
+    tickSpacing = BigInt(v3TickSpacing)
   }
 
   return {
@@ -263,7 +276,7 @@ export async function getPoolMetadata(params: GetPoolMetadataParams): Promise<Po
     token0Name,
     token1Name,
     underlyingPoolId,
-    tickSpacing: tickSpacingFromPoolId(poolId),
+    tickSpacing,
     fee,
     sfpmAddress,
   }
@@ -455,9 +468,14 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
   const uniswapPoolLiquidity =
     liquidityResult?.status === 'success' ? BigInt(liquidityResult.result as bigint) : 0n
 
-  // Parse pool key and extract tickSpacing from poolId (works for both V3 and V4)
-  const poolKey = parsePoolKey(metadata.poolKeyBytes)
-  const tickSpacing = tickSpacingFromPoolId(metadata.poolId)
+  // V3 poolKey() only contains the Uniswap pool address, so enrich the parsed
+  // key with the immutable fee and tick spacing resolved by getPoolMetadata.
+  const tickSpacing = metadata.tickSpacing
+  const poolKey = {
+    ...parsePoolKey(metadata.poolKeyBytes),
+    fee: metadata.fee,
+    tickSpacing,
+  }
 
   // Annualize rates: interestRate() returns WAD/s, multiply by seconds/year
   const SECONDS_PER_YEAR = 31_536_000n
@@ -691,12 +709,23 @@ export async function getOracleState(params: GetOracleStateParams): Promise<Orac
   const targetBlockNumber =
     blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
 
-  // Single call for oracle data - already same-block consistent
-  const [oracleTicks, _meta] = await Promise.all([
-    client.readContract({
-      address: poolAddress,
-      abi: panopticPoolV2Abi,
-      functionName: 'getOracleTicks',
+  // Read the detailed oracle state and the canonical TWAP used by downstream
+  // safety checks at the same block.
+  const [[oracleTicks, twapTick], _meta] = await Promise.all([
+    client.multicall({
+      contracts: [
+        {
+          address: poolAddress,
+          abi: panopticPoolV2Abi,
+          functionName: 'getOracleTicks',
+        },
+        {
+          address: poolAddress,
+          abi: panopticPoolV2Abi,
+          functionName: 'getTWAP',
+        },
+      ],
+      allowFailure: false,
       blockNumber: targetBlockNumber,
     }),
     params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
@@ -705,26 +734,68 @@ export async function getOracleState(params: GetOracleStateParams): Promise<Orac
   // oracleTicks returns: currentTick, spotTick, medianTick, latestTick, oraclePack
   const [currentTick, spotTick, medianTick, latestTick, oraclePack] = oracleTicks
 
-  // Parse oracle pack to extract EMA values and other data
-  // OraclePack structure is protocol-specific, extracting what we can
-  const epoch = (oraclePack >> 208n) & ((1n << 32n) - 1n)
-  const lastUpdateTimestamp = (oraclePack >> 176n) & ((1n << 32n) - 1n)
-  // lockMode is the 2-bit guardian safe-mode override at bits 118-119 of the
-  // OraclePack (see OraclePack.sol `lockMode()`). A non-zero value means the
-  // Panoptic Guardian has explicitly locked the pool (close-only), as opposed
-  // to safe mode being triggered algorithmically by price action.
-  const lockMode = (oraclePack >> 118n) & 3n
+  const decoded = decodeOraclePack(oraclePack, _meta.blockTimestamp)
 
   return {
-    epoch,
-    lastUpdateTimestamp,
+    epoch: decoded.epoch,
+    lastUpdateTimestamp: decoded.timestamp,
+    // Deprecated OracleState alias; use currentTick or oracleReferenceTick.
     referenceTick: BigInt(currentTick),
+    currentTick: BigInt(currentTick),
+    oracleReferenceTick: decoded.referenceTick,
+    latestTick: BigInt(latestTick),
+    twapTick: BigInt(twapTick),
     spotEMA: BigInt(spotTick),
-    fastEMA: BigInt(latestTick), // Using latestTick as fast EMA approximation
-    slowEMA: BigInt(medianTick), // Using medianTick as slow EMA approximation
-    eonsEMA: 0n, // Not directly available from getOracleTicks
-    lockMode,
+    fastEMA: decoded.fastEMA,
+    slowEMA: decoded.slowEMA,
+    eonsEMA: decoded.eonsEMA,
+    lockMode: decoded.lockMode,
     medianTick: BigInt(medianTick),
+    _meta,
+  }
+}
+
+export interface GetOracleRiskParametersParams {
+  client: PublicClient
+  riskEngineAddress: Address
+  blockNumber?: bigint
+}
+
+export interface OracleRiskParametersState extends OracleRiskParameters {
+  _meta: BlockMeta
+}
+
+/** Read the oracle constants from a specific deployed RiskEngine. */
+export async function getOracleRiskParameters(
+  params: GetOracleRiskParametersParams,
+): Promise<OracleRiskParametersState> {
+  const targetBlockNumber = params.blockNumber ?? (await params.client.getBlockNumber())
+  const [[emaPeriods, maxTicksDelta, maxClampDelta], _meta] = await Promise.all([
+    params.client.multicall({
+      contracts: [
+        {
+          address: params.riskEngineAddress,
+          abi: riskEngineAbi,
+          functionName: 'EMA_PERIODS',
+        },
+        {
+          address: params.riskEngineAddress,
+          abi: riskEngineAbi,
+          functionName: 'MAX_TICKS_DELTA',
+        },
+        {
+          address: params.riskEngineAddress,
+          abi: riskEngineAbi,
+          functionName: 'MAX_CLAMP_DELTA',
+        },
+      ],
+      allowFailure: false,
+      blockNumber: targetBlockNumber,
+    }),
+    getBlockMeta({ client: params.client, blockNumber: targetBlockNumber }),
+  ])
+  return {
+    ...decodeOracleRiskParameters(BigInt(emaPeriods), BigInt(maxTicksDelta), BigInt(maxClampDelta)),
     _meta,
   }
 }
@@ -812,6 +883,19 @@ export async function getRiskParameters(params: GetRiskParametersParams): Promis
           abi: riskEngineAbi,
           functionName: 'SATURATED_POOL_UTIL',
         },
+        // The mint-time margin buffer, read live rather than compiled in, so a
+        // redeployed RiskEngine cannot silently desync the displayed "required
+        // at mint" from what the solvency check actually enforces.
+        {
+          address: riskEngineAddress,
+          abi: riskEngineAbi,
+          functionName: 'BP_DECREASE_BUFFER',
+        },
+        {
+          address: riskEngineAddress,
+          abi: riskEngineAbi,
+          functionName: 'DECIMALS',
+        },
         {
           address: poolAddress,
           abi: panopticPoolV2Abi,
@@ -832,6 +916,8 @@ export async function getRiskParameters(params: GetRiskParametersParams): Promis
     notionalFee,
     targetPoolUtil,
     saturatedPoolUtil,
+    bpDecreaseBuffer,
+    riskEngineDecimals,
     ,
   ] = riskEngineResults
 
@@ -842,6 +928,12 @@ export async function getRiskParameters(params: GetRiskParametersParams): Promis
     targetUtilization: targetPoolUtil,
     saturatedUtilization: saturatedPoolUtil,
     itmSpreadMultiplier: buyerCollateralRatio, // Using buyer ratio as ITM multiplier
+    // A live numerator is meaningful only with its live scale. If the scale is
+    // invalid, fall back to the complete compiled-in ratio.
+    mintBuffer:
+      BigInt(riskEngineDecimals) > 0n
+        ? { numerator: BigInt(bpDecreaseBuffer), denominator: BigInt(riskEngineDecimals) }
+        : DEFAULT_MINT_BUFFER,
     _meta,
   }
 }
@@ -879,18 +971,6 @@ export async function validateBuilderCode(params: {
 }
 
 /**
- * Read the fee tier from a Uniswap V3 pool contract.
- */
-async function getV3PoolFee(client: PublicClient, poolAddress: Address): Promise<bigint> {
-  const fee = await client.readContract({
-    address: poolAddress,
-    abi: uniswapV3PoolAbi,
-    functionName: 'fee',
-  })
-  return BigInt(fee)
-}
-
-/**
  * Extract tickSpacing from the encoded 64-bit poolId.
  * Layout: poolAddress (5 bytes) + vegoid (1 byte) + tickSpacing (2 bytes).
  * tickSpacing occupies bits 48–63.
@@ -908,7 +988,7 @@ function tickSpacingFromPoolId(poolId: bigint): bigint {
  * V3 pools: poolKey() returns abi.encode(uniswapV3PoolAddress) — a single
  *   32-byte slot. The struct fields are not available, so currency0/currency1
  *   are zeroed and tickSpacing/fee are set to 0 (callers should use
- *   tickSpacingFromPoolId and getV3PoolFee respectively).
+ *   getV3PoolTickSpacing and getV3PoolFee respectively).
  */
 function parsePoolKey(poolKeyBytes: `0x${string}`): PoolKey {
   const hex = poolKeyBytes.slice(2)

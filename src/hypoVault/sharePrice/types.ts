@@ -110,6 +110,12 @@ export type CandidateResolverContext = {
   client: PublicClient
 }
 
+export type CandidateRecoveryContext = CandidateResolverContext & {
+  blockNumber: bigint
+  fromBlock: bigint
+  candidates: readonly VaultPoolCandidateTokenIds[]
+}
+
 export type VaultApyStrategy = {
   enabledMetrics: VaultApyMetricKind[]
   managerInputProvider: (ctx: ManagerInputProviderContext) => Promise<ManagerInputProviderResult>
@@ -120,6 +126,11 @@ export type VaultApyStrategy = {
    * subgraph candidate gather (e.g. the default `0x` strategy) omit this.
    */
   resolveCandidates?: (ctx: CandidateResolverContext) => Promise<VaultPoolCandidateTokenIds[]>
+  /**
+   * Recover missing candidate tokenIds from authoritative chain history after
+   * `computeNAV` reports `IncorrectPositionList`.
+   */
+  recoverCandidates?: (ctx: CandidateRecoveryContext) => Promise<VaultPoolCandidateTokenIds[]>
   premium?: PremiumApyConfig
   borrowRate?: BorrowRateApyConfig
 }
@@ -145,7 +156,7 @@ export type VaultSharePriceSnapshot = {
   reservedWithdrawalAssets: bigint
   shares: bigint
   blockNumber: bigint
-  navSource: 'computeNAV' | 'computeNAVStateOverride' | 'offchainLendingEstimate'
+  navSource: 'computeNAV' | 'computeNAVStateOverride'
   managerInputBytes: Hex
   managerInputByteLength: number
   managerInputHash: Hex

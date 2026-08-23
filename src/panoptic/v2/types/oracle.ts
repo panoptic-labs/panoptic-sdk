@@ -4,6 +4,7 @@
  */
 
 import type { BlockMeta } from './meta'
+import type { MintBufferRatio } from './mintBuffer'
 
 /**
  * Safe mode level from the RiskEngine.
@@ -18,8 +19,19 @@ export interface OracleState {
   epoch: bigint
   /** Last update timestamp */
   lastUpdateTimestamp: bigint
-  /** Reference tick */
+  /**
+   * Live pool tick returned by getOracleTicks (legacy alias for currentTick).
+   * @deprecated Use currentTick for the live tick or oracleReferenceTick for the packed reference.
+   */
   referenceTick: bigint
+  /** Live pool tick returned by getOracleTicks */
+  currentTick: bigint
+  /** Reference tick used to encode the OraclePack residual queue */
+  oracleReferenceTick: bigint
+  /** Latest observation stored in the queue */
+  latestTick: bigint
+  /** TWAP tick returned by PanopticPool.getTWAP() */
+  twapTick: bigint
   /** Spot EMA tick */
   spotEMA: bigint
   /** Fast EMA tick */
@@ -28,7 +40,7 @@ export interface OracleState {
   slowEMA: bigint
   /** Eons EMA tick */
   eonsEMA: bigint
-  /** Lock mode (0 = unlocked, 1 = spot locked, 2 = full locked) */
+  /** Guardian lock mode (0 = unlocked, 3 = close-only lock) */
   lockMode: bigint
   /** Median tick from sorted observations */
   medianTick: bigint
@@ -40,6 +52,8 @@ export interface OracleState {
  * Safe mode state from the RiskEngine.
  */
 export interface SafeModeState {
+  /** Raw additive SafeMode value returned by PanopticPool.isSafeMode(). */
+  level: bigint
   /** Current safe mode level */
   mode: SafeMode
   /** Whether minting new positions is allowed */
@@ -74,6 +88,12 @@ export interface RiskParameters {
   saturatedUtilization: bigint
   /** ITM spread multiplier */
   itmSpreadMultiplier: bigint
+  /**
+   * `RiskEngine.BP_DECREASE_BUFFER` and `RiskEngine.DECIMALS` — the live
+   * mint-time margin buffer, as the ratio `applyMintBuffer` consumes. Read
+   * from the same block as the rest of these parameters.
+   */
+  mintBuffer: MintBufferRatio
   /** Block metadata */
   _meta: BlockMeta
 }

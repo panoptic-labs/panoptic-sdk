@@ -18,6 +18,8 @@ const timedRehedgeSchema = z
 export const HypoVaultManagerConfigSchema = z.object({
   deployment: z.enum(['dev', 'prod']),
   artifactSet: z.enum(['base', 'mainnet-prod', 'mainnet-legacy', 'sepolia']).optional(),
+  // Deprecated compatibility field. Pool-local automation derives its delta
+  // asset from token roles and must not use this index for decisions.
   vaultAssetIndex: z.union([z.literal(0n), z.literal(1n)]),
   manageCycleIntervalMs: z.number().positive().optional(), // can be optional if only running manage cycles in response to websocket events instead of polling
   vaultCapInUnderlying: z.bigint().positive(),
@@ -25,6 +27,7 @@ export const HypoVaultManagerConfigSchema = z.object({
   allowUnlimitedDepositRequestIfCapNotReached: z.boolean().optional(),
   maxBuyingPowerUsageBps: z.number().int().positive().max(10000), // skip auto-fulfilling a withdrawal if it would push requiredCollateral / collateralBalance past this, on the vault's asset side
   chainId: z.number().int().positive().optional(),
+  // Deprecated vault-wide fallback for pool infos without positionScanFromBlock.
   poolDeploymentBlock: z.number().int().nonnegative().optional(),
   hypoVaultAddress: addressSchema.optional(),
   addresses: z
@@ -37,6 +40,10 @@ export const HypoVaultManagerConfigSchema = z.object({
       underlyingToken: addressSchema.optional(),
     })
     .optional(),
+  automation: z.object({
+    primaryPool: addressSchema,
+    windDownPools: z.array(addressSchema),
+  }),
   manualTxDefaults: z
     .object({
       collateralAllocations: z

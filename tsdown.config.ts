@@ -21,6 +21,12 @@ export default defineConfig({
     // src/cow/types.d.ts on multi-core CI.
     './src/cow/types.ts',
     './src/zodiac/index.ts',
+    './src/vault-transaction-fees.ts',
+    // Dedicated entries: barrels re-exported from other entries need their own
+    // deterministic declaration output, otherwise rolldown-plugin-dts races and
+    // fails with UNLOADABLE_DEPENDENCY on multi-core CI (same pattern as cow/types.ts).
+    './src/panoptic/v2/types/index.ts',
+    './src/hypoVault/vaultDisplayNames.ts',
   ],
   format: ['esm'],
   external: [

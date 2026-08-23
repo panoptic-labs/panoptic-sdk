@@ -9,6 +9,16 @@ export type PoolInfo = {
   token0: Address
   token1: Address
   maxPriceDeviation: number
+  /** Earliest block that can contain position history for this specific pool. */
+  positionScanFromBlock?: bigint
+}
+
+export function resolvePositionScanFromBlock(
+  poolInfo: PoolInfo,
+  fallbackPoolDeploymentBlock?: number,
+): bigint | undefined {
+  if (poolInfo.positionScanFromBlock !== undefined) return poolInfo.positionScanFromBlock
+  return fallbackPoolDeploymentBlock === undefined ? undefined : BigInt(fallbackPoolDeploymentBlock)
 }
 
 export type BuildManagerInputParams = {

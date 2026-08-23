@@ -22,6 +22,10 @@ export const WethPlpVaultSepoliaProdConfig: HypoVaultManagerConfig = {
     hypoVault: SEPOLIA_HYPOVAULT_ADDRESSES.wethPlpVault,
     underlyingToken: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
   },
+  automation: {
+    primaryPool: SEPOLIA_PANOPTIC_POOL_ADDRESSES.panopticPool,
+    windDownPools: [],
+  },
   manualTxDefaults: {
     collateralAllocations: [
       {

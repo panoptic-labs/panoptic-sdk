@@ -1,11 +1,16 @@
 import type { Address, PublicClient } from 'viem'
 
 import { NotEnoughTokensError, PanopticError, parsePanopticError } from '../errors'
+import { tickLimits } from '../formatters/tick'
 import { getPool } from '../reads/pool'
 import type { BlockMeta, DispatchSimulation, SimulationResult, TokenFlow } from '../types'
-import { MAX_TICK, MIN_TICK } from '../utils/constants'
+import { convertToTokenIndex } from '../utils/priceConvert'
 import { buildUniqueCredit } from '../writes/loanUtils'
-import { type DispatchIntent, buildCreditWrappedDispatch } from './creditWrap'
+import {
+  type CreditWrapDirection,
+  type DispatchIntent,
+  buildCreditWrappedDispatch,
+} from './creditWrap'
 import { simulateDispatch } from './simulateDispatch'
 
 const BPS_DENOMINATOR = 10_000n
@@ -28,9 +33,8 @@ export interface TokenShortfallRecoveryQuoteParams {
    */
   slippageBps: bigint
   /**
-   * Price bound for the temporary credit legs. Defaults to the full tick range —
-   * the recovery swap is protected economically by `maximumAmountIn`, not by a
-   * price band, and the user's own operations keep their own limits.
+   * Price bound for the temporary credit legs. Defaults to a slippage-bounded
+   * range around the pool's current tick.
    */
   tickLimitLow?: bigint
   /** See {@link TokenShortfallRecoveryQuoteParams.tickLimitLow}. */
@@ -41,6 +45,8 @@ export interface TokenShortfallRecoveryQuoteParams {
 export interface TokenShortfallRecoveryQuote {
   tokenIn: Address
   tokenOut: Address
+  /** Swap construction used by the temporary credit wrapper. */
+  direction: CreditWrapDirection
   /**
    * Exact amount of `tokenOut` the temporary credit sources. Covers the whole
    * dispatch, not just the first charge that reverted — a batch charges
@@ -48,6 +54,8 @@ export interface TokenShortfallRecoveryQuote {
    * than the `assetsRequested - assetBalance` of the first failure.
    */
   amountOut: bigint
+  /** Output measured for the temporary swap alone. May exceed `amountOut` for exact-in. */
+  estimatedAmountOut: bigint
   estimatedAmountIn: bigint
   maximumAmountIn: bigint
   slippageBps: bigint
@@ -112,6 +120,12 @@ export function buildTokenShortfallRecoveryDispatch(
   return buildCreditWrappedDispatch({ ...params, direction: 'exact-out', placement: 'straddle' })
 }
 
+function buildPrefixedExactInputRecoveryDispatch(
+  params: BuildTokenShortfallRecoveryDispatchParams,
+): DispatchIntent {
+  return buildCreditWrappedDispatch({ ...params, direction: 'exact-in', placement: 'prepend' })
+}
+
 /**
  * Extract a fully-decoded `NotEnoughTokens` revert from an arbitrary error.
  *
@@ -120,26 +134,31 @@ export function buildTokenShortfallRecoveryDispatch(
  * with undefined args, which is not actionable).
  */
 export function getNotEnoughTokensError(error: unknown): NotEnoughTokensError | null {
-  let candidate: NotEnoughTokensError | null = null
-  if (error instanceof NotEnoughTokensError) {
-    candidate = error
-  } else {
-    const parsed = parsePanopticError(error)
-    if (parsed?.error instanceof NotEnoughTokensError) candidate = parsed.error
+  const visited = new Set<unknown>()
+  let current: unknown = error
+
+  while (current !== undefined && current !== null && !visited.has(current)) {
+    visited.add(current)
+    const parsed =
+      current instanceof NotEnoughTokensError ? current : parsePanopticError(current)?.error
+    const candidate = parsed instanceof NotEnoughTokensError ? parsed : null
+    if (candidate !== null) {
+      // Selector-only decodes yield undefined args at runtime despite the types.
+      const args: Partial<
+        Pick<NotEnoughTokensError, 'tokenAddress' | 'assetsRequested' | 'assetBalance'>
+      > = candidate
+      if (
+        args.tokenAddress !== undefined &&
+        args.assetsRequested !== undefined &&
+        args.assetBalance !== undefined
+      ) {
+        return candidate
+      }
+    }
+
+    current = current instanceof Error && 'cause' in current ? current.cause : undefined
   }
-  if (candidate === null) return null
-  // Selector-only decodes yield undefined args at runtime despite the types.
-  const args: Partial<
-    Pick<NotEnoughTokensError, 'tokenAddress' | 'assetsRequested' | 'assetBalance'>
-  > = candidate
-  if (
-    args.tokenAddress === undefined ||
-    args.assetsRequested === undefined ||
-    args.assetBalance === undefined
-  ) {
-    return null
-  }
-  return candidate
+  return null
 }
 
 function maximumAmountIn(estimatedAmountIn: bigint, slippageBps: bigint): bigint {
@@ -149,6 +168,10 @@ function maximumAmountIn(estimatedAmountIn: bigint, slippageBps: bigint): bigint
   return (
     (estimatedAmountIn * (BPS_DENOMINATOR + slippageBps) + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
   )
+}
+
+function ceilDiv(numerator: bigint, denominator: bigint): bigint {
+  return (numerator + denominator - 1n) / denominator
 }
 
 function getInputAmount(tokenFlow: TokenFlow, tokenInIndex: 0n | 1n): bigint {
@@ -188,10 +211,16 @@ export async function quoteTokenShortfallRecovery(
       detail: `slippageBps=${params.slippageBps} is outside [0, ${BPS_DENOMINATOR}]`,
     }
   }
-  // The credit legs default to the full tick range: the swap is bounded
-  // economically by maximumAmountIn, and the user's own ops keep their limits.
-  const tickLimitLow = params.tickLimitLow ?? MIN_TICK
-  const tickLimitHigh = params.tickLimitHigh ?? MAX_TICK
+  const targetBlockNumber = params.blockNumber ?? (await params.client.getBlockNumber())
+  const pool = await getPool({
+    client: params.client,
+    poolAddress: params.poolAddress,
+    chainId: params.chainId,
+    blockNumber: targetBlockNumber,
+  })
+  const defaultTickLimits = tickLimits(pool.currentTick, params.slippageBps)
+  const tickLimitLow = params.tickLimitLow ?? defaultTickLimits.low
+  const tickLimitHigh = params.tickLimitHigh ?? defaultTickLimits.high
   if (tickLimitLow >= tickLimitHigh) {
     return {
       available: false,
@@ -200,23 +229,25 @@ export async function quoteTokenShortfallRecovery(
     }
   }
 
-  const targetBlockNumber = params.blockNumber ?? (await params.client.getBlockNumber())
-  const pool = await getPool({
-    client: params.client,
-    poolAddress: params.poolAddress,
-    chainId: params.chainId,
-    blockNumber: targetBlockNumber,
-  })
   const token0 = pool.collateralTracker0.token
   const token1 = pool.collateralTracker1.token
-  const normalizedShortfallToken = shortfallError.tokenAddress.toLowerCase()
-  const isToken0Shortfall =
-    normalizedShortfallToken === token0.toLowerCase() ||
-    normalizedShortfallToken === pool.collateralTracker0.address.toLowerCase()
-  const isToken1Shortfall =
-    normalizedShortfallToken === token1.toLowerCase() ||
-    normalizedShortfallToken === pool.collateralTracker1.address.toLowerCase()
-  const tokenOutIndex = isToken0Shortfall ? 0n : isToken1Shortfall ? 1n : null
+  const shortfallTokenIndex = (error: NotEnoughTokensError): 0n | 1n | null => {
+    const address = error.tokenAddress.toLowerCase()
+    if (
+      address === token0.toLowerCase() ||
+      address === pool.collateralTracker0.address.toLowerCase()
+    ) {
+      return 0n
+    }
+    if (
+      address === token1.toLowerCase() ||
+      address === pool.collateralTracker1.address.toLowerCase()
+    ) {
+      return 1n
+    }
+    return null
+  }
+  const tokenOutIndex = shortfallTokenIndex(shortfallError)
   if (tokenOutIndex === null) {
     return {
       available: false,
@@ -235,6 +266,163 @@ export async function quoteTokenShortfallRecovery(
       ...params.dispatch.finalPositionIdList,
     ]),
   )
+
+  const quotePrefixedExactInput = async (
+    initialRequiredOutput: bigint,
+  ): Promise<TokenShortfallRecoveryResult> => {
+    let requiredOutput = initialRequiredOutput
+    const spotInput = convertToTokenIndex(
+      requiredOutput,
+      tokenOutIndex,
+      tokenInIndex,
+      pool.sqrtPriceX96,
+    )
+    let creditInput = maximumAmountIn(spotInput > 0n ? spotInput : 1n, params.slippageBps)
+
+    for (let attempt = 0; attempt < MAX_RECOVERY_QUOTE_ATTEMPTS; attempt++) {
+      const credit = buildUniqueCredit(
+        pool.poolId,
+        tokenInIndex,
+        tokenInIndex,
+        pool.currentTick,
+        pool.tickSpacing,
+        collisionIds,
+        creditInput,
+      )
+      const wrapArgs = {
+        creditTokenId: credit.tokenId,
+        creditPositionSize: credit.adjustedSize,
+        tickLimitLow,
+        tickLimitHigh,
+      }
+      const swapDispatch = buildPrefixedExactInputRecoveryDispatch({
+        ...wrapArgs,
+        dispatch: {
+          positionIdList: [],
+          finalPositionIdList: [...params.existingPositionIds],
+          positionSizes: [],
+          tickAndSpreadLimits: [],
+          usePremiaAsCollateral: false,
+          builderCode: 0n,
+        },
+      })
+      const swapSimulation = await simulateDispatch({
+        client: params.client,
+        poolAddress: params.poolAddress,
+        account: params.account,
+        existingPositionIdList: params.existingPositionIds,
+        ...swapDispatch,
+        blockNumber: targetBlockNumber,
+      })
+      if (!swapSimulation.success || swapSimulation.tokenFlow === undefined) {
+        return {
+          available: false,
+          reason: 'swap-unavailable',
+          detail: swapSimulation.success
+            ? 'prefixed swap simulation returned no token flow'
+            : `prefixed swap simulation reverted: ${swapSimulation.error.message}`,
+          error: swapSimulation.success ? undefined : swapSimulation.error,
+        }
+      }
+
+      const estimatedAmountIn = getInputAmount(swapSimulation.tokenFlow, tokenInIndex)
+      const estimatedAmountOut = getOutputAmount(swapSimulation.tokenFlow, tokenOutIndex)
+      const sourceBalance = getBalanceBefore(swapSimulation.tokenFlow, tokenInIndex)
+      if (sourceBalance < estimatedAmountIn) {
+        return {
+          available: false,
+          reason: 'swap-unavailable',
+          detail: `source balance ${sourceBalance} < exact input cost ${estimatedAmountIn}`,
+          error: new PanopticError('Insufficient source collateral for the recovery swap'),
+        }
+      }
+      if (estimatedAmountOut < requiredOutput) {
+        creditInput =
+          estimatedAmountOut > 0n
+            ? ceilDiv(creditInput * requiredOutput, estimatedAmountOut) + 1n
+            : creditInput * 2n
+        continue
+      }
+
+      const recoveredDispatch = buildPrefixedExactInputRecoveryDispatch({
+        ...wrapArgs,
+        dispatch: params.dispatch,
+      })
+      const recoverySimulation = await simulateDispatch({
+        client: params.client,
+        poolAddress: params.poolAddress,
+        account: params.account,
+        existingPositionIdList: params.existingPositionIds,
+        ...recoveredDispatch,
+        blockNumber: targetBlockNumber,
+      })
+      if (recoverySimulation.success && recoverySimulation.tokenFlow !== undefined) {
+        return {
+          available: true,
+          quote: {
+            tokenIn,
+            tokenOut,
+            direction: 'exact-in',
+            amountOut: requiredOutput,
+            estimatedAmountOut,
+            estimatedAmountIn,
+            // The input credit has a fixed size. Its tick limit protects output;
+            // unlike exact-out, execution cannot consume an unbounded input.
+            maximumAmountIn: estimatedAmountIn,
+            slippageBps: params.slippageBps,
+            netTokenInChange:
+              tokenInIndex === 0n
+                ? recoverySimulation.tokenFlow.delta0
+                : recoverySimulation.tokenFlow.delta1,
+            netTokenOutChange:
+              tokenOutIndex === 0n
+                ? recoverySimulation.tokenFlow.delta0
+                : recoverySimulation.tokenFlow.delta1,
+            creditTokenId: credit.tokenId,
+            dispatch: recoveredDispatch,
+            simulation: {
+              ...recoverySimulation,
+              tokenFlow: recoverySimulation.tokenFlow,
+            },
+            tokenFlow: recoverySimulation.tokenFlow,
+            _meta: recoverySimulation._meta,
+          },
+        }
+      }
+      if (recoverySimulation.success) {
+        return {
+          available: false,
+          reason: 'recovery-unavailable',
+          detail: 'prefixed recovery simulation returned no token flow',
+          error: new PanopticError('Recovery simulation did not return token flow'),
+        }
+      }
+
+      const remainingShortfall = getNotEnoughTokensError(recoverySimulation.error)
+      if (
+        remainingShortfall === null ||
+        shortfallTokenIndex(remainingShortfall) !== tokenOutIndex
+      ) {
+        return {
+          available: false,
+          reason: 'recovery-unavailable',
+          detail: `prefixed recovery reverted with a non-output shortfall: ${recoverySimulation.error.message}`,
+          error: recoverySimulation.error,
+        }
+      }
+      const residual = remainingShortfall.assetsRequested - remainingShortfall.assetBalance
+      requiredOutput += residual > 0n ? residual : requiredOutput
+      creditInput = ceilDiv(creditInput * requiredOutput, estimatedAmountOut) + 1n
+    }
+
+    return {
+      available: false,
+      reason: 'recovery-unavailable',
+      detail: `prefixed recovery remained short after ${MAX_RECOVERY_QUOTE_ATTEMPTS} attempts`,
+      error: new PanopticError('Could not size the prefixed recovery swap'),
+    }
+  }
+
   for (let attempt = 0; attempt < MAX_RECOVERY_QUOTE_ATTEMPTS; attempt++) {
     // asset === tokenType === tokenOutIndex: the credit is denominated in the
     // token being sourced. Passing tokenInIndex as tokenType is the loan
@@ -280,6 +468,15 @@ export async function quoteTokenShortfallRecovery(
       blockNumber: targetBlockNumber,
     })
     if (!swapSimulation.success || swapSimulation.tokenFlow === undefined) {
+      const bootstrapShortfall = swapSimulation.success
+        ? null
+        : getNotEnoughTokensError(swapSimulation.error)
+      if (
+        bootstrapShortfall !== null &&
+        shortfallTokenIndex(bootstrapShortfall) === tokenOutIndex
+      ) {
+        return quotePrefixedExactInput(amountOut)
+      }
       return {
         available: false,
         reason: 'swap-unavailable',
@@ -320,7 +517,9 @@ export async function quoteTokenShortfallRecovery(
           quote: {
             tokenIn,
             tokenOut,
+            direction: 'exact-out',
             amountOut,
+            estimatedAmountOut: swapOutput,
             estimatedAmountIn,
             maximumAmountIn: maxAmountIn,
             slippageBps: params.slippageBps,
@@ -352,10 +551,7 @@ export async function quoteTokenShortfallRecovery(
     }
 
     const remainingShortfall = getNotEnoughTokensError(recoverySimulation.error)
-    if (
-      remainingShortfall === null ||
-      remainingShortfall.tokenAddress.toLowerCase() !== normalizedShortfallToken
-    ) {
+    if (remainingShortfall === null || shortfallTokenIndex(remainingShortfall) !== tokenOutIndex) {
       return {
         available: false,
         reason: 'recovery-unavailable',

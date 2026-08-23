@@ -8,6 +8,7 @@ import type { Address, PublicClient, WalletClient } from 'viem'
 import { panopticPoolV2Abi } from '../../../generated'
 import { OracleRateLimitedError } from '../errors'
 import type { TxOverrides, TxReceipt, TxResult } from '../types'
+import { decodeOracleTiming, oracleEpochAt } from '../utils/oraclePack'
 import { submitWrite } from './utils'
 
 /**
@@ -66,14 +67,13 @@ export async function pokeOracle(params: PokeOracleParams): Promise<TxResult> {
 
     // oracleData[4] is the oraclePack
     const oraclePack = oracleData[4]
-    // Epoch is in bits 232-255 (24 bits)
-    const epoch = oraclePack >> 232n
+    const { epoch } = decodeOracleTiming(oraclePack, block.timestamp)
 
-    const currentEpoch = block.timestamp / 64n
+    const currentEpoch = oracleEpochAt(block.timestamp)
 
     // If current epoch equals oracle epoch, we can't poke yet
-    if (currentEpoch <= epoch) {
-      const lastUpdate = epoch * 64n
+    if (currentEpoch === epoch) {
+      const lastUpdate = epoch << 6n
       throw new OracleRateLimitedError(lastUpdate, block.timestamp)
     }
   }

@@ -14,7 +14,8 @@
  * @module v2/writes/swap
  */
 
-import type { Address, PublicClient, WalletClient } from 'viem'
+import type { Address, Hex, PublicClient, WalletClient } from 'viem'
+import { encodeFunctionData } from 'viem'
 
 import { panopticPoolV2Abi } from '../../../generated'
 import { MaxRetriesExceededError } from '../errors'
@@ -30,6 +31,85 @@ import {
   resolveTokenIndex,
 } from './loanUtils'
 import { submitWrite } from './utils'
+
+/**
+ * Parameters for building an atomic credit swap call.
+ *
+ * `tokenIndex` is tokenOut for exact-out swaps and tokenIn for exact-in swaps.
+ * Passing the counter-token reverses the intended swap direction.
+ */
+export type CreditSwapCallParams = {
+  poolAddress: Address
+  poolId: bigint
+  currentTick: bigint
+  tickSpacing: bigint
+  existingPositionIds: bigint[]
+  tokenIndex: bigint
+  slippageBps: bigint
+  builderCode?: bigint
+} & ({ kind: 'exactIn'; amountIn: bigint } | { kind: 'exactOut'; amountOut: bigint })
+
+/** Encoded atomic credit mint/burn dispatch and its derived credit position. */
+export interface CreditSwapCall {
+  to: Address
+  data: Hex
+  creditTokenId: bigint
+  adjustedSize: bigint
+  args: readonly [
+    readonly bigint[],
+    readonly bigint[],
+    readonly bigint[],
+    readonly (readonly [number, number, number])[],
+    boolean,
+    bigint,
+  ]
+}
+
+/** Build an atomic credit mint/burn swap without fetching or sending anything. */
+export function buildCreditSwapCall(params: CreditSwapCallParams): CreditSwapCall {
+  const amount = params.kind === 'exactIn' ? params.amountIn : params.amountOut
+  if (amount <= 0n) throw new Error('credit swap amount must be positive')
+  if (params.tokenIndex !== 0n && params.tokenIndex !== 1n) {
+    throw new Error('credit swap tokenIndex must be 0 or 1')
+  }
+
+  const { low, high } = tickLimits(params.currentTick, params.slippageBps)
+  const { tokenId: creditTokenId, adjustedSize } = buildUniqueCredit(
+    params.poolId,
+    params.tokenIndex,
+    params.tokenIndex,
+    params.currentTick,
+    params.tickSpacing,
+    params.existingPositionIds,
+    amount,
+  )
+  const ascending = [Number(low), Number(high), 0] as const
+  const descending = [Number(high), Number(low), 0] as const
+  const limits =
+    params.kind === 'exactIn'
+      ? ([ascending, descending] as const)
+      : ([descending, ascending] as const)
+  const args = [
+    [creditTokenId, creditTokenId],
+    [...params.existingPositionIds],
+    [adjustedSize, 0n],
+    limits,
+    false,
+    params.builderCode ?? 0n,
+  ] as const
+
+  return {
+    to: params.poolAddress,
+    data: encodeFunctionData({
+      abi: panopticPoolV2Abi,
+      functionName: 'dispatch',
+      args,
+    }),
+    creditTokenId,
+    adjustedSize,
+    args,
+  }
+}
 
 /**
  * Parameters for swapExactOut.
@@ -147,43 +227,18 @@ export async function swapExactOut(params: SwapExactOutParams): Promise<TxResult
     // (which borrows the counter-token and swaps it in), and carrying it over to
     // the credit inverts the whole swap: an exact-out for 4 ETH then PAYS 4 ETH
     // and receives USDC. Verified on mainnet before/after.
-    const tokenType = tokenOutIndex
-
-    const { low: tickLimitLow, high: tickLimitHigh } = tickLimits(pool.currentTick, slippageBps)
-
-    // asset = tokenOutIndex so positionSize is denominated in tokenOut units
-    const { tokenId: creditTokenId, adjustedSize } = buildUniqueCredit(
-      pool.poolId,
-      tokenOutIndex,
-      tokenType,
-      pool.currentTick,
-      pool.tickSpacing,
-      positionIds,
+    const call = buildCreditSwapCall({
+      kind: 'exactOut',
+      poolAddress,
+      poolId: pool.poolId,
+      currentTick: pool.currentTick,
+      tickSpacing: pool.tickSpacing,
+      existingPositionIds: positionIds,
+      tokenIndex: tokenOutIndex,
       amountOut,
-    )
-
-    // Op 1 (mint): credit with swapAtMint=true → pay a swapped amount of tokenIn
-    // swapAtMint=true → descending tick limits: [high, low, spread]
-    const mintTickLimits: readonly [number, number, number] = [
-      Number(tickLimitHigh),
-      Number(tickLimitLow),
-      0,
-    ]
-
-    // Op 2 (burn): same credit with swapAtMint=false → receive exactly amountOut
-    // swapAtMint=false → ascending tick limits: [low, high, spread]
-    const burnTickLimits: readonly [number, number, number] = [
-      Number(tickLimitLow),
-      Number(tickLimitHigh),
-      0,
-    ]
-
-    // positionIdList: [mint tokenId, burn tokenId]
-    // finalPositionIdList: existing positions (credit opens and closes in same tx, net zero)
-    // positionSizes: mint gets the size, burn gets 0n (= burn all)
-    const positionIdList = [creditTokenId, creditTokenId]
-    const finalPositionIdList = [...positionIds]
-    const positionSizes = [adjustedSize, 0n]
+      slippageBps,
+      builderCode,
+    })
 
     try {
       return await submitWrite({
@@ -193,14 +248,7 @@ export async function swapExactOut(params: SwapExactOutParams): Promise<TxResult
         address: poolAddress,
         abi: panopticPoolV2Abi,
         functionName: 'dispatch',
-        args: [
-          positionIdList,
-          finalPositionIdList,
-          positionSizes,
-          [mintTickLimits, burnTickLimits],
-          false, // usePremiaAsCollateral
-          builderCode,
-        ],
+        args: call.args,
         txOverrides,
       })
     } catch (error) {
@@ -271,41 +319,18 @@ export async function swapExactIn(params: SwapExactInParams): Promise<TxResult> 
     const tokenInIndex = resolveTokenIndex(tokenIn, token0, token1)
 
     // For exact input: the credit is denominated in tokenIn and paid in tokenIn
-    const tokenType = tokenInIndex
-
-    const { low: tickLimitLow, high: tickLimitHigh } = tickLimits(pool.currentTick, slippageBps)
-
-    // asset = tokenInIndex so positionSize is denominated in tokenIn units
-    const { tokenId: creditTokenId, adjustedSize } = buildUniqueCredit(
-      pool.poolId,
-      tokenInIndex,
-      tokenType,
-      pool.currentTick,
-      pool.tickSpacing,
-      positionIds,
+    const call = buildCreditSwapCall({
+      kind: 'exactIn',
+      poolAddress,
+      poolId: pool.poolId,
+      currentTick: pool.currentTick,
+      tickSpacing: pool.tickSpacing,
+      existingPositionIds: positionIds,
+      tokenIndex: tokenInIndex,
       amountIn,
-    )
-
-    // Op 1 (mint): credit with swapAtMint=false → pay exactly amountIn of tokenIn
-    // swapAtMint=false → ascending tick limits: [low, high, spread]
-    const mintTickLimits: readonly [number, number, number] = [
-      Number(tickLimitLow),
-      Number(tickLimitHigh),
-      0,
-    ]
-
-    // Op 2 (burn): same credit with swapAtMint=true → receive the swapped tokenOut
-    // swapAtMint=true → descending tick limits: [high, low, spread]
-    const burnTickLimits: readonly [number, number, number] = [
-      Number(tickLimitHigh),
-      Number(tickLimitLow),
-      0,
-    ]
-
-    // positionSizes: mint gets the size, burn gets 0n (= burn all)
-    const positionIdList = [creditTokenId, creditTokenId]
-    const finalPositionIdList = [...positionIds]
-    const positionSizes = [adjustedSize, 0n]
+      slippageBps,
+      builderCode,
+    })
 
     try {
       return await submitWrite({
@@ -315,14 +340,7 @@ export async function swapExactIn(params: SwapExactInParams): Promise<TxResult> 
         address: poolAddress,
         abi: panopticPoolV2Abi,
         functionName: 'dispatch',
-        args: [
-          positionIdList,
-          finalPositionIdList,
-          positionSizes,
-          [mintTickLimits, burnTickLimits],
-          false,
-          builderCode,
-        ],
+        args: call.args,
         txOverrides,
       })
     } catch (error) {

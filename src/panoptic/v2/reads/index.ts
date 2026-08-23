@@ -53,13 +53,16 @@ export {
 export {
   type FetchPoolIdParams,
   type FetchPoolIdResult,
+  type GetOracleRiskParametersParams,
   type GetOracleStateParams,
   type GetPoolMetadataParams,
   type GetPoolParams,
   type GetRiskParametersParams,
   type GetUtilizationParams,
+  type OracleRiskParametersState,
   type PoolMetadata,
   fetchPoolId,
+  getOracleRiskParameters,
   getOracleState,
   getPool,
   getPoolMetadata,
@@ -169,6 +172,20 @@ export {
   REQUIRED_BASE_ERROR_SENTINEL,
 } from './collateralEstimate'
 
+// Collateral strategy classification + requirement attribution
+export {
+  type CollateralBreakdown,
+  type CollateralStrategyKind,
+  type EstimateCollateralBreakdownParams,
+  type StrategyAllocation,
+  type StrategyGroup,
+  apportion,
+  classifyStrategyGroups,
+  collateralRuleKindFor,
+  estimateCollateralBreakdown,
+  isolateGroupTokenId,
+} from './collateralBreakdown'
+
 // Checks (liquidation)
 export { type IsLiquidatableParams, type LiquidationCheck, isLiquidatable } from './checks'
 
@@ -230,6 +247,17 @@ export {
 
 // Margin buffer
 export { type GetMarginBufferParams, type MarginBuffer, getMarginBuffer } from './margin'
+
+// Mint-time margin buffer (RiskEngine.BP_DECREASE_BUFFER / DECIMALS)
+export {
+  type MintBufferRatio,
+  applyMintBuffer,
+  applyMintBufferPerToken,
+  DEFAULT_MINT_BUFFER,
+  MINT_BUFFER,
+  MINT_BUFFER_DENOMINATOR,
+  mintableAfterBuffer,
+} from './mintBuffer'
 
 // Delta hedging utilities
 export { type DeltaHedgeResult, type GetDeltaHedgeParamsInput, getDeltaHedgeParams } from './hedge'

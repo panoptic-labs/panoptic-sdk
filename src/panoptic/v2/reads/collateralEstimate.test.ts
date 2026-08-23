@@ -7,7 +7,7 @@ import type { PublicClient } from 'viem'
 import { encodeFunctionResult } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
-import { PanopticError } from '../errors'
+import { NotEnoughTokensError, PanopticError } from '../errors'
 import { tickToSqrtPriceX96 } from '../formatters/tick'
 import { createMemoryStorage, getPositionsKey, jsonSerializer } from '../storage'
 import { countLegs, createTokenIdBuilder, decodeAllLegs, encodePoolId } from '../tokenId'
@@ -777,6 +777,101 @@ describe('Collateral Estimation with PanopticQuery', () => {
         swapAtMint: true, // Zap
       })
       expect(result.neutralLegs).toHaveLength(1)
+    })
+
+    it('seeds an ITM-neutralizing leg from a zero-balance token shortfall', async () => {
+      const tokenId = singlePut()
+      const tracker0 = '0x4444444444444444444444444444444444444444' as const
+      const tracker1 = '0x5555555555555555555555555555555555555555' as const
+      const token0 = '0x6666666666666666666666666666666666666666' as const
+      const token1 = '0x7777777777777777777777777777777777777777' as const
+      const client = createMockClient()
+      const simulateContract = vi
+        .fn()
+        .mockRejectedValueOnce(new NotEnoughTokensError(tracker1, ONE / 2n, 0n))
+        .mockResolvedValueOnce({
+          result: [
+            encodeAssets(ONE, 0n),
+            encodeCurrentTick(0),
+            '0x',
+            encodeCurrentTick(0),
+            encodeAssets(ONE, 0n),
+          ],
+        })
+      const readContract = vi.fn().mockResolvedValue([0n, ONE / 2n])
+      const multicall = vi
+        .fn()
+        .mockResolvedValueOnce([tracker0, tracker1])
+        .mockResolvedValueOnce([token0, token1])
+      const shortfallClient = {
+        ...client,
+        simulateContract,
+        readContract,
+        multicall,
+        estimateGas: vi.fn().mockResolvedValue(100000n),
+      } as unknown as PublicClient
+
+      const result = await createFlowNeutralTokenId({
+        client: shortfallClient,
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        tokenId,
+        positionSize: ONE,
+        queryAddress: QUERY_ADDRESS,
+        swapAtMint: true,
+      })
+
+      expect(result.neutralLegs).toHaveLength(1)
+      expect(result.neutralLegs[0]).toMatchObject({ tokenType: 1n, isCredit: false })
+      expect(result.neutralizedTokenFlow).toMatchObject({ delta0: 0n, delta1: 0n })
+      expect(result.originalCredit).toBeUndefined()
+      expect(simulateContract).toHaveBeenCalledTimes(2)
+    })
+
+    it('keeps the successful neutralizer candidate with the smallest residual', async () => {
+      const tracker0 = '0x4444444444444444444444444444444444444444' as const
+      const tracker1 = '0x5555555555555555555555555555555555555555' as const
+      const token0 = '0x6666666666666666666666666666666666666666' as const
+      const token1 = '0x7777777777777777777777777777777777777777' as const
+      const responseForResidual = (residual: bigint) => ({
+        result: [
+          encodeAssets(ONE, ONE),
+          encodeCurrentTick(0),
+          '0x',
+          encodeCurrentTick(0),
+          encodeAssets(ONE, ONE - residual),
+        ],
+      })
+      const client = createMockClient()
+      const simulateContract = vi
+        .fn()
+        .mockRejectedValueOnce(new NotEnoughTokensError(tracker1, ONE / 2n, 0n))
+        .mockResolvedValueOnce(responseForResidual(ONE / 100n))
+      for (let attempt = 1; attempt < 8; attempt++) {
+        simulateContract.mockResolvedValueOnce(responseForResidual(ONE / 2n))
+      }
+      const shortfallClient: PublicClient = Object.assign(client, {
+        simulateContract,
+        readContract: vi.fn().mockResolvedValue([0n, ONE / 2n]),
+        multicall: vi
+          .fn()
+          .mockResolvedValueOnce([tracker0, tracker1])
+          .mockResolvedValueOnce([token0, token1]),
+        estimateGas: vi.fn().mockResolvedValue(100000n),
+      })
+
+      const result = await createFlowNeutralTokenId({
+        client: shortfallClient,
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        tokenId: singlePut(),
+        positionSize: ONE,
+        queryAddress: QUERY_ADDRESS,
+        swapAtMint: true,
+      })
+
+      expect(result.neutralizedTokenFlow?.delta1).toBe(-(ONE / 100n))
+      expect(simulateContract).toHaveBeenCalledTimes(9)
     })
 
     it('throws when positionSize is not positive', async () => {

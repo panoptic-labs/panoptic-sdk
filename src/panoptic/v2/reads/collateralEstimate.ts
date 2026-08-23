@@ -15,7 +15,12 @@ import { panopticQueryAbi } from '../abis/panopticQuery'
 import { getBlockMeta } from '../clients/blockMeta'
 import { PanopticError } from '../errors'
 import { sqrtPriceX96ToTick, tickToSqrtPriceX96 } from '../formatters/tick'
-import { type TokenFlow, simulateWithTokenFlow } from '../simulations/tokenFlow'
+import {
+  type TokenFlow,
+  getPoolTokensForSimulation,
+  simulateWithTokenFlow,
+} from '../simulations/tokenFlow'
+import { getNotEnoughTokensError } from '../simulations/tokenShortfallRecovery'
 import type { StorageAdapter } from '../storage'
 import { getTrackedPositionIds } from '../sync/getTrackedPositionIds'
 import { addLegToTokenId, countLegs, decodeAllLegs } from '../tokenId/encoding'
@@ -595,7 +600,7 @@ export async function getRequiredCreditForITM(
   ])
 
   if (!result.success || !result.tokenFlow) {
-    throw new PanopticError(result.error ?? 'Token flow simulation failed')
+    throw new PanopticError(result.error ?? 'Token flow simulation failed', result.rawError)
   }
 
   // The token flow deltas represent the ITM amount:
@@ -925,13 +930,13 @@ export interface FlowNeutralTokenId {
    */
   neutralLegs: NeutralLeg[]
   /** The BASE position's net-flow measurement (what the legs offset). */
-  originalCredit: RequiredCreditForITM
+  originalCredit?: RequiredCreditForITM
   /**
    * The COMBINED (neutralized) position's actual token flow under the mint's swap,
    * from a verify re-measurement. Use this for the Account-Balances display and to
    * gate the mint — its `delta0/delta1` are the residual net transfer (≈ dust).
    */
-  neutralizedTokenFlow: TokenFlow
+  neutralizedTokenFlow?: TokenFlow
   /** Block metadata */
   _meta: BlockMeta
 }
@@ -1026,17 +1031,181 @@ export async function createFlowNeutralTokenId(
   // N in that token. So sizing notional = |base net flow| and computing the strike directly
   // drives the residual to ~dust in ONE shot — no fixed-point loop.
   // creditAmount = −delta: positive = user deposits, negative = user receives.
-  const credit = await getRequiredCreditForITM({
-    client,
-    poolAddress,
-    account,
-    tokenId,
-    positionSize: measureSize,
-    existingPositionIds,
-    swapAtMint,
-    blockNumber,
-    _meta: params._meta,
-  })
+  let credit: RequiredCreditForITM
+  try {
+    credit = await getRequiredCreditForITM({
+      client,
+      poolAddress,
+      account,
+      tokenId,
+      positionSize: measureSize,
+      existingPositionIds,
+      swapAtMint,
+      blockNumber,
+      _meta: params._meta,
+    })
+  } catch (error) {
+    const firstShortfall = getNotEnoughTokensError(error)
+    if (firstShortfall === null || queryAddress === undefined) throw error
+
+    const intrinsic = await getItmAmounts({
+      client,
+      queryAddress,
+      poolAddress,
+      tokenId,
+      positionSize: measureSize,
+      blockNumber,
+      _meta: params._meta,
+    })
+    // OTM positions need no neutral leg. Their commission-only shortfall is
+    // handled by the normal collateral-swap recovery around the final dispatch.
+    if (intrinsic.itm0 === 0n && intrinsic.itm1 === 0n) {
+      return {
+        tokenId,
+        positionSize,
+        neutralLegs: [],
+        _meta: intrinsic._meta,
+      }
+    }
+
+    const pinnedBlock = blockNumber ?? intrinsic._meta.blockNumber
+    const poolTokens = await getPoolTokensForSimulation({
+      client,
+      poolAddress,
+      blockNumber: pinnedBlock,
+    })
+    const indexForShortfall = (shortfall: ReturnType<typeof getNotEnoughTokensError>) => {
+      if (shortfall === null) return null
+      const address = shortfall.tokenAddress.toLowerCase()
+      if (
+        address === poolTokens.token0.toLowerCase() ||
+        address === poolTokens.collateralTracker0.toLowerCase()
+      ) {
+        return 0n as const
+      }
+      if (
+        address === poolTokens.token1.toLowerCase() ||
+        address === poolTokens.collateralTracker1.toLowerCase()
+      ) {
+        return 1n as const
+      }
+      return null
+    }
+    const firstIndex = indexForShortfall(firstShortfall)
+    if (firstIndex === null) throw error
+
+    // A failed dispatch still reveals the complete charge attempted for its
+    // blocking collateral. Seed a neutralizing leg from that amount, then let
+    // subsequent simulations refine commissions, rounding and Cover's second side.
+    const targets: [bigint, bigint] = [0n, 0n]
+    targets[Number(firstIndex)] = firstShortfall.assetsRequested
+    let best:
+      | {
+          tokenId: bigint
+          neutralLegs: NeutralLeg[]
+          residual: RequiredCreditForITM
+          residualScore: bigint
+        }
+      | undefined
+    let previousTokenId: bigint | undefined
+
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const indices = ([0n, 1n] as const).filter((index) => targets[Number(index)] !== 0n)
+      if (swapAtMint && indices.length > 1) {
+        const keep = indices.reduce((dominant, index) =>
+          (targets[Number(index)] < 0n ? -targets[Number(index)] : targets[Number(index)]) >
+          (targets[Number(dominant)] < 0n ? -targets[Number(dominant)] : targets[Number(dominant)])
+            ? index
+            : dominant,
+        )
+        targets[Number(keep === 0n ? 1n : 0n)] = 0n
+      }
+      const activeIndices = ([0n, 1n] as const).filter((index) => targets[Number(index)] !== 0n)
+      if (legCount + BigInt(activeIndices.length) > 4n) {
+        throw new PanopticError(
+          `Cannot add ${activeIndices.length} neutralizing leg(s): tokenId would exceed 4 legs`,
+        )
+      }
+      const neutralLegs = activeIndices.map((index) =>
+        buildNeutralLeg(index, targets[Number(index)], measureSize),
+      )
+      const combined = assembleNeutralTokenId(poolId, tokenId, neutralLegs, prependNeutral)
+      if (combined === previousTokenId) break
+      previousTokenId = combined
+
+      let residual: RequiredCreditForITM
+      try {
+        residual = await getRequiredCreditForITM({
+          client,
+          poolAddress,
+          account,
+          tokenId: combined,
+          positionSize: measureSize,
+          existingPositionIds,
+          swapAtMint,
+          blockNumber: pinnedBlock,
+          _meta: intrinsic._meta,
+        })
+      } catch (retryError) {
+        const retryShortfall = getNotEnoughTokensError(retryError)
+        const retryIndex = indexForShortfall(retryShortfall)
+        if (retryShortfall === null || retryIndex === null) throw retryError
+        const deficit = retryShortfall.assetsRequested - retryShortfall.assetBalance
+        targets[Number(retryIndex)] += deficit > 0n ? deficit : retryShortfall.assetsRequested
+        continue
+      }
+
+      const residualScore =
+        (residual.creditAmount0 < 0n ? -residual.creditAmount0 : residual.creditAmount0) +
+        (residual.creditAmount1 < 0n ? -residual.creditAmount1 : residual.creditAmount1)
+      if (best === undefined || residualScore < best.residualScore) {
+        best = { tokenId: combined, neutralLegs, residual, residualScore }
+      }
+      const residualCredits = [residual.creditAmount0, residual.creditAmount1] as const
+      let adjusted = false
+      for (const index of [0n, 1n] as const) {
+        if (swapAtMint && targets[Number(index)] === 0n) continue
+        const amount = residualCredits[Number(index)]
+        if (amount === 0n) continue
+        targets[Number(index)] += amount
+        adjusted = true
+      }
+      if (!adjusted) break
+    }
+
+    if (best === undefined) {
+      throw new PanopticError('Could not create an affordable ITM-neutralizing position')
+    }
+
+    let verifiedFlow = best.residual.tokenFlow
+    if (positionSize !== measureSize) {
+      try {
+        const verified = await getRequiredCreditForITM({
+          client,
+          poolAddress,
+          account,
+          tokenId: best.tokenId,
+          positionSize,
+          existingPositionIds,
+          swapAtMint,
+          blockNumber: pinnedBlock,
+          _meta: intrinsic._meta,
+        })
+        verifiedFlow = verified.tokenFlow
+      } catch {
+        // The final mint hook can wrap any full-size rounding/commission shortfall
+        // in the collateral recovery swap; the neutral tokenId itself is valid.
+      }
+    }
+
+    return {
+      tokenId: best.tokenId,
+      positionSize,
+      neutralLegs: best.neutralLegs,
+      neutralizedTokenFlow: verifiedFlow,
+      _meta: intrinsic._meta,
+    }
+  }
 
   const tickBefore = credit.tokenFlow.tickBefore
   if (tickBefore === null) {

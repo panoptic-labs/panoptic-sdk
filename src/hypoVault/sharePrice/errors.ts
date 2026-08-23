@@ -30,6 +30,35 @@ export function getVaultApyErrorMessage(error: unknown): string {
   return 'unknown error'
 }
 
+function errorChainIncludes(error: unknown, marker: string): boolean {
+  const visited = new Set<object>()
+  let current: unknown = error
+
+  while (typeof current === 'object' && current !== null && !visited.has(current)) {
+    visited.add(current)
+
+    const record = current as Record<string, unknown>
+    for (const key of ['message', 'shortMessage', 'details', 'errorName']) {
+      const value = record[key]
+      if (typeof value === 'string' && value.includes(marker)) {
+        return true
+      }
+    }
+
+    const data = record.data
+    if (typeof data === 'object' && data !== null) {
+      const errorName = (data as Record<string, unknown>).errorName
+      if (typeof errorName === 'string' && errorName.includes(marker)) {
+        return true
+      }
+    }
+
+    current = record.cause
+  }
+
+  return false
+}
+
 export function isExpectedHistoricalReadMiss(error: unknown): boolean {
   const message = getVaultApyErrorMessage(error)
   return (
@@ -48,4 +77,16 @@ export function isStaleOraclePriceError(error: unknown): boolean {
 
 export function isStaleOraclePriceReadError(error: unknown): boolean {
   return isStaleOraclePriceError(error)
+}
+
+export function isIncorrectPositionListReadError(error: unknown): boolean {
+  return errorChainIncludes(error, 'IncorrectPositionList')
+}
+
+export const TRUSTED_VAULT_SHARE_PRICE_STATUSES = ['ok', 'stale_oracle_override'] as const
+
+export function isTrustedVaultSharePriceStatus(
+  status: string,
+): status is (typeof TRUSTED_VAULT_SHARE_PRICE_STATUSES)[number] {
+  return TRUSTED_VAULT_SHARE_PRICE_STATUSES.some((trustedStatus) => trustedStatus === status)
 }

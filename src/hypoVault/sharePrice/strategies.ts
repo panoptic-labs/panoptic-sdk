@@ -17,6 +17,7 @@ import { getMainnetVaultPoolConfigurationAtBlock } from '../mainnetVaultPoolHist
 import { buildManagerInputAtBlock } from '../utils/buildManagerInputAtBlock'
 import {
   getVaultPoolInfos,
+  recoverVaultCandidateTokenIdsByPool,
   resolveVaultHistoricalCandidatesByPool,
   resolveVaultTokenIdsByPool,
   verifyVaultOpenTokenIdsAtBlock,
@@ -52,6 +53,24 @@ function getPlpManagerAddress(chainId: number, vaultAddress: Address): Address |
   )
 }
 
+function getPlpPoolInfosAtBlock({
+  chainId,
+  vaultAddress,
+  blockNumber,
+}: {
+  chainId: number
+  vaultAddress: Address
+  blockNumber: bigint
+}) {
+  return (
+    getMainnetVaultPoolConfigurationAtBlock({
+      chainId,
+      vaultAddress,
+      blockNumber,
+    })?.poolInfos ?? getVaultPoolInfos(vaultAddress, chainId)
+  )
+}
+
 function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
   return {
     enabledMetrics: ['nav'],
@@ -68,6 +87,18 @@ function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
         poolInfos,
       })
     },
+    recoverCandidates: async ({ chainId, client, vault, blockNumber, fromBlock, candidates }) => {
+      const vaultAddress = vault.id as Address
+      return recoverVaultCandidateTokenIdsByPool({
+        viemClient: client,
+        chainId,
+        vaultAddress,
+        candidatesByPool: candidates,
+        poolInfos: getPlpPoolInfosAtBlock({ chainId, vaultAddress, blockNumber }),
+        blockNumber,
+        fromBlock,
+      })
+    },
     managerInputProvider: async ({ chainId, client, vault, blockNumber, candidates }) => {
       const vaultAddress = vault.id as Address
       if (minBlock !== undefined && blockNumber < minBlock) {
@@ -78,13 +109,7 @@ function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
         })
       }
 
-      const historicalPoolConfiguration = getMainnetVaultPoolConfigurationAtBlock({
-        chainId,
-        vaultAddress,
-        blockNumber,
-      })
-      const poolInfos =
-        historicalPoolConfiguration?.poolInfos ?? getVaultPoolInfos(vaultAddress, chainId)
+      const poolInfos = getPlpPoolInfosAtBlock({ chainId, vaultAddress, blockNumber })
       if (poolInfos.length === 0) {
         return DEFAULT_MANAGER_INPUT
       }
@@ -187,4 +212,15 @@ export function setVaultApyStrategyOverride({
 }) {
   const key = buildVaultStrategyKey(chainId, vaultAddress)
   strategyOverridesByVaultKey[key] = strategy
+}
+
+export function clearVaultApyStrategyOverride({
+  chainId,
+  vaultAddress,
+}: {
+  chainId: number
+  vaultAddress: Address
+}) {
+  const key = buildVaultStrategyKey(chainId, vaultAddress)
+  delete strategyOverridesByVaultKey[key]
 }

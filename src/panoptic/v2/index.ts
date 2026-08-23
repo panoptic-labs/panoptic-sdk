@@ -9,12 +9,24 @@
 // ============================================================================
 // Utilities
 // ============================================================================
+export type { DecodedOraclePack, OracleTiming } from './utils'
+export type {
+  OracleEmaPeriods,
+  OracleRiskParameters,
+  OracleSafeModeCause,
+  OracleSafeModeDiagnosis,
+} from './utils'
 export {
   BPS_DENOMINATOR,
+  decodeOraclePack,
+  decodeOracleRiskParameters,
+  decodeOracleTiming,
+  diagnoseOracleSafeMode,
   MAX_TICK,
   MAX_TRACKED_CHUNKS,
   MIN_TICK,
   ORACLE_EPOCH_SECONDS,
+  oracleEpochAt,
   REORG_DEPTH,
   SCHEMA_VERSION,
   STORAGE_PREFIX,
@@ -316,6 +328,7 @@ export type {
   GetNetLiquidationValuesParams,
   // Open position preview params
   GetOpenPositionPreviewParams,
+  GetOracleRiskParametersParams,
   GetOracleStateParams,
   // Pool liquidity params
   GetPoolLiquiditiesParams,
@@ -349,6 +362,7 @@ export type {
   NeutralLeg,
   OpenPositionPreview,
   OptimizeTokenIdRiskPartnersParams,
+  OracleRiskParametersState,
   PoolLiquidities,
   // Pool metadata
   PoolMetadata,
@@ -429,6 +443,7 @@ export {
   getNetLiquidationValues,
   // Open position preview
   getOpenPositionPreview,
+  getOracleRiskParameters,
   getOracleState,
   getPool,
   // Pool liquidity
@@ -466,6 +481,37 @@ export {
   utilizationBpsToWad,
   utilizationPctToWad,
   validateBuilderCode,
+} from './reads'
+
+// Collateral strategy classification + per-strategy requirement attribution.
+// The classification mirrors the RiskEngine's own branches exactly; the
+// per-group numbers are attribution weights against an authoritative total.
+export type {
+  CollateralBreakdown,
+  CollateralStrategyKind,
+  EstimateCollateralBreakdownParams,
+  StrategyAllocation,
+  StrategyGroup,
+} from './reads'
+export {
+  apportion,
+  classifyStrategyGroups,
+  collateralRuleKindFor,
+  estimateCollateralBreakdown,
+  isolateGroupTokenId,
+} from './reads'
+
+// Mint-time margin buffer (RiskEngine.BP_DECREASE_BUFFER / DECIMALS).
+// Use these instead of hand-rolling the ratio: they apply it per token, round
+// up like the contract, and must run BEFORE any price conversion.
+export type { MintBufferRatio } from './reads'
+export {
+  applyMintBuffer,
+  applyMintBufferPerToken,
+  DEFAULT_MINT_BUFFER,
+  MINT_BUFFER,
+  MINT_BUFFER_DENOMINATOR,
+  mintableAfterBuffer,
 } from './reads'
 
 // Streamia History
@@ -624,6 +670,8 @@ export type {
   CancelParams,
   CheckApprovalParams,
   ClosePositionParams,
+  CreditSwapCall,
+  CreditSwapCallParams,
   DeployNewPoolParams,
   DepositParams,
   DispatchParams,
@@ -664,6 +712,7 @@ export {
   // Lending
   borrow,
   borrowAndWait,
+  buildCreditSwapCall,
   // Position operations
   buildOpenPositionCalldata,
   // Loan utilities
@@ -774,6 +823,8 @@ export type {
   SimulateSwapExactInParams,
   SimulateSwapExactOutParams,
   SimulateWithdrawParams,
+  SimulateWithTokenFlowParams,
+  SimulateWithTokenFlowResult,
   SwapSimulation,
   TokenShortfallRecoveryQuote,
   TokenShortfallRecoveryQuoteParams,
@@ -802,6 +853,7 @@ export {
   simulateSwapExactIn,
   simulateSwapExactOut,
   simulateWithdraw,
+  simulateWithTokenFlow,
 } from './simulations'
 
 // ============================================================================
@@ -1034,7 +1086,7 @@ export type {
 // consumers (bots) importing it need wagmi installed. Re-export the handful of
 // non-React symbols bots need here so they can stay on '@panoptic-eng/sdk/v2'.
 
-export { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../generated'
+export { collateralTrackerV2Abi, panopticPoolV2Abi, riskEngineAbi } from '../../generated'
 export type { ChainDeployment } from '../../hypoVault/chainDeployments'
 export {
   getChainDeployment,

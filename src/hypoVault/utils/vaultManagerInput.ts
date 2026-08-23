@@ -1,7 +1,8 @@
-import { type Address, type Client, ContractFunctionExecutionError } from 'viem'
+import { type Address, type Client, type PublicClient, ContractFunctionExecutionError } from 'viem'
 import { getBlockNumber, readContract } from 'viem/actions'
 
 import { panopticPoolV2Abi as panopticPoolAbi } from '../../abis/panoptic_v2_abis'
+import { getOpenPositionIds } from '../../panoptic/v2/sync/getTrackedPositionIds'
 import {
   BASE_CHAIN_ID,
   MAINNET_CHAIN_ID,
@@ -444,6 +445,68 @@ export type VaultPoolCandidateTokenIds = {
    * ascending. Block-INDEPENDENT: a superset valid for any historical block.
    */
   candidates: bigint[]
+}
+
+/**
+ * Enrich a cached subgraph candidate superset with the authoritative position
+ * list recovered from Panoptic dispatch history at `blockNumber`.
+ *
+ * This is the repair path for subgraph lag: `getOpenPositionIds` decodes the
+ * most recent position-changing dispatch in the requested range and returns
+ * the complete on-chain-validated list. Recovered IDs are merged into the
+ * all-time candidate cache; closed IDs remain harmless because the normal
+ * per-block verifier filters them out.
+ */
+export async function recoverVaultCandidateTokenIdsByPool({
+  viemClient,
+  chainId,
+  vaultAddress,
+  candidatesByPool,
+  poolInfos,
+  blockNumber,
+  fromBlock,
+}: {
+  viemClient: PublicClient
+  chainId: number
+  vaultAddress: Address
+  candidatesByPool: readonly VaultPoolCandidateTokenIds[]
+  poolInfos: readonly PoolInfo[]
+  blockNumber: bigint
+  fromBlock?: bigint
+}): Promise<VaultPoolCandidateTokenIds[]> {
+  return Promise.all(
+    poolInfos.map(async (poolInfo) => {
+      const cached = candidatesByPool.find(
+        (candidate) => candidate.poolAddress.toLowerCase() === poolInfo.pool.toLowerCase(),
+      )
+      const cachedIds = cached?.candidates ?? []
+      const scanFromBlock = fromBlock ?? poolInfo.positionScanFromBlock
+      if (scanFromBlock === undefined) {
+        throw new Error(
+          `Cannot recover positions for pool ${poolInfo.pool}: no recovery lower bound configured`,
+        )
+      }
+      if (scanFromBlock > blockNumber) {
+        return { poolAddress: poolInfo.pool, candidates: [...cachedIds] }
+      }
+
+      const recoveredIds = await getOpenPositionIds({
+        client: viemClient,
+        chainId: BigInt(chainId),
+        poolAddress: poolInfo.pool,
+        account: vaultAddress,
+        fromBlock: scanFromBlock,
+        toBlock: blockNumber,
+      })
+      if (recoveredIds === null) {
+        throw new Error(
+          `Could not recover an authoritative position list for vault ${vaultAddress} in pool ${poolInfo.pool} between blocks ${scanFromBlock} and ${blockNumber}`,
+        )
+      }
+      const candidates = sortBigintsAscending(new Set<bigint>([...cachedIds, ...recoveredIds]))
+      return { poolAddress: poolInfo.pool, candidates }
+    }),
+  )
 }
 
 /**

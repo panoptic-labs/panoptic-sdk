@@ -50,6 +50,7 @@ export {
   useClearTrackedPositions,
   useClosedPositions,
   useClosePosition as useClosePositionHook,
+  useCollateralBreakdown,
   useCollateralData,
   useConfirmPendingPosition,
   useCowOrderStatus,

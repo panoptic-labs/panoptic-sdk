@@ -2,10 +2,9 @@ import { type Address, type Hex, type PublicClient, keccak256 } from 'viem'
 
 import { HypoVaultAbi } from '../../abis/HypoVault'
 import { PanopticVaultAccountantAbi } from '../../abis/PanopticVaultAccountant'
-import { fetchVaultLendingAllocation } from '../analytics/vaultLendingAllocation'
 import { getStaleOracleStateOverrideForAccountant } from '../staleOracleOverride'
 import type { VaultPoolCandidateTokenIds } from '../utils/vaultManagerInput'
-import { isStaleOraclePriceReadError } from './errors'
+import { isIncorrectPositionListReadError, isStaleOraclePriceReadError } from './errors'
 import { computeSharePriceFromNavSnapshot } from './math'
 import { getVaultApyStrategy } from './strategies'
 import type { VaultApyVaultLike, VaultSharePriceSnapshot } from './types'
@@ -20,6 +19,23 @@ export type ReadContractParams = {
 }
 
 export type ReadContractFn = (client: PublicClient, params: ReadContractParams) => Promise<unknown>
+
+export type FetchVaultSharePriceSnapshotParams = {
+  client: PublicClient
+  vault: VaultApyVaultLike
+  chainId: number
+  windowLabel: 'now' | '7d' | '30d' | 'series'
+  blockNumber: bigint
+  readContractFn: ReadContractFn
+  /**
+   * Pre-resolved, block-independent candidate tokenIds, forwarded to the
+   * strategy's `managerInputProvider` so a timeseries skips the per-anchor
+   * subgraph candidate gather. Omit for one-shot snapshots.
+   */
+  candidates?: readonly VaultPoolCandidateTokenIds[]
+  /** Populate full token-id diagnostics instead of counts only. */
+  includeTokenIdsInDiagnostics?: boolean
+}
 
 function toBigInt(value: unknown): bigint | null {
   if (typeof value === 'bigint') {
@@ -44,37 +60,6 @@ function getAssetsDepositedFromDepositEpochState(value: unknown): bigint | null 
   return null
 }
 
-async function estimateNavOffchainFromPoolState({
-  client,
-  chainId,
-  vaultAddress,
-  underlyingTokenAddress,
-  blockNumber,
-  assetsDeposited,
-}: {
-  client: PublicClient
-  chainId: number
-  vaultAddress: Address
-  underlyingTokenAddress: Address
-  blockNumber: bigint
-  assetsDeposited: bigint
-}): Promise<bigint | null> {
-  try {
-    const allocationRows = await fetchVaultLendingAllocation({
-      client,
-      chainId,
-      vaultAddress,
-      underlyingTokenAddress,
-      blockNumber,
-    })
-    const totalUnderlying = allocationRows.reduce((sum, row) => sum + row.allocationUnderlying, 0n)
-    const totalAssetsEstimate = totalUnderlying + assetsDeposited
-    return totalAssetsEstimate === 0n ? 0n : totalAssetsEstimate - 1n
-  } catch {
-    return null
-  }
-}
-
 export async function fetchVaultSharePriceSnapshot({
   client,
   vault,
@@ -84,27 +69,7 @@ export async function fetchVaultSharePriceSnapshot({
   readContractFn,
   candidates,
   includeTokenIdsInDiagnostics = false,
-}: {
-  client: PublicClient
-  vault: VaultApyVaultLike
-  chainId: number
-  windowLabel: 'now' | '7d' | '30d' | 'series'
-  blockNumber: bigint
-  readContractFn: ReadContractFn
-  /**
-   * Pre-resolved, block-independent candidate tokenIds, forwarded to the
-   * strategy's `managerInputProvider` so a timeseries skips the per-anchor
-   * subgraph candidate gather. Omit for one-shot snapshots.
-   */
-  candidates?: readonly VaultPoolCandidateTokenIds[]
-  /**
-   * When true, the returned snapshot's `tokenIdsByPool` diagnostics are
-   * populated (useful for spike-log debugging). Replaces the UI-only
-   * `import.meta.env.VITE_VAULT_APY_SPIKE_LOG_INCLUDE_TOKEN_IDS` flag so the
-   * SDK works in plain node contexts. Defaults to false.
-   */
-  includeTokenIdsInDiagnostics?: boolean
-}): Promise<VaultSharePriceSnapshot> {
+}: FetchVaultSharePriceSnapshotParams): Promise<VaultSharePriceSnapshot> {
   const vaultAddress = vault.id as Address
   const accountantAddress = vault.accountant as Address
   const underlyingTokenAddress = vault.underlyingToken.id as Address
@@ -161,7 +126,7 @@ export async function fetchVaultSharePriceSnapshot({
     } catch (error) {
       const details =
         error instanceof Error ? error.message : typeof error === 'string' ? error : 'unknown error'
-      throw new Error(`[${callName}] ${details}`)
+      throw Object.assign(new Error(`[${callName}] ${details}`), { cause: error })
     }
   }
 
@@ -246,36 +211,19 @@ export async function fetchVaultSharePriceSnapshot({
       throw error
     }
 
-    if (staleOracleStateOverride !== undefined) {
-      try {
-        const navRawWithOverride = await readWithContext({
-          callName: 'computeNAV',
-          request: {
-            ...navRequest,
-            stateOverride: staleOracleStateOverride,
-          },
-        })
-        nav = toBigInt(navRawWithOverride)
-        navSource = 'computeNAVStateOverride'
-      } catch {
-        // Keep existing offchain fallback for display continuity.
-      }
+    if (staleOracleStateOverride === undefined) {
+      throw error
     }
-    if (nav === null) {
-      nav = await estimateNavOffchainFromPoolState({
-        client,
-        chainId,
-        vaultAddress,
-        underlyingTokenAddress,
-        blockNumber,
-        assetsDeposited,
-      })
 
-      if (nav === null) {
-        throw error
-      }
-      navSource = 'offchainLendingEstimate'
-    }
+    const navRawWithOverride = await readWithContext({
+      callName: 'computeNAV',
+      request: {
+        ...navRequest,
+        stateOverride: staleOracleStateOverride,
+      },
+    })
+    nav = toBigInt(navRawWithOverride)
+    navSource = 'computeNAVStateOverride'
   }
   if (nav === null) {
     throw new Error(`Unexpected computeNAV output type for vault ${vault.id}`)
@@ -301,5 +249,50 @@ export async function fetchVaultSharePriceSnapshot({
     managerInputHash,
     tokenIdCountsByPool,
     tokenIdsByPool,
+  }
+}
+
+export async function fetchVaultSharePriceSnapshotWithCandidateRecovery({
+  recoveryFromBlock,
+  ...params
+}: FetchVaultSharePriceSnapshotParams & {
+  recoveryFromBlock: bigint
+}): Promise<{
+  snapshot: VaultSharePriceSnapshot
+  candidates: readonly VaultPoolCandidateTokenIds[] | undefined
+}> {
+  try {
+    return {
+      snapshot: await fetchVaultSharePriceSnapshot(params),
+      candidates: params.candidates,
+    }
+  } catch (error) {
+    const strategy = getVaultApyStrategy({
+      chainId: params.chainId,
+      vaultAddress: params.vault.id as Address,
+    })
+    if (
+      !isIncorrectPositionListReadError(error) ||
+      strategy.recoverCandidates === undefined ||
+      params.candidates === undefined
+    ) {
+      throw error
+    }
+
+    const recoveredCandidates = await strategy.recoverCandidates({
+      chainId: params.chainId,
+      vault: params.vault,
+      client: params.client,
+      blockNumber: params.blockNumber,
+      fromBlock: recoveryFromBlock,
+      candidates: params.candidates,
+    })
+    return {
+      snapshot: await fetchVaultSharePriceSnapshot({
+        ...params,
+        candidates: recoveredCandidates,
+      }),
+      candidates: recoveredCandidates,
+    }
   }
 }
