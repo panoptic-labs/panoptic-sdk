@@ -1,6 +1,6 @@
 {
   "name": "@panoptic-eng/sdk",
-  "version": "1.0.38",
+  "version": "1.0.39",
   "repository": {
     "type": "git",
     "url": "https://github.com/panoptic-labs/panoptic-sdk.git"
@@ -54,8 +54,9 @@
   "scripts": {
     "check:no-src-dts": "node ./scripts/check-no-src-dts.mjs",
     "clean:tsbuildinfo": "node -e \"require('fs').rmSync('tsconfig.tsbuildinfo',{force:true})\"",
-    "build": "pnpm run check:no-src-dts && pnpm run clean:tsbuildinfo && pnpm run codegen:graphql && node ./scripts/tsdown-with-retry.mjs && pnpm run build:deployments-dts",
-    "build:ci": "pnpm run check:no-src-dts && pnpm run clean:tsbuildinfo && pnpm run codegen && pnpm tsdown && pnpm run build:deployments-dts",
+    "build": "pnpm run check:no-src-dts && pnpm run clean:tsbuildinfo && pnpm run codegen:graphql && pnpm tsdown && pnpm run build:dts && pnpm run build:deployments-dts",
+    "build:ci": "pnpm run check:no-src-dts && pnpm run clean:tsbuildinfo && pnpm run codegen && pnpm tsdown && pnpm run build:dts && pnpm run build:deployments-dts",
+    "build:dts": "node ./scripts/build-dts.mjs",
     "build:deployments-dts": "pnpm tsdown -c tsdown.deployments.config.ts && node ./scripts/inline-deployments-dts.mjs",
     "dev": "pnpm concurrently \"pnpm run codegen:graphql --watch\" \"pnpm tsdown --watch\"",
     "typecheck": "tsc --noEmit -p tsconfig.build.json",

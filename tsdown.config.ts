@@ -10,23 +10,10 @@ export default defineConfig({
     // React-free for bots/servers (e.g. @panoptic-eng/mcp).
     './src/panoptic/v2/react-public.ts',
     './src/panoptic/v2/greeks/index.ts',
-    // v2/index.ts already exports the complete types barrel. Adding that barrel
-    // as a second entry creates a competing declaration graph and triggers
-    // rolldown-plugin-dts UNLOADABLE_DEPENDENCY races on multi-core CI.
     './src/uniswap/index.ts',
     './src/cow/index.ts',
-    // Dedicated entry so the type-only re-export (`export type … from './types'`
-    // in cow/index.ts) gets a deterministically-emitted declaration file. Without
-    // it, rolldown's parallel dts generation can race and fail to load
-    // src/cow/types.d.ts on multi-core CI.
-    './src/cow/types.ts',
     './src/zodiac/index.ts',
     './src/vault-transaction-fees.ts',
-    // Dedicated entries: barrels re-exported from other entries need their own
-    // deterministic declaration output, otherwise rolldown-plugin-dts races and
-    // fails with UNLOADABLE_DEPENDENCY on multi-core CI (same pattern as cow/types.ts).
-    './src/panoptic/v2/types/index.ts',
-    './src/hypoVault/vaultDisplayNames.ts',
   ],
   format: ['esm'],
   external: [
@@ -49,6 +36,12 @@ export default defineConfig({
   // unresolvable `workspace:*` dep to npm consumers.
   noExternal: ['@panoptic-eng/deployments'],
   platform: 'neutral',
-  dts: true,
+  // Declarations are emitted separately by `scripts/build-dts.mjs`, which
+  // invokes `tsdown -c tsdown.dts.config.ts` once PER ENTRY. The
+  // UNLOADABLE_DEPENDENCY race lives inside a single tsdown call sharing one
+  // in-memory module map across parallel entries — serializing at the
+  // invocation boundary eliminates it deterministically. This JS pass runs
+  // once with all entries in parallel (fast, no dts, no race).
+  dts: false,
   clean: !process.argv.includes('--watch'), // Only clean on full builds, not watch mode
 })
