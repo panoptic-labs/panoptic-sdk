@@ -41,9 +41,9 @@ const MAX_EFFECTIVE_LIQUIDITY_LIMIT = 8388607
  * Collateral estimate result.
  */
 export interface CollateralEstimate {
-  /** Required collateral for token 0 */
+  /** Required collateral when getRequiredBase is token0-denominated, otherwise zero. */
   required0: bigint
-  /** Required collateral for token 1 */
+  /** Required collateral when getRequiredBase is token1-denominated, otherwise zero. */
   required1: bigint
   /** Block metadata */
   _meta: BlockMeta
@@ -79,6 +79,7 @@ export interface EstimateCollateralRequiredParams {
  * returned value must be scaled down to the caller's actual `positionSize`.
  */
 const MAX_UINT64 = 2n ** 64n - 1n
+const FP96 = 1n << 96n
 
 /**
  * `getRequiredBase` returns `type(uint128).max` as an error sentinel (invalid
@@ -93,7 +94,9 @@ export const REQUIRED_BASE_ERROR_SENTINEL = 2n ** 128n - 1n
  * computes the requirement at `type(uint64).max` size and 0% utilization. Since
  * the requirement is linear in size, the raw result is scaled by
  * `positionSize / type(uint64).max` to yield the requirement for the requested
- * size. Returns collateral requirement in terms of token0.
+ * size. `PanopticQuery.getRequiredBase` returns the cross-margin requirement in
+ * the higher-precision raw token at `atTick`; this function places that amount
+ * in the matching `required0` or `required1` field.
  *
  * @param params - The parameters
  * @returns Estimated collateral requirements with block metadata
@@ -121,7 +124,7 @@ export async function estimateCollateralRequired(
     effectiveTick = BigInt(currentTickResult)
   }
 
-  const [required0, _meta] = await Promise.all([
+  const [requiredBase, _meta] = await Promise.all([
     client.readContract({
       address: queryAddress,
       abi: panopticQueryAbi,
@@ -135,14 +138,15 @@ export async function estimateCollateralRequired(
   // getRequiredBase computes the requirement at type(uint64).max size. The
   // requirement is linear in size, so scale down to the requested positionSize.
   // Guard against the error sentinel (type(uint128).max) so we don't scale it.
-  const scaled0 =
-    required0 >= REQUIRED_BASE_ERROR_SENTINEL ? required0 : (required0 * positionSize) / MAX_UINT64
+  const scaledRequirement =
+    requiredBase >= REQUIRED_BASE_ERROR_SENTINEL
+      ? requiredBase
+      : (requiredBase * positionSize) / MAX_UINT64
+  const denominatedInToken0 = tickToSqrtPriceX96(effectiveTick) < FP96
 
-  // PanopticQuery.getRequiredBase returns collateral requirement in terms of token0
-  // For token1 requirement, would need additional conversion or separate call
   return {
-    required0: scaled0,
-    required1: 0n, // Not available from getRequiredBase (token0-denominated only)
+    required0: denominatedInToken0 ? scaledRequirement : 0n,
+    required1: denominatedInToken0 ? 0n : scaledRequirement,
     _meta,
   }
 }

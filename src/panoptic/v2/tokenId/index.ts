@@ -36,6 +36,13 @@ export {
   validatePoolId,
 } from './decode'
 export {
+  type DeriveStrategy,
+  type DeriveUniqueTokenIdParams,
+  type DeriveUniqueTokenIdResult,
+  deriveUniqueTokenId,
+  planDeriveStrategy,
+} from './deriveUniqueTokenId'
+export {
   type DecodedLeg,
   type EncodeLegParams,
   addLegToTokenId,

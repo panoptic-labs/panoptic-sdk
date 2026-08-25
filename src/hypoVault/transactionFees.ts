@@ -1,5 +1,6 @@
 import type { Chain, Client, Transport } from 'viem'
-import { estimateFeesPerGas, getFeeHistory } from 'viem/actions'
+import { hexToBigInt } from 'viem'
+import { estimateFeesPerGas, getBlock, getFeeHistory } from 'viem/actions'
 
 export const MIN_VAULT_PRIORITY_FEE_PER_GAS = 100_000_000n // 0.1 gwei
 export const MAX_VAULT_PRIORITY_FEE_PER_GAS = 3_000_000_000n // 3 gwei
@@ -7,8 +8,11 @@ export const MAX_VAULT_TRANSACTION_GAS_COST = 15_000_000_000_000_000n // 0.015 E
 
 const FEE_HISTORY_BLOCK_COUNT = 20
 const FEE_HISTORY_REWARD_PERCENTILES = [90]
+const DELTA_HEDGE_FEE_HISTORY_REWARD_PERCENTILES = [25]
 const BASE_FEE_BUFFER_NUMERATOR = 1_125n
 const BASE_FEE_BUFFER_DENOMINATOR = 1_000n
+const REPLACEMENT_FEE_BUMP_NUMERATOR = 1_125n
+const REPLACEMENT_FEE_BUMP_DENOMINATOR = 1_000n
 const GAS_ESTIMATE_BUFFER_NUMERATOR = 3n
 const GAS_ESTIMATE_BUFFER_DENOMINATOR = 2n
 
@@ -16,7 +20,11 @@ export type VaultTransactionFeeQuote = {
   maxFeePerGas: bigint
   maxPriorityFeePerGas: bigint
   minimumMaxFeePerGas: bigint
-  source: 'fee_history' | 'viem_fallback'
+  source: 'fee_history' | 'viem_fallback' | 'rpc_priority_fee' | 'fee_history_p25'
+}
+
+export type VaultDeltaHedgeFeeQuote = VaultTransactionFeeQuote & {
+  rawPriorityFeePerGas: bigint
 }
 
 export type VaultSignedTransactionFeeCaps = {
@@ -83,6 +91,39 @@ export class VaultTransactionGasCostLimitError extends Error {
   }
 }
 
+export class VaultTransactionReplacementLimitError extends Error {
+  readonly code: 'GasCostCapExceeded'
+  readonly requiredMaxFeePerGas: bigint
+  readonly requiredMaxPriorityFeePerGas: bigint
+  readonly maximumAffordableFeePerGas: bigint
+
+  constructor({
+    code,
+    gasLimit,
+    requiredMaxFeePerGas,
+    requiredMaxPriorityFeePerGas,
+    maximumAffordableFeePerGas,
+  }: {
+    code: 'GasCostCapExceeded'
+    gasLimit: bigint
+    requiredMaxFeePerGas: bigint
+    requiredMaxPriorityFeePerGas: bigint
+    maximumAffordableFeePerGas: bigint
+  }) {
+    super(
+      `Vault transaction replacement blocked by ${code}: gasLimit=${gasLimit.toString()}, ` +
+        `requiredMaxFeePerGas=${requiredMaxFeePerGas.toString()}, ` +
+        `requiredMaxPriorityFeePerGas=${requiredMaxPriorityFeePerGas.toString()}, ` +
+        `maximumAffordableFeePerGas=${maximumAffordableFeePerGas.toString()}`,
+    )
+    this.name = 'VaultTransactionReplacementLimitError'
+    this.code = code
+    this.requiredMaxFeePerGas = requiredMaxFeePerGas
+    this.requiredMaxPriorityFeePerGas = requiredMaxPriorityFeePerGas
+    this.maximumAffordableFeePerGas = maximumAffordableFeePerGas
+  }
+}
+
 type FeeHistorySnapshot = {
   baseFeePerGas: readonly bigint[]
   reward?: readonly (readonly bigint[])[] | undefined
@@ -145,6 +186,108 @@ function resolveFeeHistoryQuote({
     maxPriorityFeePerGas,
     minimumMaxFeePerGas: bufferedBaseFee + MIN_VAULT_PRIORITY_FEE_PER_GAS,
     source: 'fee_history',
+  }
+}
+
+function resolveDeltaHedgeFeeHistoryQuote({
+  baseFeePerGas,
+  reward,
+}: FeeHistorySnapshot): VaultDeltaHedgeFeeQuote | null {
+  const latestBaseFeeIndex = baseFeePerGas.length - 2
+  if (latestBaseFeeIndex < 0 || reward === undefined || reward.length === 0) return null
+
+  const p25Rewards = reward.flatMap((blockRewards) => {
+    const p25 = blockRewards[0]
+    return p25 === undefined ? [] : [p25]
+  })
+  const rawPriorityFeePerGas = medianBigInt(p25Rewards)
+  if (rawPriorityFeePerGas === undefined) return null
+
+  const maxPriorityFeePerGas = clampPriorityFee(rawPriorityFeePerGas)
+  const bufferedBaseFee = ceilMultiplyFraction(
+    baseFeePerGas[latestBaseFeeIndex],
+    BASE_FEE_BUFFER_NUMERATOR,
+    BASE_FEE_BUFFER_DENOMINATOR,
+  )
+  return {
+    maxFeePerGas: bufferedBaseFee + maxPriorityFeePerGas,
+    maxPriorityFeePerGas,
+    minimumMaxFeePerGas: bufferedBaseFee + MIN_VAULT_PRIORITY_FEE_PER_GAS,
+    rawPriorityFeePerGas,
+    source: 'fee_history_p25',
+  }
+}
+
+function resolveRpcPriorityFeeQuote({
+  baseFeePerGas,
+  rawPriorityFeePerGas,
+}: {
+  baseFeePerGas: bigint
+  rawPriorityFeePerGas: bigint
+}): VaultDeltaHedgeFeeQuote {
+  const bufferedBaseFee = ceilMultiplyFraction(
+    baseFeePerGas,
+    BASE_FEE_BUFFER_NUMERATOR,
+    BASE_FEE_BUFFER_DENOMINATOR,
+  )
+  return {
+    maxFeePerGas: bufferedBaseFee + rawPriorityFeePerGas,
+    maxPriorityFeePerGas: rawPriorityFeePerGas,
+    minimumMaxFeePerGas: bufferedBaseFee + rawPriorityFeePerGas,
+    rawPriorityFeePerGas,
+    source: 'rpc_priority_fee',
+  }
+}
+
+export function getVaultTransactionReplacementFeeQuote({
+  originalQuote,
+  historicalQuote,
+  gasLimit,
+}: {
+  originalQuote: Pick<VaultTransactionFeeQuote, 'maxFeePerGas' | 'maxPriorityFeePerGas'>
+  historicalQuote: VaultDeltaHedgeFeeQuote
+  gasLimit: bigint
+}): VaultDeltaHedgeFeeQuote {
+  if (gasLimit <= 0n) {
+    throw new Error(`Vault transaction gas limit must be positive, received ${gasLimit.toString()}`)
+  }
+
+  const bumpedPriorityFee = ceilMultiplyFraction(
+    originalQuote.maxPriorityFeePerGas,
+    REPLACEMENT_FEE_BUMP_NUMERATOR,
+    REPLACEMENT_FEE_BUMP_DENOMINATOR,
+  )
+  const bumpedMaxFee = ceilMultiplyFraction(
+    originalQuote.maxFeePerGas,
+    REPLACEMENT_FEE_BUMP_NUMERATOR,
+    REPLACEMENT_FEE_BUMP_DENOMINATOR,
+  )
+  // The historical p25 quote is already clamped to 3 gwei. A same-nonce
+  // replacement may exceed that estimate cap when the required bump does.
+  const requiredMaxPriorityFeePerGas =
+    historicalQuote.maxPriorityFeePerGas > bumpedPriorityFee
+      ? historicalQuote.maxPriorityFeePerGas
+      : bumpedPriorityFee
+  const bufferedBaseFee = historicalQuote.minimumMaxFeePerGas - MIN_VAULT_PRIORITY_FEE_PER_GAS
+  const currentMarketMaxFee = bufferedBaseFee + requiredMaxPriorityFeePerGas
+  const requiredMaxFeePerGas =
+    currentMarketMaxFee > bumpedMaxFee ? currentMarketMaxFee : bumpedMaxFee
+  const maximumAffordableFeePerGas = MAX_VAULT_TRANSACTION_GAS_COST / gasLimit
+
+  if (requiredMaxFeePerGas > maximumAffordableFeePerGas) {
+    throw new VaultTransactionReplacementLimitError({
+      code: 'GasCostCapExceeded',
+      gasLimit,
+      requiredMaxFeePerGas,
+      requiredMaxPriorityFeePerGas,
+      maximumAffordableFeePerGas,
+    })
+  }
+
+  return {
+    ...historicalQuote,
+    maxFeePerGas: requiredMaxFeePerGas,
+    maxPriorityFeePerGas: requiredMaxPriorityFeePerGas,
   }
 }
 
@@ -323,8 +466,67 @@ export async function getVaultTransactionFeeQuote<chain extends Chain | undefine
   })
 }
 
+export async function getVaultDeltaHedgeHistoricalFeeQuote<chain extends Chain | undefined>(
+  client: Client<Transport, chain>,
+): Promise<VaultDeltaHedgeFeeQuote> {
+  const feeHistory = await getFeeHistory(client, {
+    blockCount: FEE_HISTORY_BLOCK_COUNT,
+    blockTag: 'latest',
+    rewardPercentiles: DELTA_HEDGE_FEE_HISTORY_REWARD_PERCENTILES,
+  })
+  const quote = resolveDeltaHedgeFeeHistoryQuote(feeHistory)
+  if (quote === null) {
+    throw new Error('eth_feeHistory returned incomplete p25 base fee or reward data')
+  }
+  return quote
+}
+
+async function resolveVaultDeltaHedgeInitialFeeQuote({
+  readRpcQuote,
+  readHistoricalQuote,
+}: {
+  readRpcQuote: () => Promise<{ baseFeePerGas: bigint; rawPriorityFeePerGas: bigint }>
+  readHistoricalQuote: () => Promise<VaultDeltaHedgeFeeQuote>
+}): Promise<VaultDeltaHedgeFeeQuote> {
+  try {
+    return resolveRpcPriorityFeeQuote(await readRpcQuote())
+  } catch {
+    return readHistoricalQuote()
+  }
+}
+
+/**
+ * Resolve the first fee quote for a delta hedge from the connected RPC's
+ * eth_maxPriorityFeePerGas recommendation. A failed RPC recommendation falls
+ * back immediately to the rolling historical p25 quote.
+ */
+export async function getVaultDeltaHedgeInitialFeeQuote<chain extends Chain | undefined>(
+  client: Client<Transport, chain>,
+): Promise<VaultDeltaHedgeFeeQuote> {
+  return resolveVaultDeltaHedgeInitialFeeQuote({
+    readRpcQuote: async () => {
+      const [rawPriorityFee, latestBlock] = await Promise.all([
+        client.request({ method: 'eth_maxPriorityFeePerGas' }),
+        getBlock(client, { blockTag: 'latest' }),
+      ])
+      if (latestBlock.baseFeePerGas === null) {
+        throw new Error('Latest block does not include an EIP-1559 base fee')
+      }
+      return {
+        baseFeePerGas: latestBlock.baseFeePerGas,
+        rawPriorityFeePerGas: hexToBigInt(rawPriorityFee),
+      }
+    },
+    readHistoricalQuote: () => getVaultDeltaHedgeHistoricalFeeQuote(client),
+  })
+}
+
 export const __transactionFeeTestUtils = {
+  clampPriorityFee,
+  resolveDeltaHedgeFeeHistoryQuote,
   resolveFallbackQuote,
   resolveFeeHistoryQuote,
+  resolveRpcPriorityFeeQuote,
+  resolveVaultDeltaHedgeInitialFeeQuote,
   resolveVaultTransactionFeeQuote,
 }

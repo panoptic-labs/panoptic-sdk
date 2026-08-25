@@ -423,6 +423,11 @@ export async function quoteTokenShortfallRecovery(
     }
   }
 
+  // The credit is sized to notionally emit `amountOut`, but real Uniswap
+  // execution costs fees + price impact so the actual `swapOutput` can fall a
+  // few bps short of that notional. When it does, we grow the credit sizing
+  // by the observed ratio and retry (mirrors `quotePrefixedExactInput`).
+  let creditOutSize = amountOut
   for (let attempt = 0; attempt < MAX_RECOVERY_QUOTE_ATTEMPTS; attempt++) {
     // asset === tokenType === tokenOutIndex: the credit is denominated in the
     // token being sourced. Passing tokenInIndex as tokenType is the loan
@@ -435,7 +440,7 @@ export async function quoteTokenShortfallRecovery(
       pool.currentTick,
       pool.tickSpacing,
       collisionIds,
-      amountOut,
+      creditOutSize,
     )
     const recoveredDispatch = buildTokenShortfallRecoveryDispatch({
       dispatch: params.dispatch,
@@ -490,14 +495,19 @@ export async function quoteTokenShortfallRecovery(
     const maxAmountIn = maximumAmountIn(estimatedAmountIn, params.slippageBps)
     const swapOutput = getOutputAmount(swapSimulation.tokenFlow, tokenOutIndex)
     const sourceBalance = getBalanceBefore(swapSimulation.tokenFlow, tokenInIndex)
-    if (swapOutput < amountOut || sourceBalance < maxAmountIn) {
+    if (swapOutput < amountOut) {
+      // Grow the credit's output sizing by the ratio needed vs got, plus a
+      // 1-wei safety, and try again. Falls through to the exact-in path only
+      // if we exhaust the attempts.
+      creditOutSize =
+        swapOutput > 0n ? ceilDiv(creditOutSize * amountOut, swapOutput) + 1n : creditOutSize * 2n
+      continue
+    }
+    if (sourceBalance < maxAmountIn) {
       return {
         available: false,
         reason: 'swap-unavailable',
-        detail:
-          swapOutput < amountOut
-            ? `swap output ${swapOutput} < required ${amountOut}`
-            : `source balance ${sourceBalance} < maximumAmountIn ${maxAmountIn} (estimated ${estimatedAmountIn}, slippageBps ${params.slippageBps})`,
+        detail: `source balance ${sourceBalance} < maximumAmountIn ${maxAmountIn} (estimated ${estimatedAmountIn}, slippageBps ${params.slippageBps})`,
         error: new PanopticError('Insufficient source collateral for the recovery swap'),
       }
     }
@@ -562,12 +572,17 @@ export async function quoteTokenShortfallRecovery(
     // Grow by the residual the contract just reported. If that residual is
     // non-positive (assetsRequested <= assetBalance, e.g. the shortfall moved to
     // a rounding/fee boundary the revert no longer quantifies), fall back to
-    // reusing amountOut — i.e. DOUBLE the target each retry. Bounded by
-    // MAX_RECOVERY_QUOTE_ATTEMPTS and by the source-balance check above, so a
-    // runaway size fails as swap-unavailable rather than looping.
+    // reusing amountOut — i.e. DOUBLE the target each retry. Bounded strictly by
+    // MAX_RECOVERY_QUOTE_ATTEMPTS: the loop exits after that many iterations and
+    // returns `recovery-unavailable` rather than looping unboundedly.
     const decodedShortfall = remainingShortfall.assetsRequested - remainingShortfall.assetBalance
     const additionalAmountOut = decodedShortfall > 0n ? decodedShortfall : amountOut
     amountOut += additionalAmountOut
+    // Immediately rescale the credit sizing to the new (larger) target so the
+    // next iteration doesn't just re-observe the same shortfall (mirrors the
+    // rescale in `quotePrefixedExactInput`).
+    creditOutSize =
+      swapOutput > 0n ? ceilDiv(creditOutSize * amountOut, swapOutput) + 1n : creditOutSize * 2n
   }
 
   return {

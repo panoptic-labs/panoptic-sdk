@@ -181,6 +181,9 @@ export { estimateBlockNumbers, getBlockMeta, multicallRead, resolveBlockNumbers 
 export type {
   DecodedLeg,
   DecodedTokenId,
+  DeriveStrategy,
+  DeriveUniqueTokenIdParams,
+  DeriveUniqueTokenIdResult,
   EncodeLegParams,
   LegConfig,
   Timescale,
@@ -200,6 +203,7 @@ export {
   decodeVegoid,
   DEFAULT_MAX_SPREAD,
   DEFAULT_VEGOID,
+  deriveUniqueTokenId,
   encodeLeg,
   // Low-level encoding
   encodePoolId,
@@ -216,6 +220,7 @@ export {
   LEG_BITS,
   LEG_LIMITS,
   LEG_MASKS,
+  planDeriveStrategy,
   // Constants
   STANDARD_TICK_WIDTHS,
   TOKEN_ID_BITS,

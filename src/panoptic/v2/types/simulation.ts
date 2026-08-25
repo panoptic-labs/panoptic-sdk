@@ -137,9 +137,9 @@ export interface LiquidateSimulation {
  * Settle premia simulation result data.
  */
 export interface SettleSimulation {
-  /** Premia received for token 0 */
+  /** Signed premia flow for token 0 — positive = collected, negative = paid. */
   premiaReceived0: bigint
-  /** Premia received for token 1 */
+  /** Signed premia flow for token 1 — positive = collected, negative = paid. */
   premiaReceived1: bigint
   /** Post-settle collateral for token 0 */
   postCollateral0: bigint

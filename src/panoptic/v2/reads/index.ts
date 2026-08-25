@@ -372,6 +372,9 @@ export {
   getPriceHistory,
 } from './priceHistory'
 
+// Current stored positionSize lookup (used by settle flows)
+export { type GetCurrentPositionSizesParams, getCurrentPositionSizes } from './positionSizes'
+
 // Position enrichment (batched reads for UI display)
 export {
   type GetPositionEnrichmentDataParams,

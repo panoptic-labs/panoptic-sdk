@@ -70,7 +70,7 @@ describe('Collateral Estimation with PanopticQuery', () => {
 
       // Raw = MAX_UINT64 (requirement at max size) → scales to exactly positionSize
       vi.mocked(client.readContract)
-        .mockResolvedValueOnce(100) // getCurrentTick
+        .mockResolvedValueOnce(-100) // getCurrentTick; getRequiredBase is token0-denominated
         .mockResolvedValueOnce(MAX_UINT64) // getRequiredBase (at type(uint64).max size)
 
       const positionSize = 1n * 10n ** 18n
@@ -84,7 +84,7 @@ describe('Collateral Estimation with PanopticQuery', () => {
       })
 
       expect(result.required0).toBe(positionSize)
-      expect(result.required1).toBe(0n) // Not available from getRequiredBase
+      expect(result.required1).toBe(0n)
       expect(result._meta.blockNumber).toBe(12345678n)
     })
 
@@ -105,7 +105,8 @@ describe('Collateral Estimation with PanopticQuery', () => {
         queryAddress: QUERY_ADDRESS,
       })
 
-      expect(result.required0).toBe(positionSize)
+      expect(result.required0).toBe(0n)
+      expect(result.required1).toBe(positionSize)
 
       // Verify atTick was used (not getCurrentTick) - tick is converted to number for viem
       expect(vi.mocked(client.readContract)).toHaveBeenCalledWith(
@@ -116,12 +117,32 @@ describe('Collateral Estimation with PanopticQuery', () => {
       )
     })
 
+    it('should denominate collateral in token1 at tick zero', async () => {
+      const client = createMockClient()
+
+      vi.mocked(client.readContract).mockResolvedValueOnce(MAX_UINT64) // getRequiredBase
+
+      const positionSize = 1n * 10n ** 18n
+      const result = await estimateCollateralRequired({
+        client,
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        tokenId: 456n,
+        positionSize,
+        atTick: 0n,
+        queryAddress: QUERY_ADDRESS,
+      })
+
+      expect(result.required0).toBe(0n)
+      expect(result.required1).toBe(positionSize)
+    })
+
     it('should pass through the error sentinel unscaled', async () => {
       const client = createMockClient()
 
       const sentinel = 2n ** 128n - 1n // getRequiredBase error sentinel (type(uint128).max)
       vi.mocked(client.readContract)
-        .mockResolvedValueOnce(100) // getCurrentTick
+        .mockResolvedValueOnce(100) // getCurrentTick; getRequiredBase is token1-denominated
         .mockResolvedValueOnce(sentinel) // getRequiredBase failed
 
       const result = await estimateCollateralRequired({
@@ -133,7 +154,8 @@ describe('Collateral Estimation with PanopticQuery', () => {
         queryAddress: QUERY_ADDRESS,
       })
 
-      expect(result.required0).toBe(sentinel)
+      expect(result.required0).toBe(0n)
+      expect(result.required1).toBe(sentinel)
     })
   })
 

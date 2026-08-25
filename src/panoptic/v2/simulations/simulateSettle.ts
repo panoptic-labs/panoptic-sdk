@@ -9,6 +9,7 @@ import { decodeFunctionResult, encodeFunctionData } from 'viem'
 import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients'
 import { PanopticError } from '../errors'
+import { getCurrentPositionSizes } from '../reads/positionSizes'
 import type { SettleSimulation, SimulationResult, TokenFlow } from '../types'
 import { simulateWithTokenFlow } from './tokenFlow'
 
@@ -38,8 +39,20 @@ export interface SimulateSettleParams {
   poolAddress: Address
   /** Account address */
   account: Address
-  /** Current position ID list */
+  /** TokenIds to settle in this dispatch (subset of the account's held list). */
   positionIdList: bigint[]
+  /**
+   * Full held tokenId list AFTER dispatch (must hash-match s_positionsHash).
+   * Defaults to `positionIdList` — correct only when settling ALL held
+   * positions.
+   */
+  finalPositionIdList?: bigint[]
+  /**
+   * Current stored positionSize for each tokenId in `positionIdList`. When
+   * omitted, sizes are read on-chain. Must match `positionIdList` order —
+   * anything other than the stored size will simulate a BURN, not a settle.
+   */
+  positionSizes?: bigint[]
   /** Optional tokenId to compute forfeit amounts for */
   tokenId?: bigint
   /** Optional block number for simulation */
@@ -59,14 +72,35 @@ export interface SimulateSettleParams {
 export async function simulateSettle(
   params: SimulateSettleParams,
 ): Promise<SimulationResult<SettleSimulation>> {
-  const { client, poolAddress, account, positionIdList, tokenId, blockNumber } = params
+  const {
+    client,
+    poolAddress,
+    account,
+    positionIdList,
+    finalPositionIdList,
+    positionSizes: providedSizes,
+    tokenId,
+    blockNumber,
+  } = params
 
   const targetBlockNumber = blockNumber ?? (await client.getBlockNumber())
   const metaPromise = getBlockMeta({ client, blockNumber: targetBlockNumber })
 
   try {
-    // For settlement, we call dispatch with unchanged position lists
-    const positionSizes = positionIdList.map(() => 0n)
+    if (providedSizes && providedSizes.length !== positionIdList.length) {
+      throw new PanopticError('simulateSettle: positionSizes length must match positionIdList')
+    }
+    // Must be current stored sizes — dispatch treats any mismatch (incl. 0) as a burn.
+    // OLD (buggy): const positionSizes = positionIdList.map(() => 0n)
+    const positionSizes =
+      providedSizes ??
+      (await getCurrentPositionSizes({
+        client,
+        poolAddress,
+        account,
+        positionIdList,
+        blockNumber: targetBlockNumber,
+      }))
     const tickAndSpreadLimits = positionIdList.map(() => [-887272n, 887272n, 0n] as const)
 
     // Encode dispatch call data
@@ -75,7 +109,7 @@ export async function simulateSettle(
       functionName: 'dispatch',
       args: [
         positionIdList,
-        positionIdList,
+        finalPositionIdList ?? positionIdList,
         positionSizes.map((s) => BigInt(s) as unknown as bigint & { readonly __uint128: true }),
         tickAndSpreadLimits.map(
           (t) => [Number(t[0]), Number(t[1]), Number(t[2])] as readonly [number, number, number],
@@ -118,11 +152,10 @@ export async function simulateSettle(
 
     const _meta = await metaPromise
 
-    // Build simulation result with actual token flow data
-    // Positive delta = premia received
+    // Signed flow: positive = collected, negative = paid.
     const data: SettleSimulation = {
-      premiaReceived0: tokenFlow.delta0 > 0n ? tokenFlow.delta0 : 0n,
-      premiaReceived1: tokenFlow.delta1 > 0n ? tokenFlow.delta1 : 0n,
+      premiaReceived0: tokenFlow.delta0,
+      premiaReceived1: tokenFlow.delta1,
       postCollateral0: tokenFlow.balanceAfter0,
       postCollateral1: tokenFlow.balanceAfter1,
       forfeitAmounts,

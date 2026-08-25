@@ -24,7 +24,7 @@ export type { StreamiaLeg } from '../types/streamia'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
-/** A settled premia event, used to subtract already-settled amounts. */
+/** A signed settled-premia event used to reconstruct cumulative premia. */
 export interface SettledEvent {
   /** Block at which settlement occurred */
   blockNumber: bigint
@@ -52,7 +52,7 @@ export interface GetStreamiaHistoryParams {
   poolConfig: PoolVersionConfig
   /** Whether to include Uniswap fee data (default: true) */
   includeUniswapFees?: boolean
-  /** Settled premia events to subtract from Panoptic premia (optional) */
+  /** Signed settled-premia events to include in cumulative premia (optional) */
   settledEvents?: SettledEvent[]
   /** Pre-fetched block metadata (skips an extra eth_getBlockByNumber if provided) */
   _meta?: BlockMeta
@@ -62,8 +62,10 @@ export interface GetStreamiaHistoryParams {
 export interface StreamiaSnapshot {
   /** Block number (undefined if queried as latest) */
   blockNumber: bigint | undefined
-  /** Net Panoptic premia (short - long), after subtracting settled amounts */
+  /** Currently unsettled Panoptic premia (short - long) */
   panopticPremia: { token0: bigint; token1: bigint }
+  /** Lifetime Panoptic premia, including signed settled amounts */
+  cumulativePanopticPremia: { token0: bigint; token1: bigint }
   /** Uniswap fee delta from the first block in the series */
   uniswapFees: { token0: bigint; token1: bigint }
 }
@@ -119,39 +121,79 @@ export async function getStreamiaHistory(
     return { snapshots: [], _meta }
   }
 
+  // Resolve "latest" once so reads and settlement ordering use the same block.
+  const _meta = params._meta ?? (await getBlockMeta({ client }))
+  const resolvedBlockNumbers = blockNumbers.map((blockNumber) => blockNumber ?? _meta.blockNumber)
+
   // ── 1. Panoptic premia: one readContract per block ─────────────────
-  const premiaRequests = blockNumbers.map((bn) =>
+  const premiaRequests = resolvedBlockNumbers.map((blockNumber) =>
     client.readContract({
       address: panopticPoolAddress,
       abi: panopticPoolV2Abi,
       functionName: 'getFullPositionsData',
       args: [account, true, [tokenId]],
-      blockNumber: bn,
+      blockNumber,
     }),
   )
 
   // ── 2. Uniswap fees (delegated to uniswapFeeHistory internals) ────
   const uniswapDataPromise =
     includeUniswapFees && legs.length > 0
-      ? fetchUniswapFeeData(client, blockNumbers, legs, poolConfig)
+      ? fetchUniswapFeeData(client, resolvedBlockNumbers, legs, poolConfig)
       : undefined
 
   // ── 3. Fire all in parallel ────────────────────────────────────────
-  const [premiaResults, uniswapData, _meta] = await Promise.all([
+  const [premiaResults, uniswapData] = await Promise.all([
     Promise.all(premiaRequests),
     uniswapDataPromise ?? Promise.resolve(undefined),
-    params._meta ? Promise.resolve(params._meta) : getBlockMeta({ client }),
   ])
 
   // ── 4. Pre-sort settled events for O(n+m) accumulation ─────────────
   const sortedSettled = settledEvents
-    ? [...settledEvents].sort((a, b) => (a.blockNumber < b.blockNumber ? -1 : 1))
+    ? [...settledEvents].sort((a, b) =>
+        a.blockNumber === b.blockNumber ? 0 : a.blockNumber < b.blockNumber ? -1 : 1,
+      )
     : []
 
-  // ── 5. Build snapshots ─────────────────────────────────────────────
+  // ── 5. Accumulate settlements chronologically, independently of input order ──
   let settledIdx = 0
   let accSettled0 = 0n
   let accSettled1 = 0n
+  const cumulativePremiaByInputIndex: StreamiaSnapshot['cumulativePanopticPremia'][] = Array.from(
+    { length: blockNumbers.length },
+    () => ({ token0: 0n, token1: 0n }),
+  )
+
+  const chronologicalInputs = resolvedBlockNumbers
+    .map((blockNumber, inputIndex) => ({ blockNumber, inputIndex }))
+    .sort((a, b) =>
+      a.blockNumber === b.blockNumber
+        ? a.inputIndex - b.inputIndex
+        : a.blockNumber < b.blockNumber
+          ? -1
+          : 1,
+    )
+
+  for (const { blockNumber, inputIndex } of chronologicalInputs) {
+    while (
+      settledIdx < sortedSettled.length &&
+      sortedSettled[settledIdx].blockNumber <= blockNumber
+    ) {
+      accSettled0 += sortedSettled[settledIdx].settled0
+      accSettled1 += sortedSettled[settledIdx].settled1
+      settledIdx++
+    }
+
+    const result = premiaResults[inputIndex]
+    const premia0 = (result[0] & MASK_128) - (result[1] & MASK_128)
+    const premia1 = (result[0] >> 128n) - (result[1] >> 128n)
+    cumulativePremiaByInputIndex[inputIndex] = {
+      token0: premia0 + accSettled0,
+      token1: premia1 + accSettled1,
+    }
+  }
+
+  // ── 6. Build snapshots in the caller's original input order ───────
 
   let initialUniswapFees0: bigint | null = null
   let initialUniswapFees1: bigint | null = null
@@ -167,19 +209,8 @@ export async function getStreamiaHistory(
     const long0 = longPacked & MASK_128
     const long1 = longPacked >> 128n
 
-    // Advance settled accumulator
-    const effectiveBn = bn ?? BigInt(Number.MAX_SAFE_INTEGER)
-    while (
-      settledIdx < sortedSettled.length &&
-      sortedSettled[settledIdx].blockNumber <= effectiveBn
-    ) {
-      accSettled0 += sortedSettled[settledIdx].settled0
-      accSettled1 += sortedSettled[settledIdx].settled1
-      settledIdx++
-    }
-
-    const premia0 = short0 - long0 - accSettled0
-    const premia1 = short1 - long1 - accSettled1
+    const premia0 = short0 - long0
+    const premia1 = short1 - long1
 
     let uniswapFees0 = 0n
     let uniswapFees1 = 0n
@@ -199,6 +230,7 @@ export async function getStreamiaHistory(
     return {
       blockNumber: bn,
       panopticPremia: { token0: premia0, token1: premia1 },
+      cumulativePanopticPremia: cumulativePremiaByInputIndex[i],
       uniswapFees: { token0: uniswapFees0, token1: uniswapFees1 },
     }
   })

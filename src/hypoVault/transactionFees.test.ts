@@ -4,16 +4,24 @@ import {
   __transactionFeeTestUtils,
   applyVaultTransactionGasCostLimit,
   bufferVaultTransactionGasEstimate,
+  getVaultTransactionReplacementFeeQuote,
   MAX_VAULT_PRIORITY_FEE_PER_GAS,
   MAX_VAULT_TRANSACTION_GAS_COST,
   MIN_VAULT_PRIORITY_FEE_PER_GAS,
   validateVaultSignedTransactionFeeCaps,
   VaultTransactionFeeEstimationError,
   VaultTransactionGasCostLimitError,
+  VaultTransactionReplacementLimitError,
 } from './transactionFees'
 
-const { resolveFallbackQuote, resolveFeeHistoryQuote, resolveVaultTransactionFeeQuote } =
-  __transactionFeeTestUtils
+const {
+  resolveDeltaHedgeFeeHistoryQuote,
+  resolveFallbackQuote,
+  resolveFeeHistoryQuote,
+  resolveRpcPriorityFeeQuote,
+  resolveVaultDeltaHedgeInitialFeeQuote,
+  resolveVaultTransactionFeeQuote,
+} = __transactionFeeTestUtils
 
 describe('vault transaction fee quote', () => {
   it('floors zero and one-wei p90 rewards at 0.1 gwei', () => {
@@ -165,6 +173,161 @@ describe('vault transaction fee quote', () => {
 
   it('rejects non-positive gas estimates', () => {
     expect(() => bufferVaultTransactionGasEstimate(0n)).toThrow('must be positive')
+  })
+})
+
+describe('delta hedge transaction fee quotes', () => {
+  it.each([
+    [0n, 0n],
+    [1n, 1n],
+    [1_500_000_000n, 1_500_000_000n],
+    [4_000_000_000n, 4_000_000_000n],
+  ])('passes an RPC priority fee of %s wei through as %s wei', (raw, expected) => {
+    expect(
+      resolveRpcPriorityFeeQuote({ baseFeePerGas: 1_000_000_000n, rawPriorityFeePerGas: raw }),
+    ).toEqual({
+      maxFeePerGas: 1_125_000_000n + expected,
+      maxPriorityFeePerGas: expected,
+      minimumMaxFeePerGas: 1_125_000_000n + expected,
+      rawPriorityFeePerGas: raw,
+      source: 'rpc_priority_fee',
+    })
+  })
+
+  it('does not lower an Alchemy priority fee to fit the total-cost cap', () => {
+    const quote = resolveRpcPriorityFeeQuote({
+      baseFeePerGas: 1_000_000_000n,
+      rawPriorityFeePerGas: 20_000_000_000n,
+    })
+    expect(() => applyVaultTransactionGasCostLimit(quote, 1_000_000n)).toThrow(
+      VaultTransactionGasCostLimitError,
+    )
+  })
+
+  it('falls back to historical p25 when eth_maxPriorityFeePerGas fails', async () => {
+    const historicalQuote = {
+      maxFeePerGas: 2_125_000_000n,
+      maxPriorityFeePerGas: 1_000_000_000n,
+      minimumMaxFeePerGas: 1_225_000_000n,
+      rawPriorityFeePerGas: 1_000_000_000n,
+      source: 'fee_history_p25' as const,
+    }
+    await expect(
+      resolveVaultDeltaHedgeInitialFeeQuote({
+        readRpcQuote: () => Promise.reject(new Error('RPC unavailable')),
+        readHistoricalQuote: () => Promise.resolve(historicalQuote),
+      }),
+    ).resolves.toEqual(historicalQuote)
+  })
+
+  it.each([
+    [1n, MIN_VAULT_PRIORITY_FEE_PER_GAS],
+    [1_500_000_000n, 1_500_000_000n],
+    [4_000_000_000n, MAX_VAULT_PRIORITY_FEE_PER_GAS],
+  ])('clamps a rolling p25 value of %s wei to %s wei', (raw, clamped) => {
+    const quote = resolveDeltaHedgeFeeHistoryQuote({
+      baseFeePerGas: [1_000_000_000n, 1_000_000_000n],
+      reward: [[raw]],
+    })
+    expect(quote).toMatchObject({
+      maxPriorityFeePerGas: clamped,
+      rawPriorityFeePerGas: raw,
+      source: 'fee_history_p25',
+    })
+  })
+
+  it('takes the median of 20 per-block p25 rewards', () => {
+    const rewards = [
+      ...Array.from({ length: 10 }, () => [500_000_000n]),
+      ...Array.from({ length: 10 }, () => [1_500_000_000n]),
+    ]
+    const quote = resolveDeltaHedgeFeeHistoryQuote({
+      baseFeePerGas: [1_000_000_000n, 1_000_000_000n],
+      reward: rewards,
+    })
+    expect(quote?.rawPriorityFeePerGas).toBe(1_000_000_000n)
+    expect(quote?.maxPriorityFeePerGas).toBe(1_000_000_000n)
+  })
+
+  it('uses the 12.5 percent replacement bump when p25 is lower', () => {
+    const replacement = getVaultTransactionReplacementFeeQuote({
+      originalQuote: { maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n },
+      historicalQuote: {
+        maxFeePerGas: 1_500_000_000n,
+        maxPriorityFeePerGas: 500_000_000n,
+        minimumMaxFeePerGas: 1_100_000_000n,
+        rawPriorityFeePerGas: 500_000_000n,
+        source: 'fee_history_p25',
+      },
+      gasLimit: 1_000_000n,
+    })
+    expect(replacement).toMatchObject({
+      maxFeePerGas: 2_250_000_000n,
+      maxPriorityFeePerGas: 1_125_000_000n,
+    })
+  })
+
+  it('adds a bumped priority fee to the current buffered base fee', () => {
+    const replacement = getVaultTransactionReplacementFeeQuote({
+      originalQuote: { maxFeePerGas: 1_100_000_000n, maxPriorityFeePerGas: 1_000_000_000n },
+      historicalQuote: {
+        maxFeePerGas: 10_100_000_000n,
+        maxPriorityFeePerGas: 100_000_000n,
+        minimumMaxFeePerGas: 10_100_000_000n,
+        rawPriorityFeePerGas: 1n,
+        source: 'fee_history_p25',
+      },
+      gasLimit: 1_000_000n,
+    })
+    expect(replacement).toMatchObject({
+      maxFeePerGas: 11_125_000_000n,
+      maxPriorityFeePerGas: 1_125_000_000n,
+    })
+  })
+
+  it('allows the required replacement bump above the historical 3 gwei cap', () => {
+    expect(
+      getVaultTransactionReplacementFeeQuote({
+        originalQuote: {
+          maxFeePerGas: 5_000_000_000n,
+          maxPriorityFeePerGas: MAX_VAULT_PRIORITY_FEE_PER_GAS,
+        },
+        historicalQuote: {
+          maxFeePerGas: 5_000_000_000n,
+          maxPriorityFeePerGas: MAX_VAULT_PRIORITY_FEE_PER_GAS,
+          minimumMaxFeePerGas: 2_100_000_000n,
+          rawPriorityFeePerGas: 4_000_000_000n,
+          source: 'fee_history_p25',
+        },
+        gasLimit: 1_000_000n,
+      }),
+    ).toMatchObject({
+      maxFeePerGas: 5_625_000_000n,
+      maxPriorityFeePerGas: 3_375_000_000n,
+    })
+  })
+
+  it('rejects a replacement whose required max fee exceeds the 0.015 ETH cap', () => {
+    expect(() =>
+      getVaultTransactionReplacementFeeQuote({
+        originalQuote: {
+          maxFeePerGas: 14_000_000_000n,
+          maxPriorityFeePerGas: 1_000_000_000n,
+        },
+        historicalQuote: {
+          maxFeePerGas: 14_000_000_000n,
+          maxPriorityFeePerGas: 1_000_000_000n,
+          minimumMaxFeePerGas: 13_100_000_000n,
+          rawPriorityFeePerGas: 1_000_000_000n,
+          source: 'fee_history_p25',
+        },
+        gasLimit: 1_000_000n,
+      }),
+    ).toThrow(VaultTransactionReplacementLimitError)
+  })
+
+  it('fits the recent 1,171,452 gas / 9.698402347 gwei failure under 0.015 ETH', () => {
+    expect(1_171_452n * 9_698_402_347n).toBeLessThan(MAX_VAULT_TRANSACTION_GAS_COST)
   })
 })
 

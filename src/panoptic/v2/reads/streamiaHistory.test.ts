@@ -87,7 +87,7 @@ describe('getStreamiaHistory', () => {
     expect(result.snapshots[0].panopticPremia.token1).toBe(150n) // 200 - 50
   })
 
-  it('should subtract settled events with O(n+m) accumulation', async () => {
+  it('should preserve unsettled premia and accumulate signed settlements into lifetime premia', async () => {
     const shortPacked1 = packLeftRight(100n, 200n)
     const longPacked1 = packLeftRight(0n, 0n)
     const shortPacked2 = packLeftRight(300n, 400n)
@@ -115,13 +115,99 @@ describe('getStreamiaHistory', () => {
       ],
     })
 
-    // Block 500: settled events at block 400 apply (5, 15)
-    expect(result.snapshots[0].panopticPremia.token0).toBe(95n) // 100 - 0 - 5
-    expect(result.snapshots[0].panopticPremia.token1).toBe(185n) // 200 - 0 - 15
+    expect(result.snapshots[0].panopticPremia).toEqual({ token0: 100n, token1: 200n })
+    expect(result.snapshots[0].cumulativePanopticPremia).toEqual({
+      token0: 105n,
+      token1: 215n,
+    })
 
-    // Block 700: both settled events apply (5+10=15, 15+20=35)
-    expect(result.snapshots[1].panopticPremia.token0).toBe(285n) // 300 - 0 - 15
-    expect(result.snapshots[1].panopticPremia.token1).toBe(365n) // 400 - 0 - 35
+    expect(result.snapshots[1].panopticPremia).toEqual({ token0: 300n, token1: 400n })
+    expect(result.snapshots[1].cumulativePanopticPremia).toEqual({
+      token0: 315n,
+      token1: 435n,
+    })
+  })
+
+  it('should keep cumulative premia continuous when a negative long-premia settlement resets owed premia', async () => {
+    const client = createMockClient({
+      premiaResults: [
+        [packLeftRight(0n, 0n), packLeftRight(72n, 0n), [0n]],
+        [packLeftRight(0n, 0n), packLeftRight(0n, 0n), [0n]],
+      ],
+    })
+
+    const result = await getStreamiaHistory({
+      client,
+      panopticPoolAddress: POOL,
+      account: ACCOUNT,
+      tokenId: TOKEN_ID,
+      blockNumbers: [500n, 700n],
+      legs: [],
+      poolConfig: { version: 'v3', poolAddress: UNI_POOL },
+      includeUniswapFees: false,
+      settledEvents: [{ blockNumber: 600n, settled0: -72n, settled1: 0n }],
+    })
+
+    expect(result.snapshots.map((snapshot) => snapshot.panopticPremia.token0)).toEqual([-72n, 0n])
+    expect(result.snapshots.map((snapshot) => snapshot.cumulativePanopticPremia.token0)).toEqual([
+      -72n,
+      -72n,
+    ])
+  })
+
+  it('should apply settlements chronologically and preserve descending input order', async () => {
+    const client = createMockClient({
+      premiaResults: [
+        [packLeftRight(0n, 0n), packLeftRight(0n, 0n), [0n]],
+        [packLeftRight(0n, 0n), packLeftRight(72n, 0n), [0n]],
+      ],
+    })
+
+    const result = await getStreamiaHistory({
+      client,
+      panopticPoolAddress: POOL,
+      account: ACCOUNT,
+      tokenId: TOKEN_ID,
+      blockNumbers: [700n, 500n],
+      legs: [],
+      poolConfig: { version: 'v3', poolAddress: UNI_POOL },
+      includeUniswapFees: false,
+      settledEvents: [{ blockNumber: 600n, settled0: -72n, settled1: 0n }],
+    })
+
+    expect(result.snapshots.map((snapshot) => snapshot.blockNumber)).toEqual([700n, 500n])
+    expect(result.snapshots.map((snapshot) => snapshot.cumulativePanopticPremia.token0)).toEqual([
+      -72n,
+      -72n,
+    ])
+  })
+
+  it('should resolve undefined blocks before reading and accumulating settlements', async () => {
+    const client = createMockClient({
+      premiaResults: [
+        [packLeftRight(0n, 0n), packLeftRight(0n, 0n), [0n]],
+        [packLeftRight(0n, 0n), packLeftRight(0n, 0n), [0n]],
+      ],
+    })
+
+    const result = await getStreamiaHistory({
+      client,
+      panopticPoolAddress: POOL,
+      account: ACCOUNT,
+      tokenId: TOKEN_ID,
+      blockNumbers: [undefined, 500n],
+      legs: [],
+      poolConfig: { version: 'v3', poolAddress: UNI_POOL },
+      includeUniswapFees: false,
+      settledEvents: [{ blockNumber: 900n, settled0: 10n, settled1: 0n }],
+    })
+
+    expect(vi.mocked(client.readContract).mock.calls[0][0].blockNumber).toBe(1000n)
+    expect(result.snapshots.map((snapshot) => snapshot.blockNumber)).toEqual([undefined, 500n])
+    expect(result.snapshots.map((snapshot) => snapshot.cumulativePanopticPremia.token0)).toEqual([
+      10n,
+      0n,
+    ])
   })
 
   it('should compute Uniswap fee deltas from first block', async () => {
