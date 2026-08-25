@@ -65,6 +65,15 @@ export {
   quoteOneTokenFlow,
 } from './oneTokenFlow'
 export {
+  type BuildTemporaryLoanRecoveryDispatchParams,
+  type TemporaryLoanRecoveryQuote,
+  type TemporaryLoanRecoveryQuoteParams,
+  type TemporaryLoanRecoveryResult,
+  type TemporaryLoanRecoveryUnavailableReason,
+  buildTemporaryLoanRecoveryDispatch,
+  quoteTemporaryLoanRecovery,
+} from './temporaryLoanRecovery'
+export {
   type BuildTokenShortfallRecoveryDispatchParams,
   type DispatchIntent,
   type TokenShortfallRecoveryQuote,

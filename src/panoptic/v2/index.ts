@@ -806,6 +806,7 @@ export {
 // ============================================================================
 export type {
   BuildCreditWrappedDispatchParams,
+  BuildTemporaryLoanRecoveryDispatchParams,
   BuildTokenShortfallRecoveryDispatchParams,
   CreditWrapDirection,
   CreditWrapPlacement,
@@ -831,6 +832,10 @@ export type {
   SimulateWithTokenFlowParams,
   SimulateWithTokenFlowResult,
   SwapSimulation,
+  TemporaryLoanRecoveryQuote,
+  TemporaryLoanRecoveryQuoteParams,
+  TemporaryLoanRecoveryResult,
+  TemporaryLoanRecoveryUnavailableReason,
   TokenShortfallRecoveryQuote,
   TokenShortfallRecoveryQuoteParams,
   TokenShortfallRecoveryResult,
@@ -838,12 +843,14 @@ export type {
 } from './simulations'
 export {
   buildCreditWrappedDispatch,
+  buildTemporaryLoanRecoveryDispatch,
   buildTokenShortfallRecoveryDispatch,
   DEFAULT_MIN_SWAP_RATIO_BPS,
   encodePoolKeyBytes,
   encodeV3PoolKeyBytes,
   getNotEnoughTokensError,
   quoteOneTokenFlow,
+  quoteTemporaryLoanRecovery,
   quoteTokenShortfallRecovery,
   simulateBatchDispatch,
   simulateClosePosition,
