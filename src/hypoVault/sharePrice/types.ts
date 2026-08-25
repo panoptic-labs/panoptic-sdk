@@ -47,13 +47,6 @@ export type VaultApyMetrics = {
   firstNonNullScanFailures?: number | null
   hourAgoSharePrice?: string | null
   hourlyDeltaPct?: string | null
-  /**
-   * Raw `managerInput` bytes captured at the "now" snapshot. Reusing these
-   * lets `<DepositWithdrawPanel>` skip rebuilding the manager input itself
-   * (the same heavy candidate-token-id gather + on-chain filter that drives
-   * the APY pipeline). Null when the "now" snapshot couldn't be taken.
-   */
-  sharePriceNowManagerInputBytes?: Hex | null
 }
 
 export type VaultApyTimescale = '7d' | '30d' | 'allTime'

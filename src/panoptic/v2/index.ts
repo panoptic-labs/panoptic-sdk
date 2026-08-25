@@ -127,6 +127,8 @@ export {
 // ============================================================================
 // Batch Dispatch (item-based mint/burn batching for PanopticPool.dispatch())
 // ============================================================================
+export type { BuildBatchDispatchArgsParams, BuildBatchDispatchArgsResult } from './batch/build'
+export { buildBatchDispatchArgs } from './batch/build'
 export type {
   BatchDiagnostic,
   BatchDiagnosticCode,
@@ -135,11 +137,9 @@ export type {
   BatchOpBurn,
   BatchOpKind,
   BatchOpMint,
-  BuildBatchDispatchArgsParams,
-  BuildBatchDispatchArgsResult,
-  ValidateBatchParams,
-} from './batch'
-export { buildBatchDispatchArgs, validateBatch } from './batch'
+} from './batch/types'
+export type { ValidateBatchParams } from './batch/validate'
+export { validateBatch } from './batch/validate'
 
 // ============================================================================
 // Storage

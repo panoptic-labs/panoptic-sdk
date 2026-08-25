@@ -103,12 +103,12 @@ describe('buildRequestWithdrawalCalldatas', () => {
     ])
   })
 
-  it('includes all claimable epochs when requesting all available shares', () => {
+  it('requests all available shares without requiring a share price', () => {
     const result = buildRequestWithdrawalCalldatas({
       user: USER,
       desiredAssets: 1n,
       requestAllAvailableShares: true,
-      sharePrice: { numerator: 1n, denominator: 1n },
+      sharePrice: { numerator: 0n, denominator: 0n },
       walletShares: 5n,
       queuedDeposits: [
         { amount: 20n, epoch: 0n },
