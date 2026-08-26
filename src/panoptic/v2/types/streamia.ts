@@ -11,4 +11,6 @@ export interface StreamiaLeg {
   upperTick: number
   /** Liquidity for this leg (from sizeToLiquidity) */
   liquidity: bigint
+  /** Long legs pay rather than collect the equivalent Uniswap fees */
+  isLong?: boolean
 }

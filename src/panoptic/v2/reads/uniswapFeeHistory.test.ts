@@ -7,7 +7,7 @@ import type { Address, PublicClient } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { StreamiaLeg } from './streamiaHistory'
-import { getUniswapFeeHistory } from './uniswapFeeHistory'
+import { computeUniswapFeesForBlock, getUniswapFeeHistory } from './uniswapFeeHistory'
 
 const UNI_POOL = '0x2222222222222222222222222222222222222222' as Address
 
@@ -18,6 +18,33 @@ const MOCK_BLOCK = {
 }
 
 describe('getUniswapFeeHistory', () => {
+  const feeGrowth = 10n * (1n << 128n)
+  const blockData = {
+    currentTick: 150,
+    feeGrowthGlobal0: feeGrowth,
+    feeGrowthGlobal1: feeGrowth,
+    tickData: new Map([
+      [100, { feeGrowthOutside0: 0n, feeGrowthOutside1: 0n }],
+      [200, { feeGrowthOutside0: 0n, feeGrowthOutside1: 0n }],
+    ]),
+  }
+
+  it('subtracts the equivalent fees for long legs', () => {
+    const fees = computeUniswapFeesForBlock(blockData, [
+      { lowerTick: 100, upperTick: 200, liquidity: 1n, isLong: true },
+    ])
+
+    expect(fees).toEqual({ total0: -10n, total1: -10n })
+  })
+
+  it('adds the equivalent fees when isLong is omitted', () => {
+    const fees = computeUniswapFeesForBlock(blockData, [
+      { lowerTick: 100, upperTick: 200, liquidity: 1n },
+    ])
+
+    expect(fees).toEqual({ total0: 10n, total1: 10n })
+  })
+
   it('should return empty snapshots for empty blockNumbers', async () => {
     const client = {
       getBlock: vi.fn().mockResolvedValue(MOCK_BLOCK),

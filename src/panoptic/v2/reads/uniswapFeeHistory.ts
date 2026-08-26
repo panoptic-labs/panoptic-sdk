@@ -191,8 +191,9 @@ export function computeUniswapFeesForBlock(
     const fees0 = ((feeGrowthGlobal0 - feesBelow0 - feesAbove0) * leg.liquidity) / (1n << 128n)
     const fees1 = ((feeGrowthGlobal1 - feesBelow1 - feesAbove1) * leg.liquidity) / (1n << 128n)
 
-    total0 += fees0
-    total1 += fees1
+    const direction = leg.isLong === true ? -1n : 1n
+    total0 += direction * fees0
+    total1 += direction * fees1
   }
 
   return { total0, total1 }
