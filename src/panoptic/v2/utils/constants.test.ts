@@ -5,6 +5,8 @@ import {
   MAX_TICK,
   MAX_TRACKED_CHUNKS,
   MIN_TICK,
+  NO_LOWER_LIQUIDATION_TICK,
+  NO_UPPER_LIQUIDATION_TICK,
   ORACLE_EPOCH_SECONDS,
   REORG_DEPTH,
   SCHEMA_VERSION,
@@ -109,6 +111,11 @@ describe('constants', () => {
     it('matches Uniswap v3 bounds', () => {
       expect(MIN_TICK).toBe(-887272n)
       expect(MAX_TICK).toBe(887272n)
+    })
+
+    it('uses int24 bounds for PanopticQuery liquidation sentinels', () => {
+      expect(NO_LOWER_LIQUIDATION_TICK).toBe(-8388608n)
+      expect(NO_UPPER_LIQUIDATION_TICK).toBe(8388607n)
     })
   })
 

@@ -28,13 +28,10 @@ import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import { panopticQueryAbi } from '../abis/panopticQuery'
 import { tickToSqrtPriceX96 } from '../formatters/tick'
 import type { BlockMeta } from '../types'
+import { NO_LOWER_LIQUIDATION_TICK, NO_UPPER_LIQUIDATION_TICK } from '../utils/constants'
 import { decodeLeftRightUnsigned } from '../writes/utils'
 import { type MintBufferRatio, mintableAfterBuffer } from './mintBuffer'
 import { type MulticallBlockCall, readBlockAndAggregate, requireReturnData } from './multicallBlock'
-
-// Sentinel ticks used by PanopticQuery to indicate "no liquidation at this boundary"
-const MIN_TICK = -887272n
-const MAX_TICK = 887272n
 
 const FP96 = 1n << 96n
 const Q128 = 1n << 128n
@@ -148,9 +145,9 @@ export interface MarginBuffer {
   denominatedInToken: 0 | 1
   /** Tick distance to nearest liquidation boundary (null if no liquidation boundaries) */
   liquidationDistance: bigint | null
-  /** Lower liquidation tick (null if safe at MIN_TICK) */
+  /** Lower liquidation tick (null for the PanopticQuery NO_LOWER_LIQUIDATION_TICK sentinel) */
   lowerLiquidationTick: bigint | null
-  /** Upper liquidation tick (null if safe at MAX_TICK) */
+  /** Upper liquidation tick (null for the PanopticQuery NO_UPPER_LIQUIDATION_TICK sentinel) */
   upperLiquidationTick: bigint | null
   /**
    * Collateral usage against the constraint that actually liquidates, in bps
@@ -431,8 +428,8 @@ export async function getMarginBuffer(params: GetMarginBufferParams): Promise<Ma
   if (liqPricesResult) {
     const liqPriceDown = BigInt(liqPricesResult[0])
     const liqPriceUp = BigInt(liqPricesResult[1])
-    lowerLiquidationTick = liqPriceDown === MIN_TICK ? null : liqPriceDown
-    upperLiquidationTick = liqPriceUp === MAX_TICK ? null : liqPriceUp
+    lowerLiquidationTick = liqPriceDown === NO_LOWER_LIQUIDATION_TICK ? null : liqPriceDown
+    upperLiquidationTick = liqPriceUp === NO_UPPER_LIQUIDATION_TICK ? null : liqPriceUp
     if (lowerLiquidationTick !== null && upperLiquidationTick !== null) {
       const distLower = currentTick - lowerLiquidationTick
       const distUpper = upperLiquidationTick - currentTick

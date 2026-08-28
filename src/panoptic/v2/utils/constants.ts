@@ -80,6 +80,18 @@ export const MIN_TICK = -887272n
 export const MAX_TICK = 887272n
 
 /**
+ * PanopticQuery sentinel indicating that no lower liquidation boundary exists.
+ * This is int24.min, not Uniswap's minimum usable tick.
+ */
+export const NO_LOWER_LIQUIDATION_TICK = -(1n << 23n)
+
+/**
+ * PanopticQuery sentinel indicating that no upper liquidation boundary exists.
+ * This is int24.max, not Uniswap's maximum usable tick.
+ */
+export const NO_UPPER_LIQUIDATION_TICK = (1n << 23n) - 1n
+
+/**
  * Basis points denominator (100% = 10000 bps).
  */
 export const BPS_DENOMINATOR = 10000n

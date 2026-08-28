@@ -708,7 +708,7 @@ describe('Account Read Functions', () => {
       const client = createMockClient()
       const queryAddress = '0x7777777777777777777777777777777777777777' as const
 
-      vi.mocked(client.readContract).mockResolvedValueOnce([-887272, 887272]) // MIN_TICK, MAX_TICK
+      vi.mocked(client.readContract).mockResolvedValueOnce([-8388608, 8388607])
 
       const result = await getLiquidationPrices({
         client,
@@ -720,6 +720,7 @@ describe('Account Read Functions', () => {
 
       expect(result.lowerTick).toBeNull()
       expect(result.upperTick).toBeNull()
+      expect(result.hasLiquidationBoundary).toBe(false)
     })
 
     it('should use PanopticQuery when queryAddress provided', async () => {
@@ -738,6 +739,7 @@ describe('Account Read Functions', () => {
 
       expect(result.lowerTick).toBe(-50000n)
       expect(result.upperTick).toBe(50000n)
+      expect(result.hasLiquidationBoundary).toBe(true)
       expect(result.isLiquidatable).toBe(true) // Has liquidation prices
       expect(result._meta.blockNumber).toBe(12345678n)
     })
@@ -746,8 +748,7 @@ describe('Account Read Functions', () => {
       const client = createMockClient()
       const queryAddress = '0x7777777777777777777777777777777777777777' as const
 
-      // MIN_TICK and MAX_TICK indicate no liquidation
-      vi.mocked(client.readContract).mockResolvedValueOnce([-887272n, 887272n])
+      vi.mocked(client.readContract).mockResolvedValueOnce([-8388608n, 8388607n])
 
       const result = await getLiquidationPrices({
         client,
@@ -759,7 +760,28 @@ describe('Account Read Functions', () => {
 
       expect(result.lowerTick).toBeNull()
       expect(result.upperTick).toBeNull()
+      expect(result.hasLiquidationBoundary).toBe(false)
       expect(result.isLiquidatable).toBe(false)
+    })
+
+    it('should preserve a one-sided boundary and compatibility alias', async () => {
+      const client = createMockClient()
+      const queryAddress = '0x7777777777777777777777777777777777777777' as const
+
+      vi.mocked(client.readContract).mockResolvedValueOnce([-8388608n, 50000n])
+
+      const result = await getLiquidationPrices({
+        client,
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        tokenIds: [123n],
+        queryAddress,
+      })
+
+      expect(result.lowerTick).toBeNull()
+      expect(result.upperTick).toBe(50000n)
+      expect(result.hasLiquidationBoundary).toBe(true)
+      expect(result.isLiquidatable).toBe(result.hasLiquidationBoundary)
     })
   })
 

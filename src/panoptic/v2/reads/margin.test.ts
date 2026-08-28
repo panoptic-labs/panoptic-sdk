@@ -38,8 +38,8 @@ const MOCK_BLOCK = {
   timestamp: 1700000000n,
 }
 
-const MIN_TICK_INT24 = -887272
-const MAX_TICK_INT24 = 887272
+const MIN_TICK_INT24 = -8388608
+const MAX_TICK_INT24 = 8388607
 
 function packLeftRightUnsigned(right: bigint, left: bigint): bigint {
   return right + (left << 128n)

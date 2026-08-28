@@ -31,6 +31,8 @@ export interface LiquidateParams {
   positionIdListToFinal: bigint[]
   /** Packed value for using premia as collateral */
   usePremiaAsCollateral?: bigint
+  /** Native currency supplied to cover a negative token0 liquidation bonus */
+  value?: bigint
   /** Gas and transaction overrides */
   txOverrides?: TxOverrides
 }
@@ -70,6 +72,7 @@ export async function liquidate(params: LiquidateParams): Promise<TxResult> {
     positionIdListTo,
     positionIdListToFinal,
     usePremiaAsCollateral = 0n,
+    value,
     txOverrides,
   } = params
 
@@ -87,6 +90,7 @@ export async function liquidate(params: LiquidateParams): Promise<TxResult> {
       positionIdListToFinal,
       usePremiaAsCollateral,
     ],
+    value,
     txOverrides,
   })
 }

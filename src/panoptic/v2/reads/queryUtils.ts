@@ -13,6 +13,7 @@ import { panopticPoolV2Abi } from '../../../generated'
 import { panopticQueryAbi } from '../abis/panopticQuery'
 import { getBlockMeta } from '../clients/blockMeta'
 import type { BlockMeta } from '../types'
+import { NO_LOWER_LIQUIDATION_TICK, NO_UPPER_LIQUIDATION_TICK } from '../utils/constants'
 
 /**
  * Portfolio value result (without premia).
@@ -183,10 +184,6 @@ export async function checkCollateralAcrossTicks(
 
   const [balanceRequired, tickData, liquidationPrices] = result
 
-  // MIN_TICK and MAX_TICK indicate no liquidation at that boundary
-  const MIN_TICK = -887272n
-  const MAX_TICK = 887272n
-
   // Convert to data points
   const dataPoints: CollateralDataPoint[] = balanceRequired.map((point, index) => ({
     tick: BigInt(tickData[index]),
@@ -200,8 +197,8 @@ export async function checkCollateralAcrossTicks(
 
   return {
     dataPoints,
-    liquidationPriceDown: liqPriceDown === MIN_TICK ? null : liqPriceDown,
-    liquidationPriceUp: liqPriceUp === MAX_TICK ? null : liqPriceUp,
+    liquidationPriceDown: liqPriceDown === NO_LOWER_LIQUIDATION_TICK ? null : liqPriceDown,
+    liquidationPriceUp: liqPriceUp === NO_UPPER_LIQUIDATION_TICK ? null : liqPriceUp,
     _meta,
   }
 }

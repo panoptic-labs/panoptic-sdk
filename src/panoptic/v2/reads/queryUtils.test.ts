@@ -110,8 +110,8 @@ describe('PanopticQuery Utility Functions', () => {
     it('should handle no liquidation prices', async () => {
       const client = createMockClient()
 
-      const MIN_TICK = -887272n
-      const MAX_TICK = 887272n
+      const MIN_TICK = -8388608n
+      const MAX_TICK = 8388607n
 
       const mockBalanceRequired = Array(301).fill([1000n, 500n])
       const mockTickData = Array(301).fill(0n)

@@ -131,11 +131,13 @@ export interface NetLiquidationValues {
  * Liquidation prices result.
  */
 export interface LiquidationPrices {
-  /** Lower liquidation tick (null if position is safe at MIN_TICK) */
+  /** Lower liquidation tick (null when PanopticQuery reports no lower boundary) */
   lowerTick: bigint | null
-  /** Upper liquidation tick (null if position is safe at MAX_TICK) */
+  /** Upper liquidation tick (null when PanopticQuery reports no upper boundary) */
   upperTick: bigint | null
-  /** Whether the account is currently liquidatable */
+  /** Whether either liquidation boundary exists. This does not indicate current insolvency. */
+  hasLiquidationBoundary: boolean
+  /** @deprecated Use hasLiquidationBoundary. This does not indicate current insolvency. */
   isLiquidatable: boolean
   /** Block metadata */
   _meta: BlockMeta

@@ -25,6 +25,7 @@ import type {
   NetLiquidationValues,
   TokenCollateral,
 } from '../types'
+import { NO_LOWER_LIQUIDATION_TICK, NO_UPPER_LIQUIDATION_TICK } from '../utils/constants'
 import { isLiquidatable } from './checks'
 import { type PoolMetadata, getPool } from './pool'
 import { getPositions } from './position'
@@ -647,10 +648,6 @@ export async function getLiquidationPrices(
   const targetBlockNumber =
     blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
 
-  // MIN_TICK and MAX_TICK indicate no liquidation at that boundary
-  const MIN_TICK = -887272n
-  const MAX_TICK = 887272n
-
   const [result, _meta] = await Promise.all([
     client.readContract({
       address: queryAddress,
@@ -667,9 +664,12 @@ export async function getLiquidationPrices(
   const liqPriceUp = BigInt(result[1])
 
   return {
-    lowerTick: liqPriceDown === MIN_TICK ? null : liqPriceDown,
-    upperTick: liqPriceUp === MAX_TICK ? null : liqPriceUp,
-    isLiquidatable: liqPriceDown !== MIN_TICK || liqPriceUp !== MAX_TICK,
+    lowerTick: liqPriceDown === NO_LOWER_LIQUIDATION_TICK ? null : liqPriceDown,
+    upperTick: liqPriceUp === NO_UPPER_LIQUIDATION_TICK ? null : liqPriceUp,
+    hasLiquidationBoundary:
+      liqPriceDown !== NO_LOWER_LIQUIDATION_TICK || liqPriceUp !== NO_UPPER_LIQUIDATION_TICK,
+    isLiquidatable:
+      liqPriceDown !== NO_LOWER_LIQUIDATION_TICK || liqPriceUp !== NO_UPPER_LIQUIDATION_TICK,
     _meta,
   }
 }
