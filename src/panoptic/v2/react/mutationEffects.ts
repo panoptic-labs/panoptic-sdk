@@ -126,6 +126,7 @@ export const mutationEffects = {
       queryKeys.accountSummaryBasic(chainId, poolAddress, account),
       queryKeys.accountSummaryRisk(chainId, poolAddress, account),
       queryKeys.chunkSpreads(chainId, poolAddress),
+      queryKeys.forfeitablePremium(chainId, poolAddress, account),
     ]
 
     if (tokenId !== undefined) {
@@ -165,6 +166,7 @@ export const mutationEffects = {
       queryKeys.accountCollateral(chainId, poolAddress, account),
       queryKeys.accountSummaryBasic(chainId, poolAddress, account),
       queryKeys.accountSummaryRisk(chainId, poolAddress, account),
+      queryKeys.forfeitablePremium(chainId, poolAddress, account),
     ]
 
     if (tokenId !== undefined) {

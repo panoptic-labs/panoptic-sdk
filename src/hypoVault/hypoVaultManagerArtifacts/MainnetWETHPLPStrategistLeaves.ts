@@ -1,5 +1,10 @@
 import { MAINNET_CHAIN_ID, requireChainDeployment } from '../chainDeployments'
+import { type VaultPoolPolicyEntry, compileVaultPoolPolicy } from './compileVaultPoolPolicy'
 import { createStrategistLeavesArtifact } from './createStrategistLeavesArtifact'
+import {
+  MAINNET_ETH_USDC_V4_POOL_INFO,
+  MAINNET_USDC_WETH_5BPS_V3_POOL_INFO,
+} from './poolInfosConfig'
 
 const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
 const NEW_POOL_DEPLOYMENT = MAINNET_DEPLOYMENT.panoptic.additionalPools?.ethUsdc5bpsV3
@@ -19,7 +24,7 @@ const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
 const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
 const DISPATCH_SIGNATURE = 'dispatch(uint256[],uint256[],uint128[],int24[3][],bool,uint256)'
 
-export const MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS = [
+export const MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS = [
   {
     description: 'Deposit ETH for poETH (payable)',
     target: CURRENT_PO_ETH,
@@ -211,6 +216,58 @@ export const MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS = [
   },
 ] as const
 
+const WETH_BASE_LEAF_DEFINITIONS = MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS.slice(
+  6,
+  8,
+)
+const V4_FULL_LEAF_DEFINITIONS = [
+  ...MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS.slice(0, 6),
+  ...MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS.slice(8, 14),
+]
+const V4_WIND_DOWN_LEAF_DEFINITIONS = [
+  MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[1],
+  MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[2],
+  MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[4],
+  MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[5],
+  MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[8],
+  MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[9],
+  MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[13],
+]
+const V3_FULL_LEAF_DEFINITIONS =
+  MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS.slice(14)
+const V3_WIND_DOWN_LEAF_DEFINITIONS = V3_FULL_LEAF_DEFINITIONS.filter(
+  ({ functionSignature }) =>
+    functionSignature === DISPATCH_SIGNATURE ||
+    functionSignature === 'withdraw(uint256,address,address)' ||
+    functionSignature === 'withdraw(uint256,address,address,uint256[],bool)' ||
+    functionSignature === 'redeem(uint256,address,address)',
+)
+
+export const MAINNET_WETH_PLP_POOL_POLICY = [
+  {
+    id: 'weth-usdc-v3-5bps',
+    mode: 'primary',
+    poolInfo: MAINNET_USDC_WETH_5BPS_V3_POOL_INFO,
+    fullLeafDefinitions: V3_FULL_LEAF_DEFINITIONS,
+    windDownLeafDefinitions: V3_WIND_DOWN_LEAF_DEFINITIONS,
+  },
+  {
+    id: 'eth-usdc-v4',
+    mode: 'retired',
+    poolInfo: MAINNET_ETH_USDC_V4_POOL_INFO,
+    fullLeafDefinitions: V4_FULL_LEAF_DEFINITIONS,
+    windDownLeafDefinitions: V4_WIND_DOWN_LEAF_DEFINITIONS,
+  },
+] as const satisfies readonly VaultPoolPolicyEntry[]
+
+export const MAINNET_WETH_PLP_COMPILED_POOL_POLICY = compileVaultPoolPolicy({
+  baseLeafDefinitions: WETH_BASE_LEAF_DEFINITIONS,
+  pools: MAINNET_WETH_PLP_POOL_POLICY,
+})
+
+export const MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS =
+  MAINNET_WETH_PLP_COMPILED_POOL_POLICY.strategistLeafDefinitions
+
 const MAINNET_WETH_PLP_STRATEGIST_ARTIFACT_METADATA = {
   accountantAddress: MAINNET_DEPLOYMENT.hypovault.core.accountant,
   boringVaultAddress: VAULT,
@@ -224,11 +281,20 @@ const PRE_V3_AUTHORIZATION_LEAF_COUNT = 10
 /** Production permissions before the ETH/USDC 5bps v3 pool authorization executes. */
 export const MainnetWETHPLPPreviousStrategistLeaves = createStrategistLeavesArtifact(
   MAINNET_WETH_PLP_STRATEGIST_ARTIFACT_METADATA,
-  MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS.slice(0, PRE_V3_AUTHORIZATION_LEAF_COUNT),
+  MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS.slice(
+    0,
+    PRE_V3_AUTHORIZATION_LEAF_COUNT,
+  ),
 )
 
-/** Production permissions after the ETH/USDC 5bps v3 pool authorization executes. */
+/** Production permissions authorized by the original ETH/USDC 5bps v3 release. */
+export const MainnetWETHPLPV3AuthorizedStrategistLeaves = createStrategistLeavesArtifact(
+  MAINNET_WETH_PLP_STRATEGIST_ARTIFACT_METADATA,
+  MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS,
+)
+
+/** Current production permissions after retiring the migrated v4 pool. */
 export const MainnetWETHPLPStrategistLeaves = createStrategistLeavesArtifact(
   MAINNET_WETH_PLP_STRATEGIST_ARTIFACT_METADATA,
-  MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS,
+  MAINNET_WETH_PLP_COMPILED_POOL_POLICY.strategistLeafDefinitions,
 )

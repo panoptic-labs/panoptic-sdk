@@ -15,6 +15,7 @@ import {
   type DepositParams,
   type DispatchParams,
   type ExecuteBatchDispatchParams,
+  type ExecuteSettleSequenceParams,
   type ForceExerciseParams,
   type LiquidateParams,
   type MintParams,
@@ -24,6 +25,7 @@ import {
   type RepayParams,
   type RollPositionParams,
   type SettleParams,
+  type SettlePremiumFromParams,
   type SmartRepayParams,
   type SupplyParams,
   type SwapExactInParams,
@@ -43,6 +45,7 @@ import {
   deposit,
   dispatch,
   executeBatchDispatch,
+  executeSettleSequence,
   forceExerciseAndWait,
   liquidate,
   mint,
@@ -52,6 +55,7 @@ import {
   repay,
   rollPosition,
   settleAccumulatedPremia,
+  settlePremiumFromAndWait,
   smartRepay,
   supply,
   swapExactIn,
@@ -480,6 +484,79 @@ export function useForceExercise(poolAddress: Address) {
         return
       }
 
+      invalidateKeys(queryClient, [
+        ...mutationEffects.forceExercise({ chainId, poolAddress, account: context.signerAccount }),
+        ...mutationEffects.forceExercise({ chainId, poolAddress, account: params.user }),
+      ])
+    },
+  })
+}
+
+/**
+ * Execute a settle sequence (settle N buyers, optionally close own position)
+ * as one multicall. The mutation resolves at submission with the TxResult so
+ * callers can track confirmation via `result.wait()` or event polling;
+ * invalidation therefore fires at submit time.
+ */
+export function useExecuteSettleSequence(poolAddress: Address) {
+  const { publicClient, chainId, walletClient, account } = usePanopticContext()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    onMutate: () => createWalletMutationContext({ walletClient, account }),
+    mutationFn: (params: OmitInjectedWithPool<ExecuteSettleSequenceParams>) => {
+      const wallet = requireWallet({ walletClient, account })
+      return executeSettleSequence({ client: publicClient, ...wallet, poolAddress, ...params })
+    },
+    onSuccess: (_data, params, context) => {
+      if (!context) {
+        return
+      }
+
+      // Same invalidation surface as force exercise: premia/collateral change
+      // on the signer and every settled target.
+      const accounts = [
+        context.signerAccount,
+        ...params.targets.map((target) => target.user),
+      ] as const
+      invalidateKeys(
+        queryClient,
+        accounts.flatMap((affected) =>
+          mutationEffects.forceExercise({ chainId, poolAddress, account: affected }),
+        ),
+      )
+    },
+  })
+}
+
+export function useSettlePremiumFrom(poolAddress: Address) {
+  const { publicClient, chainId, walletClient, account, storage } = usePanopticContext()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    onMutate: () => createWalletMutationContext({ walletClient, account }),
+    mutationFn: (
+      params: Omit<
+        SettlePremiumFromParams,
+        'client' | 'walletClient' | 'account' | 'poolAddress' | 'chainId' | 'storage'
+      >,
+    ) => {
+      const wallet = requireWallet({ walletClient, account })
+      return settlePremiumFromAndWait({
+        client: publicClient,
+        ...wallet,
+        poolAddress,
+        ...params,
+        storage,
+        chainId,
+      })
+    },
+    onSuccess: (_data, params, context) => {
+      if (!context) {
+        return
+      }
+
+      // Same invalidation surface as force exercise: premia/collateral change on both accounts
       invalidateKeys(queryClient, [
         ...mutationEffects.forceExercise({ chainId, poolAddress, account: context.signerAccount }),
         ...mutationEffects.forceExercise({ chainId, poolAddress, account: params.user }),

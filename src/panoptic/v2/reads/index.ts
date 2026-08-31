@@ -85,11 +85,14 @@ export {
 // Premia reads
 export {
   type AccountPremia,
+  type ForfeitablePremium,
   type GetAccountPremiaParams,
+  type GetForfeitablePremiumParams,
   type GetPositionsWithPremiaParams,
   type PositionsWithPremiaResult,
   type PositionWithPremia,
   getAccountPremia,
+  getForfeitablePremium,
   getPositionsWithPremia,
 } from './premia'
 

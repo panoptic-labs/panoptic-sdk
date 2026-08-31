@@ -1,4 +1,5 @@
 import { MAINNET_CHAIN_ID, requireChainDeployment } from '../chainDeployments'
+import { MAINNET_WETH_PLP_COMPILED_POOL_POLICY } from '../hypoVaultManagerArtifacts/MainnetWETHPLPStrategistLeaves'
 import type { HypoVaultManagerConfig } from './schema'
 
 const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
@@ -35,8 +36,8 @@ export const WethPlpVaultMainnetProdConfig: HypoVaultManagerConfig = {
     underlyingToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
   },
   automation: {
-    primaryPool: MAINNET_V3_POOL_ADDRESSES.panopticPool,
-    windDownPools: [MAINNET_PANOPTIC_POOL_ADDRESSES.panopticPool],
+    primaryPool: MAINNET_WETH_PLP_COMPILED_POOL_POLICY.automation.primaryPool,
+    windDownPools: [...MAINNET_WETH_PLP_COMPILED_POOL_POLICY.automation.windDownPools],
   },
   manualTxDefaults: {
     collateralAllocations: [

@@ -135,6 +135,8 @@ function prefixedSuccess({
     data: {
       netAmount0: delta0,
       netAmount1: delta1,
+      premiaReceived0: null,
+      premiaReceived1: null,
       positionsCreated: [],
       positionsClosed: [],
       postCollateral0: balanceBefore0 + delta0,
@@ -286,6 +288,8 @@ describe('quoteTokenShortfallRecovery', () => {
         data: {
           netAmount0: 6n,
           netAmount1: -100n,
+          premiaReceived0: null,
+          premiaReceived1: null,
           positionsCreated: [],
           positionsClosed: [],
           postCollateral0: 10n,
@@ -304,6 +308,8 @@ describe('quoteTokenShortfallRecovery', () => {
         data: {
           netAmount0: 0n,
           netAmount1: -100n,
+          premiaReceived0: null,
+          premiaReceived1: null,
           positionsCreated: [12n],
           positionsClosed: [11n],
           postCollateral0: 4n,
@@ -346,6 +352,7 @@ describe('quoteTokenShortfallRecovery', () => {
     ])
     expect(result.quote.dispatch.finalPositionIdList).toEqual(baseDispatch.finalPositionIdList)
     expect(simulateDispatch).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(simulateDispatch).mock.calls[1]?.[0].measurePremia).toBe(true)
   })
 
   it('prepends an exact-input swap when zero output balance cannot pay the credit fee', async () => {
@@ -368,6 +375,8 @@ describe('quoteTokenShortfallRecovery', () => {
       data: {
         netAmount0: delta0,
         netAmount1: delta1,
+        premiaReceived0: null,
+        premiaReceived1: null,
         positionsCreated: [],
         positionsClosed: [],
         postCollateral0: 10n + delta0,
@@ -422,6 +431,7 @@ describe('quoteTokenShortfallRecovery', () => {
       ...baseDispatch.positionIdList,
     ])
     expect(simulateDispatch).toHaveBeenCalledTimes(3)
+    expect(vi.mocked(simulateDispatch).mock.calls[2]?.[0].measurePremia).toBe(true)
   })
 
   it('rejects a prefixed swap whose input exceeds the source balance', async () => {
@@ -527,6 +537,8 @@ describe('quoteTokenShortfallRecovery', () => {
       data: {
         netAmount0: 0n,
         netAmount1: -120n,
+        premiaReceived0: null,
+        premiaReceived1: null,
         positionsCreated: [],
         positionsClosed: [],
         postCollateral0: 4n,
@@ -645,6 +657,8 @@ describe('quoteTokenShortfallRecovery', () => {
       data: {
         netAmount0: 6n,
         netAmount1: -100n,
+        premiaReceived0: null,
+        premiaReceived1: null,
         positionsCreated: [],
         positionsClosed: [],
         postCollateral0: 10n,

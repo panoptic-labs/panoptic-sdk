@@ -1,4 +1,5 @@
 import { getEthUsdcMarket, MAINNET_CHAIN_ID, requireChainDeployment } from '../chainDeployments'
+import { MAINNET_USDC_PLP_COMPILED_POOL_POLICY } from '../hypoVaultManagerArtifacts/MainnetUSDCPLPStrategistLeaves'
 import type { HypoVaultManagerConfig } from './schema'
 
 const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
@@ -36,8 +37,8 @@ export const UsdcPlpVaultMainnetProdConfig: HypoVaultManagerConfig = {
     underlyingToken: MAINNET_ETH_USDC_MARKET.currency1,
   },
   automation: {
-    primaryPool: MAINNET_V3_POOL_ADDRESSES.panopticPool,
-    windDownPools: [MAINNET_PANOPTIC_POOL_ADDRESSES.panopticPool],
+    primaryPool: MAINNET_USDC_PLP_COMPILED_POOL_POLICY.automation.primaryPool,
+    windDownPools: [...MAINNET_USDC_PLP_COMPILED_POOL_POLICY.automation.windDownPools],
   },
   manualTxDefaults: {
     collateralAllocations: [

@@ -91,6 +91,7 @@ export type {
   ForceExerciseSimulation,
   LiquidateSimulation,
   OpenPositionSimulation,
+  SettlePremiumFromSimulation,
   SettleSimulation,
   SimulationResult,
   TokenFlow,

@@ -73,6 +73,7 @@ vi.mock('../hypoVaultManagerArtifacts/MainnetUSDCPLPVaultPoolInfos', () => ({
     poolInfos: [],
   },
   MainnetUSDCPLPPreviousVaultPoolInfos: { poolInfos: [] },
+  MainnetUSDCPLPV3AuthorizedVaultPoolInfos: { poolInfos: [] },
 }))
 vi.mock('../hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos', () => ({
   MainnetWETHPLPVaultPoolInfos: {
@@ -80,6 +81,7 @@ vi.mock('../hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos', () => ({
     poolInfos: [],
   },
   MainnetWETHPLPPreviousVaultPoolInfos: { poolInfos: [] },
+  MainnetWETHPLPV3AuthorizedVaultPoolInfos: { poolInfos: [] },
 }))
 vi.mock('../hypoVaultManagerArtifacts/MainnetUSDCPLPStrategistLeaves', () => ({
   MainnetUSDCPLPStrategistLeaves: {
@@ -88,6 +90,9 @@ vi.mock('../hypoVaultManagerArtifacts/MainnetUSDCPLPStrategistLeaves', () => ({
   MainnetUSDCPLPPreviousStrategistLeaves: {
     metadata: { ManageRoot: `0x${'12'.repeat(32)}` },
   },
+  MainnetUSDCPLPV3AuthorizedStrategistLeaves: {
+    metadata: { ManageRoot: `0x${'13'.repeat(32)}` },
+  },
 }))
 vi.mock('../hypoVaultManagerArtifacts/MainnetWETHPLPStrategistLeaves', () => ({
   MainnetWETHPLPStrategistLeaves: {
@@ -95,6 +100,9 @@ vi.mock('../hypoVaultManagerArtifacts/MainnetWETHPLPStrategistLeaves', () => ({
   },
   MainnetWETHPLPPreviousStrategistLeaves: {
     metadata: { ManageRoot: `0x${'22'.repeat(32)}` },
+  },
+  MainnetWETHPLPV3AuthorizedStrategistLeaves: {
+    metadata: { ManageRoot: `0x${'23'.repeat(32)}` },
   },
 }))
 vi.mock('../hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos', () => ({

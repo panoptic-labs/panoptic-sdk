@@ -187,7 +187,12 @@ export type {
   DeriveUniqueTokenIdParams,
   DeriveUniqueTokenIdResult,
   EncodeLegParams,
+  GenerateOverlappingTokenIdsParams,
+  GenerateOverlappingTokenIdsResult,
   LegConfig,
+  OverlappingOptionLegConfig,
+  OverlappingOptionType,
+  SplitTokenIdByTimescaleResult,
   Timescale,
   TokenIdBuilder,
 } from './tokenId'
@@ -210,6 +215,7 @@ export {
   // Low-level encoding
   encodePoolId,
   encodeV4PoolId,
+  generateOverlappingTokenIds,
   getAssetIndex,
   hasLoanOrCredit,
   hasLongLeg,
@@ -223,6 +229,7 @@ export {
   LEG_LIMITS,
   LEG_MASKS,
   planDeriveStrategy,
+  splitTokenIdByTimescale,
   // Constants
   STANDARD_TICK_WIDTHS,
   TOKEN_ID_BITS,
@@ -301,6 +308,7 @@ export type {
   FetchPoolIdParams,
   FetchPoolIdResult,
   FlowNeutralTokenId,
+  ForfeitablePremium,
   GetAccountBuyingPowerParams,
   // Account read params
   GetAccountCollateralParams,
@@ -319,6 +327,7 @@ export type {
   // Delta hedge params
   GetDeltaHedgeParamsInput,
   GetEnforcedTickLimitsParams,
+  GetForfeitablePremiumParams,
   // Guardian unlock params + state
   GetGuardianUnlockStateParams,
   GetInterestStateParams,
@@ -433,6 +442,7 @@ export {
   getDeltaHedgeParams,
   // Pool reads
   getEnforcedTickLimits,
+  getForfeitablePremium,
   // Guardian unlock state
   getGuardianUnlockState,
   getInterestState,
@@ -683,6 +693,7 @@ export type {
   DepositParams,
   DispatchParams,
   ExecuteBatchDispatchParams,
+  ExecuteSettleSequenceParams,
   ForceExerciseParams,
   LiquidateParams,
   MintParams,
@@ -696,6 +707,10 @@ export type {
   RepayParams,
   RollPositionParams,
   SettleParams,
+  SettlePremiumFromParams,
+  SettleSequenceCallsParams,
+  SettleSequenceClose,
+  SettleSequenceTarget,
   SmartRepayParams,
   SpeedUpParams,
   SupplyParams,
@@ -722,6 +737,7 @@ export {
   buildCreditSwapCall,
   // Position operations
   buildOpenPositionCalldata,
+  buildSettleSequenceCalls,
   // Loan utilities
   buildUniqueCredit,
   buildUniqueLoan,
@@ -743,6 +759,8 @@ export {
   // Item-based batch dispatch
   executeBatchDispatch,
   executeBatchDispatchAndWait,
+  executeSettleSequence,
+  executeSettleSequenceAndWait,
   // Force exercise
   forceExercise,
   forceExerciseAndWait,
@@ -754,6 +772,8 @@ export {
   mintAndWait,
   openPosition,
   openPositionAndWait,
+  // Settlement
+  orderListForSettle,
   // Oracle
   pokeOracle,
   pokeOracleAndWait,
@@ -769,9 +789,10 @@ export {
   resolveTokenIndex,
   rollPosition,
   rollPositionAndWait,
-  // Settlement
   settleAccumulatedPremia,
   settleAccumulatedPremiaAndWait,
+  settlePremiumFrom,
+  settlePremiumFromAndWait,
   smartRepay,
   smartRepayAndWait,
   // Transaction management
@@ -817,6 +838,9 @@ export type {
   OneTokenFlowQuoteParams,
   OneTokenFlowResult,
   OneTokenFlowUnavailableReason,
+  SettlePremiumBatchResult,
+  SettlePremiumBatchTargetResult,
+  SettleSequenceSimulation,
   SFPMSimulationResult,
   SimulateBatchDispatchParams,
   SimulateBatchDispatchResult,
@@ -827,6 +851,9 @@ export type {
   SimulateLiquidateParams,
   SimulateOpenPositionParams,
   SimulateSettleParams,
+  SimulateSettlePremiumBatchParams,
+  SimulateSettlePremiumFromParams,
+  SimulateSettleSequenceParams,
   SimulateSFPMParams,
   SimulateSwapExactInParams,
   SimulateSwapExactOutParams,
@@ -862,6 +889,9 @@ export {
   simulateLiquidate,
   simulateOpenPosition,
   simulateSettle,
+  simulateSettlePremiumBatch,
+  simulateSettlePremiumFrom,
+  simulateSettleSequence,
   simulateSFPMBurn,
   simulateSFPMMint,
   simulateSwapExactIn,
@@ -1066,6 +1096,7 @@ export type {
   // Oracle types
   SafeMode,
   SafeModeState,
+  SettlePremiumFromSimulation,
   SettleSimulation,
   // Simulation types
   SimulationResult,

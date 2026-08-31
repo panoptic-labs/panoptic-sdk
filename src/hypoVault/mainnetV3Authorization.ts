@@ -14,17 +14,21 @@ import { MAINNET_CHAIN_ID, requireChainDeployment } from './chainDeployments'
 import {
   MainnetUSDCPLPPreviousStrategistLeaves,
   MainnetUSDCPLPStrategistLeaves,
+  MainnetUSDCPLPV3AuthorizedStrategistLeaves,
 } from './hypoVaultManagerArtifacts/MainnetUSDCPLPStrategistLeaves'
 import {
   MainnetUSDCPLPPreviousVaultPoolInfos,
+  MainnetUSDCPLPV3AuthorizedVaultPoolInfos,
   MainnetUSDCPLPVaultPoolInfos,
 } from './hypoVaultManagerArtifacts/MainnetUSDCPLPVaultPoolInfos'
 import {
   MainnetWETHPLPPreviousStrategistLeaves,
   MainnetWETHPLPStrategistLeaves,
+  MainnetWETHPLPV3AuthorizedStrategistLeaves,
 } from './hypoVaultManagerArtifacts/MainnetWETHPLPStrategistLeaves'
 import {
   MainnetWETHPLPPreviousVaultPoolInfos,
+  MainnetWETHPLPV3AuthorizedVaultPoolInfos,
   MainnetWETHPLPVaultPoolInfos,
 } from './hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
 import type { StrategistLeavesArtifact } from './utils/buildManageArgs'
@@ -45,7 +49,7 @@ const POOL_INFO_ARRAY_ABI = {
   ],
 } as const
 
-export type MainnetV3AuthorizationVersion = 'previous' | 'next'
+export type MainnetV3AuthorizationVersion = 'previous' | 'next' | 'v3-only'
 
 export type MainnetV3AuthorizationArtifacts = {
   readonly version: MainnetV3AuthorizationVersion
@@ -65,6 +69,7 @@ type VaultTransition = {
   readonly activationBlockNumber: bigint
   readonly previous: AuthorizationGeneration
   readonly next: AuthorizationGeneration
+  readonly current: AuthorizationGeneration
   readonly generations: readonly (AuthorizationGeneration & {
     readonly version: MainnetV3AuthorizationVersion
   })[]
@@ -76,6 +81,7 @@ function createVaultTransition(transition: Omit<VaultTransition, 'generations'>)
     generations: [
       { version: 'previous', ...transition.previous },
       { version: 'next', ...transition.next },
+      { version: 'v3-only', ...transition.current },
     ],
   }
 }
@@ -118,7 +124,11 @@ const MAINNET_V3_AUTHORIZATION_TRANSITIONS: readonly VaultTransition[] = [
       MainnetWETHPLPPreviousVaultPoolInfos.poolInfos,
       MainnetWETHPLPPreviousStrategistLeaves,
     ),
-    next: generation(MainnetWETHPLPVaultPoolInfos.poolInfos, MainnetWETHPLPStrategistLeaves),
+    next: generation(
+      MainnetWETHPLPV3AuthorizedVaultPoolInfos.poolInfos,
+      MainnetWETHPLPV3AuthorizedStrategistLeaves,
+    ),
+    current: generation(MainnetWETHPLPVaultPoolInfos.poolInfos, MainnetWETHPLPStrategistLeaves),
   }),
   createVaultTransition({
     vaultAddress: MAINNET_DEPLOYMENT.hypovault.vaults.usdcPlpVault,
@@ -129,7 +139,11 @@ const MAINNET_V3_AUTHORIZATION_TRANSITIONS: readonly VaultTransition[] = [
       MainnetUSDCPLPPreviousVaultPoolInfos.poolInfos,
       MainnetUSDCPLPPreviousStrategistLeaves,
     ),
-    next: generation(MainnetUSDCPLPVaultPoolInfos.poolInfos, MainnetUSDCPLPStrategistLeaves),
+    next: generation(
+      MainnetUSDCPLPV3AuthorizedVaultPoolInfos.poolInfos,
+      MainnetUSDCPLPV3AuthorizedStrategistLeaves,
+    ),
+    current: generation(MainnetUSDCPLPVaultPoolInfos.poolInfos, MainnetUSDCPLPStrategistLeaves),
   }),
 ] as const
 
@@ -157,9 +171,11 @@ export function getMainnetV3AuthorizationGenerations({
 }: {
   chainId: number
   vaultAddress: Address
-}): Pick<VaultTransition, 'previous' | 'next'> | null {
+}): Pick<VaultTransition, 'previous' | 'next' | 'current'> | null {
   const transition = findTransition(chainId, vaultAddress)
-  return transition === null ? null : { previous: transition.previous, next: transition.next }
+  return transition === null
+    ? null
+    : { previous: transition.previous, next: transition.next, current: transition.current }
 }
 
 /**

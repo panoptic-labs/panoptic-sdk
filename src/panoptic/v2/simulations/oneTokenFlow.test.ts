@@ -56,6 +56,8 @@ const ok = (flow: Flow) => {
     data: {
       netAmount0: tokenFlow.delta0,
       netAmount1: tokenFlow.delta1,
+      premiaReceived0: null,
+      premiaReceived1: null,
       positionsCreated: [],
       positionsClosed: [],
       postCollateral0: tokenFlow.balanceAfter0,

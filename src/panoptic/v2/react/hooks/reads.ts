@@ -36,6 +36,7 @@ import {
   getFactoryConstructMetadata,
   getFactoryOwnerOf,
   getFactoryTokenURI,
+  getForfeitablePremium,
   getGuardianUnlockState,
   getInterestState,
   getLiquidationPrices,
@@ -747,6 +748,42 @@ export function useAccountPremia(
         account: resolvedAccount!,
         tokenIds,
       }),
+    enabled: (options?.enabled ?? true) && !!resolvedAccount,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+/**
+ * Unsettled short premium the account would forfeit by closing `tokenIds` now
+ * (owed-including-pending minus available-to-collect).
+ */
+export function useForfeitablePremium(
+  poolAddress: Address,
+  tokenIds: bigint[],
+  account?: Address,
+  options?: QueryOptions,
+) {
+  const ctx = usePanopticContext()
+  const resolvedAccount = account ?? ctx.account
+  return useQuery({
+    queryKey: [
+      ...queryKeys.forfeitablePremium(ctx.chainId, poolAddress, resolvedAccount!),
+      getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
+      tokenIds,
+    ],
+    queryFn: () => {
+      if (!resolvedAccount) {
+        throw new Error('useForfeitablePremium: no account resolved')
+      }
+      return getForfeitablePremium({
+        client: ctx.publicClient,
+        poolAddress,
+        account: resolvedAccount,
+        tokenIds,
+      })
+    },
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
     staleTime: options?.staleTime,

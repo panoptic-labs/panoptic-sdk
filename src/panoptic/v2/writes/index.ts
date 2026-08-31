@@ -84,6 +84,21 @@ export { type LiquidateParams, liquidate, liquidateAndWait } from './liquidate'
 
 // Force exercise
 export { type ForceExerciseParams, forceExercise, forceExerciseAndWait } from './forceExercise'
+export {
+  type SettlePremiumFromParams,
+  orderListForSettle,
+  settlePremiumFrom,
+  settlePremiumFromAndWait,
+} from './settlePremiumFrom'
+export {
+  type ExecuteSettleSequenceParams,
+  type SettleSequenceCallsParams,
+  type SettleSequenceClose,
+  type SettleSequenceTarget,
+  buildSettleSequenceCalls,
+  executeSettleSequence,
+  executeSettleSequenceAndWait,
+} from './settleSequence'
 
 // Settlement
 export {

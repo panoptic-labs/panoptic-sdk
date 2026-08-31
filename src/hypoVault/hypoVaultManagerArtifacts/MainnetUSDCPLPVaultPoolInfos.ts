@@ -1,3 +1,4 @@
+import { MAINNET_USDC_PLP_COMPILED_POOL_POLICY } from './MainnetUSDCPLPStrategistLeaves'
 import {
   DEFAULT_TRIGGER_TICK,
   MAINNET_LEGACY_DEFAULT_POOL_INFOS,
@@ -8,6 +9,15 @@ import {
 } from './poolInfosConfig'
 
 export const MainnetUSDCPLPVaultPoolInfos = {
+  vaultAddress: MAINNET_VAULT_ADDRESSES.usdcPlpVault,
+  poolInfos: MAINNET_USDC_PLP_COMPILED_POOL_POLICY.poolInfos.map((poolInfo) => ({
+    ...poolInfo,
+    triggerTick: DEFAULT_TRIGGER_TICK,
+  })),
+} as const
+
+/** Accountant input authorized by the original ETH/USDC 5bps v3 release. */
+export const MainnetUSDCPLPV3AuthorizedVaultPoolInfos = {
   vaultAddress: MAINNET_VAULT_ADDRESSES.usdcPlpVault,
   poolInfos: MAINNET_USDC_PLP_POOL_INFOS.map((poolInfo) => ({
     ...poolInfo,

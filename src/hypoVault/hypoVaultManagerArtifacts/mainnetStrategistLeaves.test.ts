@@ -12,11 +12,15 @@ import {
 import {
   MAINNET_USDC_PLP_PRE_V3_MANAGE_ROOT,
   MAINNET_USDC_PLP_STRATEGIST_LEAF_DEFINITIONS,
+  MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS,
   MainnetUSDCPLPStrategistLeaves,
+  MainnetUSDCPLPV3AuthorizedStrategistLeaves,
 } from './MainnetUSDCPLPStrategistLeaves'
 import {
   MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS,
+  MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS,
   MainnetWETHPLPStrategistLeaves,
+  MainnetWETHPLPV3AuthorizedStrategistLeaves,
 } from './MainnetWETHPLPStrategistLeaves'
 
 const NEW_POOL = '0x00000000009C7B687e833559e34503f64d7ed7c4'
@@ -66,26 +70,6 @@ function expectErc20TrackerLifecycle(
   expect(trackerLeaves.every(({ canSendValue }) => !canSendValue)).toBe(true)
 }
 
-function expectNativeTrackerLifecycle(
-  definitions: readonly StrategistLeafDefinition[],
-  tracker: string,
-) {
-  const trackerLeaves = definitions.filter(
-    ({ target }) => target.toLowerCase() === tracker.toLowerCase(),
-  )
-
-  expect(trackerLeaves).toHaveLength(TRACKER_ACTIONS.length)
-  expect(trackerLeaves.map(({ functionSignature }) => functionSignature)).toEqual(
-    expect.arrayContaining([...TRACKER_ACTIONS]),
-  )
-  for (const leaf of trackerLeaves) {
-    expect(leaf.canSendValue).toBe(
-      leaf.functionSignature === 'deposit(uint256,address)' ||
-        leaf.functionSignature === 'mint(uint256,address)',
-    )
-  }
-}
-
 describe('mainnet strategist leaves', () => {
   it('reproduces the previous roots from the preserved leaf prefixes', () => {
     const wethPrevious = createStrategistLeavesArtifact(
@@ -95,7 +79,7 @@ describe('mainnet strategist leaves', () => {
         decoderAndSanitizerAddress: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
         managerAddress: '0xB6Fc48e658C9B1a7dbdFA51A5E153ab60BB2e04d',
       },
-      MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS.slice(0, 10),
+      MAINNET_WETH_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS.slice(0, 10),
     )
     const usdcPrevious = createStrategistLeavesArtifact(
       {
@@ -104,7 +88,7 @@ describe('mainnet strategist leaves', () => {
         decoderAndSanitizerAddress: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
         managerAddress: '0x2ce65016366ef7320078e0758D58Cf1038bc7C4e',
       },
-      MAINNET_USDC_PLP_STRATEGIST_LEAF_DEFINITIONS.slice(0, 12),
+      MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS.slice(0, 12),
     )
 
     expect(wethPrevious.metadata.ManageRoot).toBe(
@@ -113,39 +97,60 @@ describe('mainnet strategist leaves', () => {
     expect(usdcPrevious.metadata.ManageRoot).toBe(MAINNET_USDC_PLP_PRE_V3_MANAGE_ROOT)
   })
 
-  it('selects and proves each dispatch leaf by pool target', () => {
+  it('proves only the active v3 dispatch leaf in current artifacts', () => {
     for (const artifact of [MainnetWETHPLPStrategistLeaves, MainnetUSDCPLPStrategistLeaves]) {
-      const oldDispatch = findLeafForTarget(artifact, DISPATCH, OLD_POOL)
       const newDispatch = findLeafForTarget(artifact, DISPATCH, NEW_POOL)
 
-      expect(oldDispatch.LeafDigest).not.toBe(newDispatch.LeafDigest)
-      expect(oldDispatch.TargetAddress.toLowerCase()).toBe(OLD_POOL.toLowerCase())
       expect(newDispatch.TargetAddress.toLowerCase()).toBe(NEW_POOL.toLowerCase())
+      expect(() => findLeafForTarget(artifact, DISPATCH, OLD_POOL)).toThrow('Leaf not found')
 
-      const [proofs, , targets] = buildManageArgs(
-        [
-          { leaf: oldDispatch, data: '0x' },
-          { leaf: newDispatch, data: '0x' },
-        ],
-        artifact,
-      )
-      expect(proofs).toHaveLength(2)
-      expect(proofs[0]).toHaveLength(5)
-      expect(proofs[1]).toHaveLength(5)
-      expect(targets.map((target) => target.toLowerCase())).toEqual([
-        OLD_POOL.toLowerCase(),
-        NEW_POOL.toLowerCase(),
-      ])
+      const [proofs, , targets] = buildManageArgs([{ leaf: newDispatch, data: '0x' }], artifact)
+      expect(proofs).toHaveLength(1)
+      expect(proofs[0]).toHaveLength(4)
+      expect(targets.map((target) => target.toLowerCase())).toEqual([NEW_POOL.toLowerCase()])
     }
   })
 
-  it('selects duplicate ERC-20 signatures by authorized address arguments', () => {
-    const currentApproval = findLeafForTargetAndSignature(
-      MainnetUSDCPLPStrategistLeaves,
-      USDC,
-      'approve(address,uint256)',
-      [CURRENT_PO_USDC],
+  it('preserves the exact v3-authorized roots for rollback and cleanup proofs', () => {
+    expect(MainnetWETHPLPV3AuthorizedStrategistLeaves.metadata.ManageRoot).toBe(
+      '0x4d2fb008ac93d2a363881e31e65f31bacbefef39efb44cf2f95b65cf49c65c7d',
     )
+    expect(MainnetUSDCPLPV3AuthorizedStrategistLeaves.metadata.ManageRoot).toBe(
+      '0x3223880461fe3e61dc96d9d81579ae943507ec95f17cba100b462cec53967e14',
+    )
+  })
+
+  it('retains provable WETH wrap and unwrap permissions after pool retirement', () => {
+    const wrap = findLeafForTargetAndSignature(
+      MainnetWETHPLPStrategistLeaves,
+      WETH,
+      'deposit()',
+      [],
+    )
+    const unwrap = findLeafForTargetAndSignature(
+      MainnetWETHPLPStrategistLeaves,
+      WETH,
+      'withdraw(uint256)',
+      [],
+    )
+    const [proofs, , targets] = buildManageArgs(
+      [
+        { leaf: wrap, data: '0x' },
+        { leaf: unwrap, data: '0x' },
+      ],
+      MainnetWETHPLPStrategistLeaves,
+    )
+
+    expect(wrap.CanSendValue).toBe(true)
+    expect(unwrap.CanSendValue).toBe(false)
+    expect(proofs.every((proof) => proof.length === 4)).toBe(true)
+    expect(targets.map((target) => target.toLowerCase())).toEqual([
+      WETH.toLowerCase(),
+      WETH.toLowerCase(),
+    ])
+  })
+
+  it('selects the retained v3 ERC-20 approval by address arguments', () => {
     const v3Approval = findLeafForTargetAndSignature(
       MainnetUSDCPLPStrategistLeaves,
       USDC,
@@ -153,9 +158,15 @@ describe('mainnet strategist leaves', () => {
       [NEW_PO_USDC],
     )
 
-    expect(currentApproval.LeafDigest).not.toBe(v3Approval.LeafDigest)
-    expect(currentApproval.AddressArguments[0]?.toLowerCase()).toBe(CURRENT_PO_USDC.toLowerCase())
     expect(v3Approval.AddressArguments[0]?.toLowerCase()).toBe(NEW_PO_USDC.toLowerCase())
+    expect(() =>
+      findLeafForTargetAndSignature(
+        MainnetUSDCPLPStrategistLeaves,
+        USDC,
+        'approve(address,uint256)',
+        [CURRENT_PO_USDC],
+      ),
+    ).toThrow('found 0')
   })
 
   it('rejects missing semantic leaf matches', () => {
@@ -170,29 +181,36 @@ describe('mainnet strategist leaves', () => {
   })
 
   it('rejects ambiguous semantic leaf matches', () => {
-    const currentApproval = findLeafForTargetAndSignature(
+    const v3Approval = findLeafForTargetAndSignature(
       MainnetUSDCPLPStrategistLeaves,
       USDC,
       'approve(address,uint256)',
-      [CURRENT_PO_USDC],
+      [NEW_PO_USDC],
     )
     const duplicateArtifact = {
       ...MainnetUSDCPLPStrategistLeaves,
-      leafs: [...MainnetUSDCPLPStrategistLeaves.leafs, currentApproval],
+      leafs: [...MainnetUSDCPLPStrategistLeaves.leafs, v3Approval],
     }
 
     expect(() =>
       findLeafForTargetAndSignature(duplicateArtifact, USDC, 'approve(address,uint256)', [
-        CURRENT_PO_USDC,
+        NEW_PO_USDC,
       ]),
     ).toThrow('found 2')
   })
 
-  it('authorizes complete two-sided lifecycles for the existing ETH/USDC pool', () => {
-    expectNativeTrackerLifecycle(MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS, CURRENT_PO_ETH)
-    expectErc20TrackerLifecycle(MAINNET_WETH_PLP_STRATEGIST_LEAF_DEFINITIONS, USDC, CURRENT_PO_USDC)
-    expectNativeTrackerLifecycle(MAINNET_USDC_PLP_STRATEGIST_LEAF_DEFINITIONS, CURRENT_PO_ETH)
-    expectErc20TrackerLifecycle(MAINNET_USDC_PLP_STRATEGIST_LEAF_DEFINITIONS, USDC, CURRENT_PO_USDC)
+  it('removes every retired pool target and approval argument', () => {
+    const retiredAddresses = [OLD_POOL, CURRENT_PO_ETH, CURRENT_PO_USDC, WSPCXX_PO_USDC].map(
+      (address) => address.toLowerCase(),
+    )
+    for (const definitions of STRATEGIST_DEFINITION_SETS) {
+      for (const definition of definitions) {
+        expect(retiredAddresses).not.toContain(definition.target.toLowerCase())
+        for (const argument of definition.addressArguments) {
+          expect(retiredAddresses).not.toContain(argument.toLowerCase())
+        }
+      }
+    }
   })
 
   it('authorizes exactly one complete two-sided lifecycle and dispatch for the v3 pool', () => {
@@ -212,17 +230,7 @@ describe('mainnet strategist leaves', () => {
 
   it('does not authorize swaps, conversion, transfers, delegation, or unexpected targets', () => {
     const allowedTargets = new Set(
-      [
-        OLD_POOL,
-        NEW_POOL,
-        CURRENT_PO_ETH,
-        CURRENT_PO_USDC,
-        NEW_PO_WETH,
-        NEW_PO_USDC,
-        WSPCXX_PO_USDC,
-        WETH,
-        USDC,
-      ].map((address) => address.toLowerCase()),
+      [NEW_POOL, NEW_PO_WETH, NEW_PO_USDC, WETH, USDC].map((address) => address.toLowerCase()),
     )
     const allowedSignatures = new Set([
       'approve(address,uint256)',

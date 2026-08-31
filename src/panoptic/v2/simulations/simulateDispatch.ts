@@ -47,6 +47,8 @@ export interface SimulateDispatchParams {
   usePremiaAsCollateral?: boolean
   /** Builder code */
   builderCode?: bigint
+  /** Capture aggregate settled premia from atomic pre/post position snapshots. */
+  measurePremia?: boolean
   /** Optional block number for simulation */
   blockNumber?: bigint
 }
@@ -75,6 +77,7 @@ export async function simulateDispatch(
     builderCode = 0n,
     blockNumber,
     existingPositionIdList,
+    measurePremia = false,
   } = params
 
   const targetBlockNumber = blockNumber ?? (await client.getBlockNumber())
@@ -115,11 +118,26 @@ export async function simulateDispatch(
             args: [account, false, existingPositionIdList],
           })
         : undefined
+    const prePremiaCallData =
+      measurePremia && existingPositionIdList !== undefined
+        ? encodeFunctionData({
+            abi: panopticPoolV2Abi,
+            functionName: 'getFullPositionsData',
+            args: [account, true, existingPositionIdList],
+          })
+        : undefined
     const postFullPositionsCallData = encodeFunctionData({
       abi: panopticPoolV2Abi,
       functionName: 'getFullPositionsData',
       args: [account, false, finalPositionIdList],
     })
+    const postPremiaCallData = measurePremia
+      ? encodeFunctionData({
+          abi: panopticPoolV2Abi,
+          functionName: 'getFullPositionsData',
+          args: [account, true, finalPositionIdList],
+        })
+      : undefined
 
     // Simulate with token flow measurement using PanopticPool.multicall + getAssetsOf
     const flowResult = await simulateWithTokenFlow({
@@ -128,8 +146,13 @@ export async function simulateDispatch(
       user: account,
       callData,
       blockNumber: targetBlockNumber,
-      preCallData: preFullPositionsCallData ? [preFullPositionsCallData] : undefined,
-      postCallData: [postFullPositionsCallData],
+      preCallData: preFullPositionsCallData
+        ? [preFullPositionsCallData, ...(prePremiaCallData ? [prePremiaCallData] : [])]
+        : undefined,
+      postCallData: [
+        postFullPositionsCallData,
+        ...(postPremiaCallData ? [postPremiaCallData] : []),
+      ],
     })
 
     if (!flowResult.success || !flowResult.tokenFlow) {
@@ -148,11 +171,17 @@ export async function simulateDispatch(
     const positionsCreated = finalPositionIdList.filter((id) => !preSnapshot.includes(id))
     const positionsClosed = preSnapshot.filter((id) => !finalPositionIdList.includes(id))
 
-    // Sum collateralRequirements across all entries from one
-    // getFullPositionsData multicall slot. Each entry is a LeftRightUnsigned
-    // packed as right=token0, left=token1. Returns null on decode failure so
-    // callers fall back gracefully (the type is bigint | null).
-    const sumCollateralReq = (data: Hex | undefined): { token0: bigint; token1: bigint } | null => {
+    // Decode the atomic position snapshots around dispatch. Aggregate premia
+    // stays separate from token flow, which may also include swaps and
+    // commissions in a wrapped recovery transaction.
+    const decodeFullPositions = (
+      data: Hex | undefined,
+    ): {
+      collateralRequirements0: bigint
+      collateralRequirements1: bigint
+      netPremia0: bigint
+      netPremia1: bigint
+    } | null => {
       if (!data) return null
       try {
         const decoded = decodeFunctionResult({
@@ -160,22 +189,31 @@ export async function simulateDispatch(
           functionName: 'getFullPositionsData',
           data,
         })
+        const shortPremium = decodeLeftRightUnsigned(decoded[0])
+        const longPremium = decodeLeftRightUnsigned(decoded[1])
         const reqs = decoded[3] // collateralRequirements
-        let token0 = 0n
-        let token1 = 0n
+        let collateralRequirements0 = 0n
+        let collateralRequirements1 = 0n
         for (const packed of reqs) {
           const r = decodeLeftRightUnsigned(packed)
-          token0 += r.right
-          token1 += r.left
+          collateralRequirements0 += r.right
+          collateralRequirements1 += r.left
         }
-        return { token0, token1 }
+        return {
+          collateralRequirements0,
+          collateralRequirements1,
+          netPremia0: shortPremium.right - longPremium.right,
+          netPremia1: shortPremium.left - longPremium.left,
+        }
       } catch {
         return null
       }
     }
 
-    const preReq = sumCollateralReq(flowResult.preCallResults?.[0])
-    const postReq = sumCollateralReq(flowResult.postCallResults?.[0])
+    const prePositions = decodeFullPositions(flowResult.preCallResults?.[0])
+    const postPositions = decodeFullPositions(flowResult.postCallResults?.[0])
+    const prePremia = decodeFullPositions(flowResult.preCallResults?.[1])
+    const postPremia = decodeFullPositions(flowResult.postCallResults?.[1])
 
     const _meta = await metaPromise
 
@@ -183,14 +221,34 @@ export async function simulateDispatch(
     const data: DispatchSimulation = {
       netAmount0: tokenFlow.delta0,
       netAmount1: tokenFlow.delta1,
+      premiaReceived0:
+        prePremia !== null && postPremia !== null
+          ? prePremia.netPremia0 - postPremia.netPremia0
+          : null,
+      premiaReceived1:
+        prePremia !== null && postPremia !== null
+          ? prePremia.netPremia1 - postPremia.netPremia1
+          : null,
       positionsCreated,
       positionsClosed,
       postCollateral0: tokenFlow.balanceAfter0,
       postCollateral1: tokenFlow.balanceAfter1,
-      preMarginExcess0: preReq ? tokenFlow.balanceBefore0 - preReq.token0 : null,
-      preMarginExcess1: preReq ? tokenFlow.balanceBefore1 - preReq.token1 : null,
-      postMarginExcess0: postReq ? tokenFlow.balanceAfter0 - postReq.token0 : null,
-      postMarginExcess1: postReq ? tokenFlow.balanceAfter1 - postReq.token1 : null,
+      preMarginExcess0:
+        prePositions === null
+          ? null
+          : tokenFlow.balanceBefore0 - prePositions.collateralRequirements0,
+      preMarginExcess1:
+        prePositions === null
+          ? null
+          : tokenFlow.balanceBefore1 - prePositions.collateralRequirements1,
+      postMarginExcess0:
+        postPositions === null
+          ? null
+          : tokenFlow.balanceAfter0 - postPositions.collateralRequirements0,
+      postMarginExcess1:
+        postPositions === null
+          ? null
+          : tokenFlow.balanceAfter1 - postPositions.collateralRequirements1,
     }
 
     return {

@@ -354,6 +354,7 @@ export async function quoteTokenShortfallRecovery(
         account: params.account,
         existingPositionIdList: params.existingPositionIds,
         ...recoveredDispatch,
+        measurePremia: true,
         blockNumber: targetBlockNumber,
       })
       if (recoverySimulation.success && recoverySimulation.tokenFlow !== undefined) {
@@ -518,6 +519,7 @@ export async function quoteTokenShortfallRecovery(
       account: params.account,
       existingPositionIdList: params.existingPositionIds,
       ...recoveredDispatch,
+      measurePremia: true,
       blockNumber: targetBlockNumber,
     })
     if (recoverySimulation.success) {

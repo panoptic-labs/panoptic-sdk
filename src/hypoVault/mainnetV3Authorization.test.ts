@@ -85,6 +85,12 @@ describe('mainnet v3 authorization transition', () => {
     expect(wethGenerations?.next.manageRoot).toBe(
       '0x4d2fb008ac93d2a363881e31e65f31bacbefef39efb44cf2f95b65cf49c65c7d',
     )
+    expect(wethGenerations?.current.poolHash).toBe(
+      '0x450c55809afb4950087cf439f3ee4c9ec6f13478568c0a7c9e919418b379b975',
+    )
+    expect(wethGenerations?.current.manageRoot).toBe(
+      '0x99baae2a0ddf55db31bf2e340856e6e76c87d37add86e95483bd7d1bad93e95c',
+    )
     expect(usdcGenerations?.previous.poolHash).toBe(
       '0x32148c1d3efa7ecf95c9b76cdaef4497a14a756deca81cfa2adfe4f6f30a9889',
     )
@@ -97,9 +103,15 @@ describe('mainnet v3 authorization transition', () => {
     expect(usdcGenerations?.next.manageRoot).toBe(
       '0x3223880461fe3e61dc96d9d81579ae943507ec95f17cba100b462cec53967e14',
     )
+    expect(usdcGenerations?.current.poolHash).toBe(
+      '0x450c55809afb4950087cf439f3ee4c9ec6f13478568c0a7c9e919418b379b975',
+    )
+    expect(usdcGenerations?.current.manageRoot).toBe(
+      '0x29587b0f67aefbf4a11ecffe3bfb56ebef54e441df95fa260d44273d182027b7',
+    )
   })
 
-  it.each(['next', 'previous'] as const)(
+  it.each(['current', 'next', 'previous'] as const)(
     'selects the %s generation atomically',
     async (version) => {
       const generations = getMainnetV3AuthorizationGenerations({
@@ -116,7 +128,7 @@ describe('mainnet v3 authorization transition', () => {
         vaultAddress,
       })
 
-      expect(resolved?.version).toBe(version)
+      expect(resolved?.version).toBe(version === 'current' ? 'v3-only' : version)
       expect(resolved?.blockNumber).toBe(blockNumber)
       expect(resolved?.poolInfos).toHaveLength(version === 'next' ? 2 : 1)
       expect(resolved?.strategistLeaves.metadata.ManageRoot).toBe(generation.manageRoot)

@@ -358,3 +358,92 @@ export async function getPositionsWithPremia(
     _meta,
   }
 }
+
+/**
+ * Forfeitable (unsettled) short premium on a position.
+ */
+export interface ForfeitablePremium {
+  /** Short premium owed to the account, including unsettled pending premium (token 0) */
+  owed0: bigint
+  /** Short premium owed to the account, including unsettled pending premium (token 1) */
+  owed1: bigint
+  /** Short premium currently available to collect (token 0) */
+  available0: bigint
+  /** Short premium currently available to collect (token 1) */
+  available1: bigint
+  /** Premium that would be forfeited if the position were closed now (owed - available, token 0) */
+  forfeit0: bigint
+  /** Premium that would be forfeited if the position were closed now (owed - available, token 1) */
+  forfeit1: bigint
+  /** Block metadata */
+  _meta: BlockMeta
+}
+
+/**
+ * Parameters for getForfeitablePremium.
+ */
+export interface GetForfeitablePremiumParams {
+  /** viem PublicClient */
+  client: PublicClient
+  /** PanopticPool address */
+  poolAddress: Address
+  /** Account address (the seller) */
+  account: Address
+  /** TokenIds to measure (typically the position(s) being closed) */
+  tokenIds: bigint[]
+  /** Optional block number for historical queries */
+  blockNumber?: bigint
+}
+
+/**
+ * Get the unsettled short premium an account would forfeit by closing now.
+ *
+ * Calls `getFullPositionsData` twice in one multicall — once with
+ * `includePendingPremium = true` (everything owed to the short legs) and once
+ * with `false` (only what is available to collect). The difference is the
+ * premium still owed by buyers that has not been settled; closing before it
+ * settles forfeits it. Settling buyers first (see `settlePremiumFrom`) moves
+ * that premium into the available bucket.
+ *
+ * @param params - The parameters
+ * @returns Owed, available, and forfeitable premium with block metadata
+ */
+export async function getForfeitablePremium(
+  params: GetForfeitablePremiumParams,
+): Promise<ForfeitablePremium> {
+  const { client, poolAddress, account, tokenIds, blockNumber } = params
+
+  const targetBlockNumber = blockNumber ?? (await client.getBlockNumber())
+
+  const contracts = [true, false].map((includePendingPremium) => ({
+    address: poolAddress,
+    abi: panopticPoolV2Abi,
+    functionName: 'getFullPositionsData' as const,
+    args: [account, includePendingPremium, tokenIds] as const,
+  }))
+
+  const [multicallResults, _meta] = await Promise.all([
+    client.multicall({
+      contracts,
+      blockNumber: targetBlockNumber,
+      allowFailure: false,
+    }),
+    getBlockMeta({ client, blockNumber: targetBlockNumber }),
+  ])
+
+  const owed = decodeLeftRightUnsigned(multicallResults[0][0])
+  const available = decodeLeftRightUnsigned(multicallResults[1][0])
+
+  const forfeit0 = owed.right > available.right ? owed.right - available.right : 0n
+  const forfeit1 = owed.left > available.left ? owed.left - available.left : 0n
+
+  return {
+    owed0: owed.right,
+    owed1: owed.left,
+    available0: available.right,
+    available1: available.left,
+    forfeit0,
+    forfeit1,
+    _meta,
+  }
+}

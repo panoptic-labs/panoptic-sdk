@@ -15,6 +15,19 @@ export { type SimulateLiquidateParams, simulateLiquidate } from './simulateLiqui
 export { type SimulateOpenPositionParams, simulateOpenPosition } from './simulateOpenPosition'
 export { type SimulateSettleParams, simulateSettle } from './simulateSettle'
 export {
+  type SettlePremiumBatchResult,
+  type SettlePremiumBatchTargetResult,
+  type SettleSequenceSimulation,
+  type SimulateSettlePremiumBatchParams,
+  type SimulateSettleSequenceParams,
+  simulateSettlePremiumBatch,
+  simulateSettleSequence,
+} from './simulateSettlePremiumBatch'
+export {
+  type SimulateSettlePremiumFromParams,
+  simulateSettlePremiumFrom,
+} from './simulateSettlePremiumFrom'
+export {
   type SimulateDepositParams,
   type SimulateWithdrawParams,
   simulateDeposit,

@@ -1,4 +1,10 @@
+import { type VaultPoolPolicyEntry, compileVaultPoolPolicy } from './compileVaultPoolPolicy'
 import { createStrategistLeavesArtifact } from './createStrategistLeavesArtifact'
+import {
+  MAINNET_ETH_USDC_V4_POOL_INFO,
+  MAINNET_USDC_WETH_5BPS_V3_POOL_INFO,
+  MAINNET_WSPCXX_USDC_POOL_INFO,
+} from './poolInfosConfig'
 
 /** Last mainnet block before the V3 authorization execute transaction. */
 export const MAINNET_USDC_PLP_PRE_V3_AUTHORIZATION_BLOCK = 25_704_950n
@@ -20,7 +26,7 @@ const NEW_PO_WETH = '0x69E9f9e44E5F52237493b980dd7306198C64A4E4'
 const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
 const DISPATCH_SIGNATURE = 'dispatch(uint256[],uint256[],uint128[],int24[3][],bool,uint256)'
 
-export const MAINNET_USDC_PLP_STRATEGIST_LEAF_DEFINITIONS = [
+export const MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS = [
   {
     description: 'Approve poUSDC to spend USDC',
     target: USDC,
@@ -219,6 +225,65 @@ export const MAINNET_USDC_PLP_STRATEGIST_LEAF_DEFINITIONS = [
   },
 ] as const
 
+const V4_FULL_LEAF_DEFINITIONS = [
+  ...MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS.slice(0, 9),
+  ...MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS.slice(12, 15),
+]
+const V4_WIND_DOWN_LEAF_DEFINITIONS = [
+  MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[2],
+  MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[3],
+  MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[5],
+  MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[6],
+  MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[7],
+  MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[8],
+  MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[14],
+]
+const WSPCXX_FULL_LEAF_DEFINITIONS =
+  MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS.slice(9, 12)
+const WSPCXX_WIND_DOWN_LEAF_DEFINITIONS = [
+  MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS[11],
+]
+const V3_FULL_LEAF_DEFINITIONS =
+  MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS.slice(15)
+const V3_WIND_DOWN_LEAF_DEFINITIONS = V3_FULL_LEAF_DEFINITIONS.filter(
+  ({ functionSignature }) =>
+    functionSignature === DISPATCH_SIGNATURE ||
+    functionSignature === 'withdraw(uint256,address,address)' ||
+    functionSignature === 'withdraw(uint256,address,address,uint256[],bool)' ||
+    functionSignature === 'redeem(uint256,address,address)',
+)
+
+export const MAINNET_USDC_PLP_POOL_POLICY = [
+  {
+    id: 'weth-usdc-v3-5bps',
+    mode: 'primary',
+    poolInfo: MAINNET_USDC_WETH_5BPS_V3_POOL_INFO,
+    fullLeafDefinitions: V3_FULL_LEAF_DEFINITIONS,
+    windDownLeafDefinitions: V3_WIND_DOWN_LEAF_DEFINITIONS,
+  },
+  {
+    id: 'eth-usdc-v4',
+    mode: 'retired',
+    poolInfo: MAINNET_ETH_USDC_V4_POOL_INFO,
+    fullLeafDefinitions: V4_FULL_LEAF_DEFINITIONS,
+    windDownLeafDefinitions: V4_WIND_DOWN_LEAF_DEFINITIONS,
+  },
+  {
+    id: 'wspcxx-usdc',
+    mode: 'retired',
+    poolInfo: MAINNET_WSPCXX_USDC_POOL_INFO,
+    fullLeafDefinitions: WSPCXX_FULL_LEAF_DEFINITIONS,
+    windDownLeafDefinitions: WSPCXX_WIND_DOWN_LEAF_DEFINITIONS,
+  },
+] as const satisfies readonly VaultPoolPolicyEntry[]
+
+export const MAINNET_USDC_PLP_COMPILED_POOL_POLICY = compileVaultPoolPolicy({
+  pools: MAINNET_USDC_PLP_POOL_POLICY,
+})
+
+export const MAINNET_USDC_PLP_STRATEGIST_LEAF_DEFINITIONS =
+  MAINNET_USDC_PLP_COMPILED_POOL_POLICY.strategistLeafDefinitions
+
 const MAINNET_USDC_PLP_STRATEGIST_ARTIFACT_METADATA = {
   accountantAddress: '0x65aA902AE3135658587FFC36ED51B61c927114e1',
   boringVaultAddress: VAULT,
@@ -232,11 +297,20 @@ const PRE_V3_AUTHORIZATION_LEAF_COUNT = 12
 /** Production permissions before the ETH/USDC 5bps v3 pool authorization executes. */
 export const MainnetUSDCPLPPreviousStrategistLeaves = createStrategistLeavesArtifact(
   MAINNET_USDC_PLP_STRATEGIST_ARTIFACT_METADATA,
-  MAINNET_USDC_PLP_STRATEGIST_LEAF_DEFINITIONS.slice(0, PRE_V3_AUTHORIZATION_LEAF_COUNT),
+  MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS.slice(
+    0,
+    PRE_V3_AUTHORIZATION_LEAF_COUNT,
+  ),
 )
 
-/** Production permissions after the ETH/USDC 5bps v3 pool authorization executes. */
+/** Production permissions authorized by the original ETH/USDC 5bps v3 release. */
+export const MainnetUSDCPLPV3AuthorizedStrategistLeaves = createStrategistLeavesArtifact(
+  MAINNET_USDC_PLP_STRATEGIST_ARTIFACT_METADATA,
+  MAINNET_USDC_PLP_V3_AUTHORIZED_STRATEGIST_LEAF_DEFINITIONS,
+)
+
+/** Current production permissions after retiring the migrated pools. */
 export const MainnetUSDCPLPStrategistLeaves = createStrategistLeavesArtifact(
   MAINNET_USDC_PLP_STRATEGIST_ARTIFACT_METADATA,
-  MAINNET_USDC_PLP_STRATEGIST_LEAF_DEFINITIONS,
+  MAINNET_USDC_PLP_COMPILED_POOL_POLICY.strategistLeafDefinitions,
 )

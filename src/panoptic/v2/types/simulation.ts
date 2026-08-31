@@ -116,6 +116,24 @@ export interface ForceExerciseSimulation {
 }
 
 /**
+ * Settle-premium-on-another-account simulation result data.
+ */
+export interface SettlePremiumFromSimulation {
+  /** Short premium the settle makes available to the caller (token 0) */
+  premium0: bigint
+  /** Short premium the settle makes available to the caller (token 1) */
+  premium1: bigint
+  /** Total premium the buyer pays into the chunk (token 0) */
+  settled0: bigint
+  /** Total premium the buyer pays into the chunk (token 1) */
+  settled1: bigint
+  /** Whether the settlement would succeed */
+  canSettle: boolean
+  /** Reason if cannot settle */
+  reason?: string
+}
+
+/**
  * Liquidation simulation result data.
  */
 export interface LiquidateSimulation {
@@ -187,6 +205,10 @@ export interface DispatchSimulation {
   netAmount0: bigint
   /** Token 1 net change */
   netAmount1: bigint
+  /** Premia settled for token 0 (null when atomic pre/post position reads are unavailable). */
+  premiaReceived0: bigint | null
+  /** Premia settled for token 1 (null when atomic pre/post position reads are unavailable). */
+  premiaReceived1: bigint | null
   /** Positions created */
   positionsCreated: bigint[]
   /** Positions closed */

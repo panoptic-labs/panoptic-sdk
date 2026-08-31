@@ -3,11 +3,11 @@ import { type Address, type Hex, encodeAbiParameters, getAddress, keccak256 } fr
 import { MAINNET_CHAIN_ID, requireChainDeployment } from './chainDeployments'
 import {
   MainnetUSDCPLPPreviousVaultPoolInfos,
-  MainnetUSDCPLPVaultPoolInfos,
+  MainnetUSDCPLPV3AuthorizedVaultPoolInfos,
 } from './hypoVaultManagerArtifacts/MainnetUSDCPLPVaultPoolInfos'
 import {
   MainnetWETHPLPPreviousVaultPoolInfos,
-  MainnetWETHPLPVaultPoolInfos,
+  MainnetWETHPLPV3AuthorizedVaultPoolInfos,
 } from './hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
 import type { PoolInfo } from './utils/buildManagerInput'
 
@@ -98,7 +98,7 @@ const MAINNET_VAULT_HISTORIES: readonly VaultHistory[] = [
       poolConfiguration(
         25_704_951n,
         '0xb6d62abb10728655c4c9b612abcd82af9e93c5906357eb6be41cabb224b32118',
-        MainnetWETHPLPVaultPoolInfos.poolInfos,
+        MainnetWETHPLPV3AuthorizedVaultPoolInfos.poolInfos,
       ),
     ],
     managerRootTransitions: [
@@ -140,7 +140,7 @@ const MAINNET_VAULT_HISTORIES: readonly VaultHistory[] = [
       poolConfiguration(
         25_704_951n,
         '0xb6d62abb10728655c4c9b612abcd82af9e93c5906357eb6be41cabb224b32118',
-        MainnetUSDCPLPVaultPoolInfos.poolInfos,
+        MainnetUSDCPLPV3AuthorizedVaultPoolInfos.poolInfos,
       ),
     ],
     managerRootTransitions: [

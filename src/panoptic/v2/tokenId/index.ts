@@ -58,3 +58,11 @@ export {
   encodePoolId,
   encodeV4PoolId,
 } from './encoding'
+export {
+  type GenerateOverlappingTokenIdsParams,
+  type GenerateOverlappingTokenIdsResult,
+  type OverlappingOptionLegConfig,
+  type OverlappingOptionType,
+  generateOverlappingTokenIds,
+} from './generateOverlapping'
+export { type SplitTokenIdByTimescaleResult, splitTokenIdByTimescale } from './split'

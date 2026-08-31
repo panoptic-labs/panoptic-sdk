@@ -207,36 +207,36 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     expect(UsdcPlpVaultMainnetProdConfig.vaultCapInUnderlying).toBe(350_000_000_000n)
     expect(UsdcPlpVaultMainnetProdConfig.vaultCapInShares).toBe(350_000_000_000_000_000n)
     expect(MainnetWETHPLPStrategistLeaves.metadata.ManageRoot).toBe(
-      '0x4d2fb008ac93d2a363881e31e65f31bacbefef39efb44cf2f95b65cf49c65c7d',
+      '0x99baae2a0ddf55db31bf2e340856e6e76c87d37add86e95483bd7d1bad93e95c',
     )
     expect(MainnetUSDCPLPStrategistLeaves.metadata.ManageRoot).toBe(
-      '0x3223880461fe3e61dc96d9d81579ae943507ec95f17cba100b462cec53967e14',
+      '0x29587b0f67aefbf4a11ecffe3bfb56ebef54e441df95fa260d44273d182027b7',
     )
     expect(MainnetWETHPLPVaultPoolInfos.vaultAddress).toBe(deployment.hypovault.vaults.wethPlpVault)
     expect(MainnetUSDCPLPVaultPoolInfos.vaultAddress).toBe(deployment.hypovault.vaults.usdcPlpVault)
-    expect(MainnetWETHPLPVaultPoolInfos.poolInfos[0]?.pool).toBe(
-      deployment.panoptic.pool.panopticPool,
-    )
-    expect(MainnetWETHPLPVaultPoolInfos.poolInfos[0]?.positionScanFromBlock).toBe(25_302_077n)
-    expect(MainnetUSDCPLPVaultPoolInfos.poolInfos[0]?.pool).toBe(
-      deployment.panoptic.pool.panopticPool,
-    )
-    expect(MainnetUSDCPLPVaultPoolInfos.poolInfos[1]?.pool).toBe(
-      '0x0f34e6fCda264349Db10d445BD95f529cbe88090',
-    )
-    expect(MainnetWETHPLPVaultPoolInfos.poolInfos[1]).toMatchObject({
+    expect(MainnetWETHPLPVaultPoolInfos.poolInfos).toHaveLength(1)
+    expect(MainnetUSDCPLPVaultPoolInfos.poolInfos).toHaveLength(1)
+    expect(MainnetWETHPLPVaultPoolInfos.poolInfos[0]).toMatchObject({
       pool: '0x00000000009C7B687e833559e34503f64d7ed7c4',
       token0: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
       token1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
       maxPriceDeviation: 100,
       positionScanFromBlock: 25_631_480n,
     })
-    expect(MainnetUSDCPLPVaultPoolInfos.poolInfos[2]).toMatchObject({
+    expect(MainnetUSDCPLPVaultPoolInfos.poolInfos[0]).toMatchObject({
       pool: '0x00000000009C7B687e833559e34503f64d7ed7c4',
       token0: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
       token1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
       maxPriceDeviation: 100,
       positionScanFromBlock: 25_631_480n,
+    })
+    expect(WethPlpVaultMainnetProdConfig.automation).toEqual({
+      primaryPool: '0x00000000009C7B687e833559e34503f64d7ed7c4',
+      windDownPools: [],
+    })
+    expect(UsdcPlpVaultMainnetProdConfig.automation).toEqual({
+      primaryPool: '0x00000000009C7B687e833559e34503f64d7ed7c4',
+      windDownPools: [],
     })
   })
 

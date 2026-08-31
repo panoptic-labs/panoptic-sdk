@@ -295,6 +295,14 @@ export const queryKeys = {
     [...queryKeys.all, 'positionsWithPremia', chainId.toString(), poolAddress, account] as const,
 
   /**
+   * Key prefix for forfeitable premium. Used both as the query key prefix (the
+   * hook appends the client scope and tokenIds) and for prefix invalidation
+   * after settle / force-exercise mutations.
+   */
+  forfeitablePremium: (chainId: bigint, poolAddress: Address, account: Address) =>
+    [...queryKeys.all, 'forfeitablePremium', chainId.toString(), poolAddress, account] as const,
+
+  /**
    * Key for collateral data.
    */
   collateralData: (chainId: bigint, poolAddress: Address) =>

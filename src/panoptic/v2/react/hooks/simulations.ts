@@ -15,6 +15,9 @@ import {
   type SimulateLiquidateParams,
   type SimulateOpenPositionParams,
   type SimulateSettleParams,
+  type SimulateSettlePremiumBatchParams,
+  type SimulateSettlePremiumFromParams,
+  type SimulateSettleSequenceParams,
   type SimulateSFPMParams,
   type SimulateSwapExactInParams,
   type SimulateSwapExactOutParams,
@@ -27,6 +30,9 @@ import {
   simulateLiquidate,
   simulateOpenPosition,
   simulateSettle,
+  simulateSettlePremiumBatch,
+  simulateSettlePremiumFrom,
+  simulateSettleSequence,
   simulateSFPMBurn,
   simulateSFPMMint,
   simulateSwapExactIn,
@@ -155,6 +161,80 @@ export function useSimulateForceExercise(
       params,
     ] as const,
     queryFn: () => simulateForceExercise({ client: publicClient, poolAddress, ...params! }),
+    enabled: params !== undefined,
+    staleTime: 0,
+  })
+}
+
+/**
+ * Simulate settling several buyers' owed premium at one block, partitioning
+ * them into settleable vs unsettleable and summing the caller's unlocked
+ * premium. Refetches on every call (staleTime 0) so the partition reflects
+ * current chain state.
+ */
+export function useSimulateSettlePremiumBatch(
+  poolAddress: Address,
+  params?: OmitClientAndPool<SimulateSettlePremiumBatchParams>,
+) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sim',
+      'settlePremiumBatch',
+      poolAddress,
+      params?.account,
+      getClientCacheScopeKey(publicClient, clientScope),
+      params,
+    ] as const,
+    queryFn: () => simulateSettlePremiumBatch({ client: publicClient, poolAddress, ...params! }),
+    enabled: params !== undefined,
+    staleTime: 0,
+  })
+}
+
+/**
+ * Simulate a full settle sequence (per-buyer settles + optional close/dispatch)
+ * as the single multicall that will be submitted, returning the caller's net
+ * token flow and gas. Refetches on every call (staleTime 0).
+ */
+export function useSimulateSettleSequence(
+  poolAddress: Address,
+  params?: OmitClientAndPool<SimulateSettleSequenceParams>,
+) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sim',
+      'settleSequence',
+      poolAddress,
+      params?.account,
+      getClientCacheScopeKey(publicClient, clientScope),
+      params,
+    ] as const,
+    queryFn: () => simulateSettleSequence({ client: publicClient, poolAddress, ...params! }),
+    enabled: params !== undefined,
+    staleTime: 0,
+  })
+}
+
+export function useSimulateSettlePremiumFrom(
+  poolAddress: Address,
+  params?: OmitClientAndPool<SimulateSettlePremiumFromParams>,
+) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sim',
+      'settlePremiumFrom',
+      poolAddress,
+      params?.user,
+      getClientCacheScopeKey(publicClient, clientScope),
+      params,
+    ] as const,
+    queryFn: () => simulateSettlePremiumFrom({ client: publicClient, poolAddress, ...params! }),
     enabled: params !== undefined,
     staleTime: 0,
   })

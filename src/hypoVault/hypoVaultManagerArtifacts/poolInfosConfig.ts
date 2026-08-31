@@ -51,26 +51,31 @@ export const BASE_DEFAULT_POOL_INFOS = [
 
 export const BASE_VAULT_ADDRESSES = BASE_DEPLOYMENT.hypovault.vaults
 
+export const MAINNET_ETH_USDC_V4_POOL_INFO = {
+  maxPriceDeviation: MAX_PRICE_DEVIATION,
+  pool: MAINNET_DEPLOYMENT.panoptic.pool.panopticPool,
+  token0: getEthUsdcMarket(MAINNET_DEPLOYMENT).currency0,
+  token1: getEthUsdcMarket(MAINNET_DEPLOYMENT).currency1,
+  positionScanFromBlock: 25_302_077n,
+} as const
+
+export const MAINNET_WSPCXX_USDC_POOL_INFO = {
+  maxPriceDeviation: WSPCXX_USDC_MAX_PRICE_DEVIATION,
+  pool: '0x0f34e6fCda264349Db10d445BD95f529cbe88090',
+  token0: '0x8e2eeD8b8B5E13Ea7BF38e50d7821d2C57309072',
+  token1: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  positionScanFromBlock: 25_302_077n,
+} as const
+
+/** Accountant order used by the v3-authorization release. */
 export const MAINNET_DEFAULT_POOL_INFOS = [
-  {
-    maxPriceDeviation: MAX_PRICE_DEVIATION,
-    pool: MAINNET_DEPLOYMENT.panoptic.pool.panopticPool,
-    token0: getEthUsdcMarket(MAINNET_DEPLOYMENT).currency0,
-    token1: getEthUsdcMarket(MAINNET_DEPLOYMENT).currency1,
-    positionScanFromBlock: 25_302_077n,
-  },
+  MAINNET_ETH_USDC_V4_POOL_INFO,
   MAINNET_USDC_WETH_5BPS_V3_POOL_INFO,
 ] as const
 
 export const MAINNET_USDC_PLP_POOL_INFOS = [
-  MAINNET_DEFAULT_POOL_INFOS[0],
-  {
-    maxPriceDeviation: WSPCXX_USDC_MAX_PRICE_DEVIATION,
-    pool: '0x0f34e6fCda264349Db10d445BD95f529cbe88090',
-    token0: '0x8e2eeD8b8B5E13Ea7BF38e50d7821d2C57309072',
-    token1: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-    positionScanFromBlock: 25_302_077n,
-  },
+  MAINNET_ETH_USDC_V4_POOL_INFO,
+  MAINNET_WSPCXX_USDC_POOL_INFO,
   MAINNET_USDC_WETH_5BPS_V3_POOL_INFO,
 ] as const
 

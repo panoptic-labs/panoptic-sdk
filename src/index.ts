@@ -124,21 +124,29 @@ export { BaseWETHPLPVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts
 export { MainnetLegacyUSDCPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/MainnetLegacyUSDCPLPStrategistLeaves'
 export { MainnetLegacyWETHPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/MainnetLegacyWETHPLPStrategistLeaves'
 export {
+  MAINNET_USDC_PLP_COMPILED_POOL_POLICY,
+  MAINNET_USDC_PLP_POOL_POLICY,
   MainnetUSDCPLPPreviousStrategistLeaves,
   MainnetUSDCPLPStrategistLeaves,
+  MainnetUSDCPLPV3AuthorizedStrategistLeaves,
 } from './hypoVault/hypoVaultManagerArtifacts/MainnetUSDCPLPStrategistLeaves'
 export {
   MainnetUSDCPLPLegacyVaultPoolInfos,
   MainnetUSDCPLPPreviousVaultPoolInfos,
+  MainnetUSDCPLPV3AuthorizedVaultPoolInfos,
   MainnetUSDCPLPVaultPoolInfos,
 } from './hypoVault/hypoVaultManagerArtifacts/MainnetUSDCPLPVaultPoolInfos'
 export {
+  MAINNET_WETH_PLP_COMPILED_POOL_POLICY,
+  MAINNET_WETH_PLP_POOL_POLICY,
   MainnetWETHPLPPreviousStrategistLeaves,
   MainnetWETHPLPStrategistLeaves,
+  MainnetWETHPLPV3AuthorizedStrategistLeaves,
 } from './hypoVault/hypoVaultManagerArtifacts/MainnetWETHPLPStrategistLeaves'
 export {
   MainnetWETHPLPLegacyVaultPoolInfos,
   MainnetWETHPLPPreviousVaultPoolInfos,
+  MainnetWETHPLPV3AuthorizedVaultPoolInfos,
   MainnetWETHPLPVaultPoolInfos,
 } from './hypoVault/hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
 export { SepoliaUSDCPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/SepoliaUSDCPLPStrategistLeaves'

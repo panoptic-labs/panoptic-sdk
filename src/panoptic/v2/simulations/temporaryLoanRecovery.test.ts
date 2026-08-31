@@ -99,6 +99,8 @@ const success = () => ({
   data: {
     netAmount0: 2n,
     netAmount1: -3n,
+    premiaReceived0: null,
+    premiaReceived1: null,
     positionsCreated: [],
     positionsClosed: [11n],
     postCollateral0: 12n,
