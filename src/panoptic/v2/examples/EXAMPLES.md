@@ -30,7 +30,7 @@ It is intentionally high-level so individual example READMEs can focus on implem
 - `14-vertical-spreads`: Build and manage defined-risk vertical structures.
 - `15-calendar-spreads`: Same strike across expiries for term-structure positioning.
 - `16-roll-manager`: Rule-based rolling by delta, distance, or time criteria.
-- `17-risk-guardrails`: Freshness/health checks, safe-mode controls, kill switch.
+- [`17-risk-guardrails`](./intermediate/17-risk-guardrails.ts): Freshness/health checks, safe-mode controls, utilization limits, and retry policy.
 
 ## Advanced Examples
 
