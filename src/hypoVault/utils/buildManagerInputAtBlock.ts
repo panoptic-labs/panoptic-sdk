@@ -3,7 +3,11 @@ import { encodeAbiParameters, parseAbi } from 'viem'
 import { readContract } from 'viem/actions'
 
 import { PanopticVaultAccountantManagerInputAbi } from '../../abis/PanopticVaultAccountantManagerInput'
-import { type PoolInfo, isUnderlyingEquivalentToken } from './buildManagerInput'
+import {
+  type PoolInfo,
+  assertValidManagerInputTokenIds,
+  isUnderlyingEquivalentToken,
+} from './buildManagerInput'
 
 export type BuildManagerInputAtBlockParams = {
   viemClient: Client
@@ -27,11 +31,7 @@ export async function buildManagerInputAtBlock({
   blockNumber,
   erc4626Vaults = [],
 }: BuildManagerInputAtBlockParams): Promise<Hex> {
-  if (tokenIds.length !== poolInfos.length) {
-    throw new Error(
-      `Invalid managerInput tokenIds length: expected ${poolInfos.length}, received ${tokenIds.length}`,
-    )
-  }
+  assertValidManagerInputTokenIds({ tokenIds, expectedPoolCount: poolInfos.length })
 
   const twapTicks = await Promise.all(
     poolInfos.map((poolInfo) =>
