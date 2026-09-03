@@ -328,9 +328,11 @@ export {
   type VaultPoolCandidateTokenIds,
   buildVaultManagerInput,
   buildVaultManagerInputAtBlock,
+  getVaultCandidatePoolInfos,
   getVaultPoolInfos,
   recoverVaultCandidateTokenIdsByPool,
   resolveVaultHistoricalCandidatesByPool,
+  resolveVaultPoolInfosAtBlock,
   resolveVaultTokenIdsByPool,
   verifyVaultOpenTokenIdsAtBlock,
 } from './hypoVault/utils/vaultManagerInput'

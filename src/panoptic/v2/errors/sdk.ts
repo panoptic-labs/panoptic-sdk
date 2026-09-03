@@ -429,3 +429,25 @@ export class SwapTokenMismatchError extends PanopticError {
     )
   }
 }
+
+/**
+ * A premium settlement would advance the seller checkpoint while some
+ * displayed premium is still unavailable, or a required buyer cannot settle.
+ */
+export class UnsafePremiumSettlementError extends PanopticError {
+  override readonly name = 'UnsafePremiumSettlementError'
+
+  constructor(
+    public readonly remainingForfeit: readonly [bigint, bigint],
+    public readonly failedBuyerCount: number,
+    cause?: Error,
+  ) {
+    const [token0, token1] = remainingForfeit
+    super(
+      failedBuyerCount > 0
+        ? `Premium settlement blocked: ${failedBuyerCount} buyer settlement${failedBuyerCount === 1 ? '' : 's'} would fail`
+        : `Premium settlement blocked: uncollectable premium remains (${token0}, ${token1})`,
+      cause,
+    )
+  }
+}

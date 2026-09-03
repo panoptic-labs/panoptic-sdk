@@ -110,6 +110,7 @@ export {
   // Sync & Position Tracking
   SyncTimeoutError,
   UnhealthyPoolError,
+  UnsafePremiumSettlementError,
 } from './sdk'
 
 // Error parsing utilities

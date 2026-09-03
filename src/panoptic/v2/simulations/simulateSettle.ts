@@ -1,24 +1,21 @@
-/**
- * Settle simulation for the Panoptic v2 SDK.
- * @module v2/simulations/simulateSettle
- */
+/** Fee-protected premium settlement simulation. @module v2/simulations/simulateSettle */
 
 import type { Address, Hex, PublicClient } from 'viem'
 import { decodeFunctionResult, encodeFunctionData } from 'viem'
 
 import { panopticPoolV2Abi } from '../../../generated'
 import { getBlockMeta } from '../clients'
-import { PanopticError } from '../errors'
+import { PanopticError, UnsafePremiumSettlementError } from '../errors'
 import { getCurrentPositionSizes } from '../reads/positionSizes'
+import { getForfeitablePremium } from '../reads/premia'
 import type { SettleSimulation, SimulationResult, TokenFlow } from '../types'
+import { buildProtectedSettlePlan } from '../writes/protectedSettle'
+import type { SettleSequenceTarget } from '../writes/settleSequence'
+import { buildSettleSequenceCalls } from '../writes/settleSequence'
+import { simulateSettlePremiumBatch } from './simulateSettlePremiumBatch'
 import { simulateWithTokenFlow } from './tokenFlow'
 
-/** BIT_MASK_128 = (1n << 128n) - 1n */
 const BIT_MASK_128 = (1n << 128n) - 1n
-
-/**
- * PanopticPool multicall ABI (inherited from Uniswap).
- */
 const multicallAbi = [
   {
     type: 'function',
@@ -29,46 +26,104 @@ const multicallAbi = [
   },
 ] as const
 
-/**
- * Parameters for simulating premium settlement.
- */
 export interface SimulateSettleParams {
-  /** Public client */
   client: PublicClient
-  /** PanopticPool address */
   poolAddress: Address
-  /** Account address */
   account: Address
-  /** TokenIds to settle in this dispatch (subset of the account's held list). */
   positionIdList: bigint[]
-  /**
-   * Full held tokenId list AFTER dispatch (must hash-match s_positionsHash).
-   * Defaults to `positionIdList` — correct only when settling ALL held
-   * positions.
-   */
   finalPositionIdList?: bigint[]
-  /**
-   * Current stored positionSize for each tokenId in `positionIdList`. When
-   * omitted, sizes are read on-chain. Must match `positionIdList` order —
-   * anything other than the stored size will simulate a BURN, not a settle.
-   */
   positionSizes?: bigint[]
-  /** Optional tokenId to compute forfeit amounts for */
-  tokenId?: bigint
-  /** Optional block number for simulation */
+  /** Buyers holding longs against the short chunks being settled. */
+  targets?: SettleSequenceTarget[]
+  usePremiaAsCollateral?: boolean
+  builderCode?: bigint
+  /**
+   * Allow settlement when premium remains but no buyer settlement or chunk
+   * poke can collect it (for example, width-zero legs). Avoidable forfeiture
+   * still fails closed. Default false.
+   */
+  allowForfeit?: boolean
   blockNumber?: bigint
 }
 
-/**
- * Simulate premium settlement.
- *
- * When `tokenId` is provided, the simulation also computes forfeit amounts
- * by chaining the dispatch with `getFullPositionsData` reads
- * in a single multicall.
- *
- * @param params - Simulation parameters
- * @returns Simulation result with settlement data or error
- */
+function encodeDispatch(plan: ReturnType<typeof buildProtectedSettlePlan>): Hex {
+  const dispatch = plan.dispatch
+  return encodeFunctionData({
+    abi: panopticPoolV2Abi,
+    functionName: 'dispatch',
+    args: [
+      dispatch.positionIdList,
+      dispatch.finalPositionIdList,
+      dispatch.positionSizes,
+      dispatch.tickAndSpreadLimits.map(
+        (limits) =>
+          [Number(limits[0]), Number(limits[1]), Number(limits[2])] as readonly [
+            number,
+            number,
+            number,
+          ],
+      ),
+      dispatch.usePremiaAsCollateral,
+      dispatch.builderCode,
+    ],
+  })
+}
+
+function decodeShortPremium(data: Hex): readonly [bigint, bigint] {
+  const packed = decodeFunctionResult({
+    abi: panopticPoolV2Abi,
+    functionName: 'getFullPositionsData',
+    data,
+  })[0]
+  return [packed & BIT_MASK_128, packed >> 128n]
+}
+
+async function remainingForfeitAfterProtection(params: {
+  client: PublicClient
+  poolAddress: Address
+  account: Address
+  positionIdList: bigint[]
+  finalPositionIdList: bigint[]
+  targets: SettleSequenceTarget[]
+  plan: ReturnType<typeof buildProtectedSettlePlan>
+  blockNumber: bigint
+  initial: readonly [bigint, bigint]
+}): Promise<[bigint, bigint]> {
+  const { client, poolAddress, account, positionIdList, targets, plan, blockNumber, initial } =
+    params
+  if (targets.length === 0 && plan.collectionDispatch === undefined) return [...initial]
+
+  const protectionCalls = buildSettleSequenceCalls({
+    positionIdListFrom: params.finalPositionIdList,
+    targets,
+    dispatch: plan.collectionDispatch,
+  })
+  const availableCall = encodeFunctionData({
+    abi: panopticPoolV2Abi,
+    functionName: 'getFullPositionsData',
+    args: [account, false, positionIdList],
+  })
+  const totalCall = encodeFunctionData({
+    abi: panopticPoolV2Abi,
+    functionName: 'getFullPositionsData',
+    args: [account, true, positionIdList],
+  })
+  const { result } = await client.simulateContract({
+    address: poolAddress,
+    abi: multicallAbi,
+    functionName: 'multicall',
+    args: [[...protectionCalls, availableCall, totalCall]],
+    account,
+    blockNumber,
+  })
+  const available = decodeShortPremium(result[result.length - 2])
+  const total = decodeShortPremium(result[result.length - 1])
+  return [
+    total[0] > available[0] ? total[0] - available[0] : 0n,
+    total[1] > available[1] ? total[1] - available[1] : 0n,
+  ]
+}
+
 export async function simulateSettle(
   params: SimulateSettleParams,
 ): Promise<SimulationResult<SettleSimulation>> {
@@ -77,12 +132,14 @@ export async function simulateSettle(
     poolAddress,
     account,
     positionIdList,
-    finalPositionIdList,
+    finalPositionIdList = positionIdList,
     positionSizes: providedSizes,
-    tokenId,
+    targets = [],
+    usePremiaAsCollateral = false,
+    builderCode = 0n,
+    allowForfeit = false,
     blockNumber,
   } = params
-
   const targetBlockNumber = blockNumber ?? (await client.getBlockNumber())
   const metaPromise = getBlockMeta({ client, blockNumber: targetBlockNumber })
 
@@ -90,8 +147,6 @@ export async function simulateSettle(
     if (providedSizes && providedSizes.length !== positionIdList.length) {
       throw new PanopticError('simulateSettle: positionSizes length must match positionIdList')
     }
-    // Must be current stored sizes — dispatch treats any mismatch (incl. 0) as a burn.
-    // OLD (buggy): const positionSizes = positionIdList.map(() => 0n)
     const positionSizes =
       providedSizes ??
       (await getCurrentPositionSizes({
@@ -101,25 +156,65 @@ export async function simulateSettle(
         positionIdList,
         blockNumber: targetBlockNumber,
       }))
-    const tickAndSpreadLimits = positionIdList.map(() => [-887272n, 887272n, 0n] as const)
-
-    // Encode dispatch call data
-    const callData = encodeFunctionData({
-      abi: panopticPoolV2Abi,
-      functionName: 'dispatch',
-      args: [
-        positionIdList,
-        finalPositionIdList ?? positionIdList,
-        positionSizes.map((s) => BigInt(s) as unknown as bigint & { readonly __uint128: true }),
-        tickAndSpreadLimits.map(
-          (t) => [Number(t[0]), Number(t[1]), Number(t[2])] as readonly [number, number, number],
-        ),
-        false,
-        0n,
-      ],
+    const plan = buildProtectedSettlePlan({
+      positionIdList,
+      finalPositionIdList,
+      positionSizes,
+      usePremiaAsCollateral,
+      builderCode,
     })
+    const initialForfeit = await getForfeitablePremium({
+      client,
+      poolAddress,
+      account,
+      tokenIds: positionIdList,
+      blockNumber: targetBlockNumber,
+    })
+    const initial: [bigint, bigint] = [initialForfeit.forfeit0, initialForfeit.forfeit1]
 
-    // Simulate with token flow measurement using PanopticPool.multicall + getAssetsOf
+    if (targets.length > 0) {
+      const buyers = await simulateSettlePremiumBatch({
+        client,
+        poolAddress,
+        account,
+        positionIdListFrom: finalPositionIdList,
+        targets,
+        blockNumber: targetBlockNumber,
+      })
+      if (buyers.unsettleableCount > 0) {
+        throw new UnsafePremiumSettlementError(initial, buyers.unsettleableCount)
+      }
+    }
+
+    const remainingForfeit = await remainingForfeitAfterProtection({
+      client,
+      poolAddress,
+      account,
+      positionIdList,
+      finalPositionIdList,
+      targets,
+      plan,
+      blockNumber: targetBlockNumber,
+      initial,
+    })
+    if ((remainingForfeit[0] > 0n || remainingForfeit[1] > 0n) && !allowForfeit) {
+      throw new UnsafePremiumSettlementError(remainingForfeit, 0)
+    }
+
+    const callData =
+      targets.length === 0
+        ? encodeDispatch(plan)
+        : encodeFunctionData({
+            abi: panopticPoolV2Abi,
+            functionName: 'multicall',
+            args: [
+              buildSettleSequenceCalls({
+                positionIdListFrom: finalPositionIdList,
+                targets,
+                dispatch: plan.dispatch,
+              }),
+            ],
+          })
     const flowResult = await simulateWithTokenFlow({
       client,
       poolAddress,
@@ -127,49 +222,28 @@ export async function simulateSettle(
       callData,
       blockNumber: targetBlockNumber,
     })
-
     if (!flowResult.success || !flowResult.tokenFlow) {
-      throw (
-        flowResult.rawError ?? new PanopticError(flowResult.error || 'Token flow simulation failed')
-      )
+      throw flowResult.rawError ?? new PanopticError(flowResult.error || 'Simulation failed')
     }
 
     const tokenFlow: TokenFlow = flowResult.tokenFlow
-
-    // Compute forfeit amounts if tokenId is provided
-    let forfeitAmounts: [bigint, bigint] | undefined
-    if (tokenId !== undefined) {
-      forfeitAmounts = await computeForfeitAmounts({
-        client,
-        poolAddress,
-        account,
-        positionIdList,
-        tokenId,
-        dispatchCallData: callData,
-        blockNumber: targetBlockNumber,
-      })
-    }
-
-    const _meta = await metaPromise
-
-    // Signed flow: positive = collected, negative = paid.
-    const data: SettleSimulation = {
-      premiaReceived0: tokenFlow.delta0,
-      premiaReceived1: tokenFlow.delta1,
-      postCollateral0: tokenFlow.balanceAfter0,
-      postCollateral1: tokenFlow.balanceAfter1,
-      forfeitAmounts,
-    }
-
     return {
       success: true,
-      data,
+      data: {
+        premiaReceived0: tokenFlow.delta0,
+        premiaReceived1: tokenFlow.delta1,
+        postCollateral0: tokenFlow.balanceAfter0,
+        postCollateral1: tokenFlow.balanceAfter1,
+        premiumProtected: [initial[0] - remainingForfeit[0], initial[1] - remainingForfeit[1]],
+        remainingForfeit,
+        usesPoke: plan.pokingTokenIds.length > 0,
+        settledBuyerCount: targets.length,
+      },
       gasEstimate: flowResult.gasEstimate,
       tokenFlow,
-      _meta,
+      _meta: await metaPromise,
     }
   } catch (error) {
-    const _meta = await metaPromise
     return {
       success: false,
       error:
@@ -179,71 +253,7 @@ export async function simulateSettle(
               error instanceof Error ? error.message : 'Simulation failed',
               error instanceof Error ? error : undefined,
             ),
-      _meta,
+      _meta: await metaPromise,
     }
-  }
-}
-
-/**
- * Compute forfeit amounts by chaining dispatch + getFullPositionsData
- * in a single PanopticPool.multicall.
- */
-async function computeForfeitAmounts(params: {
-  client: PublicClient
-  poolAddress: Address
-  account: Address
-  positionIdList: bigint[]
-  tokenId: bigint
-  dispatchCallData: Hex
-  blockNumber: bigint
-}): Promise<[bigint, bigint]> {
-  const { client, poolAddress, account, tokenId, dispatchCallData, blockNumber } = params
-
-  // Encode getFullPositionsData calls (available = false, total = true)
-  const feesCallAvailable = encodeFunctionData({
-    abi: panopticPoolV2Abi,
-    functionName: 'getFullPositionsData',
-    args: [account, false, [tokenId]],
-  })
-  const feesCallTotal = encodeFunctionData({
-    abi: panopticPoolV2Abi,
-    functionName: 'getFullPositionsData',
-    args: [account, true, [tokenId]],
-  })
-
-  try {
-    // Chain: dispatch (settle) + fees(available) + fees(total) in one multicall
-    const { result } = await client.simulateContract({
-      address: poolAddress,
-      abi: multicallAbi,
-      functionName: 'multicall',
-      args: [[dispatchCallData, feesCallAvailable, feesCallTotal]],
-      account,
-      blockNumber,
-    })
-
-    // Decode the two fee reads (result[0] is dispatch, result[1] and result[2] are fees)
-    const decodeFeesResult = (data: Hex): bigint => {
-      return decodeFunctionResult({
-        abi: panopticPoolV2Abi,
-        functionName: 'getFullPositionsData',
-        data,
-      })[0]
-    }
-
-    const availablePremium = decodeFeesResult(result[1])
-    const totalPremium = decodeFeesResult(result[2])
-
-    const available0 = availablePremium & BIT_MASK_128
-    const available1 = availablePremium >> 128n
-    const total0 = totalPremium & BIT_MASK_128
-    const total1 = totalPremium >> 128n
-
-    return [total0 - available0, total1 - available1]
-  } catch (error) {
-    throw new PanopticError(
-      'Forfeit amount computation failed',
-      error instanceof Error ? error : undefined,
-    )
   }
 }

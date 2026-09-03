@@ -163,8 +163,14 @@ export interface SettleSimulation {
   postCollateral0: bigint
   /** Post-settle collateral for token 1 */
   postCollateral1: bigint
-  /** Forfeit amounts [token0, token1] — present when tokenId was provided */
-  forfeitAmounts?: [bigint, bigint]
+  /** Premium made collectable by buyer settlement and chunk pokes. */
+  premiumProtected: [bigint, bigint]
+  /** Premium still unavailable after protection and forfeited by settlement. */
+  remainingForfeit: [bigint, bigint]
+  /** Whether the settlement includes a temporary chunk-liquidity poke. */
+  usesPoke: boolean
+  /** Number of buyer accounts settled before self-settlement. */
+  settledBuyerCount: number
 }
 
 /**

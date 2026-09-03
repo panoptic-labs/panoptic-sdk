@@ -575,19 +575,25 @@ export function useSettleAccumulatedPremia(poolAddress: Address) {
       const wallet = requireWallet({ walletClient, account })
       return settleAccumulatedPremia({ client: publicClient, ...wallet, poolAddress, ...params })
     },
-    onSuccess: (_data, _params, context) => {
+    onSuccess: (_data, params, context) => {
       if (!context) {
         return
       }
 
-      invalidateKeys(
-        queryClient,
-        mutationEffects.settleAccumulatedPremia({
+      invalidateKeys(queryClient, [
+        ...mutationEffects.settleAccumulatedPremia({
           chainId,
           poolAddress,
           account: context.signerAccount,
         }),
-      )
+        ...(params.targets ?? []).flatMap((target) =>
+          mutationEffects.settleAccumulatedPremia({
+            chainId,
+            poolAddress,
+            account: target.user,
+          }),
+        ),
+      ])
     },
   })
 }

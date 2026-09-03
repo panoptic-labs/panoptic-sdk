@@ -7,12 +7,17 @@ import {
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  getVaultCandidatePoolInfos,
   recoverVaultCandidateTokenIdsByPool,
+  resolveVaultPoolInfosAtBlock,
   resolveVaultTokenIdsByPool,
 } from './vaultManagerInput'
 
 const readContractMock = vi.fn()
 const getOpenPositionIdsMock = vi.fn()
+const resolveAuthorizationMock = vi.fn()
+const getAuthorizationGenerationsMock = vi.fn()
+const getHistoricalPoolConfigurationMock = vi.fn()
 
 vi.mock('viem/actions', () => ({
   readContract: (...args: unknown[]) => readContractMock(...args),
@@ -20,6 +25,18 @@ vi.mock('viem/actions', () => ({
 
 vi.mock('../../panoptic/v2/sync/getTrackedPositionIds', () => ({
   getOpenPositionIds: (...args: unknown[]) => getOpenPositionIdsMock(...args),
+}))
+
+vi.mock('../mainnetV3Authorization', () => ({
+  MAINNET_V3_AUTHORIZATION_BLOCK: 100n,
+  getMainnetV3AuthorizationGenerations: (...args: unknown[]) =>
+    getAuthorizationGenerationsMock(...args),
+  resolveMainnetV3AuthorizationArtifacts: (...args: unknown[]) => resolveAuthorizationMock(...args),
+}))
+
+vi.mock('../mainnetVaultPoolHistory', () => ({
+  getMainnetVaultPoolConfigurationAtBlock: (...args: unknown[]) =>
+    getHistoricalPoolConfigurationMock(...args),
 }))
 
 /**
@@ -50,6 +67,45 @@ function jsonResponse(body: unknown) {
     json: async () => body,
   }
 }
+
+describe('vault pool generation selection', () => {
+  const vaultAddress = '0xCd70829727D5524Dee39DA7E824BCfe0F0879Ff4' as const
+  const poolA = {
+    pool: '0x0000000000000000000000000000000000000010' as const,
+    token0: '0x0000000000000000000000000000000000000001' as const,
+    token1: '0x0000000000000000000000000000000000000002' as const,
+    maxPriceDeviation: 100,
+  }
+  const poolB = {
+    ...poolA,
+    pool: '0x0000000000000000000000000000000000000020' as const,
+  }
+
+  it('selects the atomically authorized generation at and after the transition boundary', async () => {
+    resolveAuthorizationMock.mockReset()
+    resolveAuthorizationMock.mockResolvedValue({ poolInfos: [poolB] })
+
+    await expect(
+      resolveVaultPoolInfosAtBlock({
+        viemClient: {} as never,
+        chainId: 1,
+        vaultAddress,
+        blockNumber: 100n,
+      }),
+    ).resolves.toEqual([poolB])
+  })
+
+  it('keeps candidates for pools from every recognized generation', () => {
+    getAuthorizationGenerationsMock.mockReset()
+    getAuthorizationGenerationsMock.mockReturnValue({
+      previous: { poolInfos: [poolA] },
+      next: { poolInfos: [poolA, poolB] },
+      current: { poolInfos: [poolB] },
+    })
+
+    expect(getVaultCandidatePoolInfos(vaultAddress, 1)).toEqual([poolA, poolB])
+  })
+})
 
 describe('resolveVaultTokenIdsByPool', () => {
   it('prefers subgraph open account balances when available', async () => {

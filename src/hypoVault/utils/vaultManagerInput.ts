@@ -21,6 +21,11 @@ import {
 } from '../hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
 import { SepoliaUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 import { SepoliaWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaWETHPLPVaultPoolInfos'
+import {
+  getMainnetV3AuthorizationGenerations,
+  MAINNET_V3_AUTHORIZATION_BLOCK,
+  resolveMainnetV3AuthorizationArtifacts,
+} from '../mainnetV3Authorization'
 import { getMainnetVaultPoolConfigurationAtBlock } from '../mainnetVaultPoolHistory'
 import type { PoolInfo } from './buildManagerInput'
 import { buildManagerInputAtBlock } from './buildManagerInputAtBlock'
@@ -438,6 +443,66 @@ export function getVaultPoolInfos(vaultAddress: Address, chainId?: number): read
   return artifact?.poolInfos ?? []
 }
 
+/**
+ * Returns every pool that can contribute historical position candidates for a vault.
+ * The live accountant generation is selected separately when encoding manager input.
+ */
+export function getVaultCandidatePoolInfos(
+  vaultAddress: Address,
+  chainId: number,
+): readonly PoolInfo[] {
+  const generations = getMainnetV3AuthorizationGenerations({ chainId, vaultAddress })
+  const candidates =
+    generations === null
+      ? getVaultPoolInfos(vaultAddress, chainId)
+      : [
+          ...generations.previous.poolInfos,
+          ...generations.next.poolInfos,
+          ...generations.current.poolInfos,
+        ]
+  const byPoolAddress = new Map<string, PoolInfo>()
+  for (const candidate of candidates) {
+    const key = candidate.pool.toLowerCase()
+    if (!byPoolAddress.has(key)) {
+      byPoolAddress.set(key, candidate)
+    }
+  }
+  return [...byPoolAddress.values()]
+}
+
+/** Selects the pool tuple authorized at an exact block before encoding manager input. */
+export async function resolveVaultPoolInfosAtBlock({
+  viemClient,
+  chainId,
+  vaultAddress,
+  blockNumber,
+}: {
+  viemClient: Client
+  chainId: number
+  vaultAddress: Address
+  blockNumber: bigint
+}): Promise<readonly PoolInfo[]> {
+  if (chainId === MAINNET_CHAIN_ID && blockNumber >= MAINNET_V3_AUTHORIZATION_BLOCK) {
+    const authorization = await resolveMainnetV3AuthorizationArtifacts({
+      viemClient,
+      chainId,
+      vaultAddress,
+      blockNumber,
+    })
+    if (authorization !== null) {
+      return authorization.poolInfos
+    }
+  }
+
+  return (
+    getMainnetVaultPoolConfigurationAtBlock({
+      chainId,
+      vaultAddress,
+      blockNumber,
+    })?.poolInfos ?? getVaultPoolInfos(vaultAddress, chainId)
+  )
+}
+
 export type VaultPoolCandidateTokenIds = {
   poolAddress: Address
   /**
@@ -794,13 +859,12 @@ export async function buildVaultManagerInputAtBlock({
   panopticSubgraphUrl?: string
   fetchFn?: FetchLike
 }): Promise<`0x${string}`> {
-  const historicalPoolConfiguration = getMainnetVaultPoolConfigurationAtBlock({
+  const poolInfos = await resolveVaultPoolInfosAtBlock({
+    viemClient,
     chainId,
     vaultAddress,
     blockNumber,
   })
-  const poolInfos =
-    historicalPoolConfiguration?.poolInfos ?? getVaultPoolInfos(vaultAddress, chainId)
   if (poolInfos.length === 0) {
     return DEFAULT_MANAGER_INPUT
   }

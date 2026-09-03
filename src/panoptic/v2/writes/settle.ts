@@ -3,14 +3,23 @@
  * @module v2/writes/settle
  */
 
-import type { Address, PublicClient, WalletClient } from 'viem'
+import type { Address, ContractFunctionArgs, PublicClient, WalletClient } from 'viem'
 
 import { panopticPoolV2Abi } from '../../../generated'
 import { PanopticError } from '../errors'
 import { getCurrentPositionSizes } from '../reads/positionSizes'
+import { simulateSettle } from '../simulations/simulateSettle'
 import type { TxOverrides, TxReceipt, TxResult } from '../types'
-import type { TickAndSpreadLimits } from './position'
+import { buildProtectedSettlePlan } from './protectedSettle'
+import type { SettleSequenceTarget } from './settleSequence'
+import { executeSettleSequence } from './settleSequence'
 import { submitWrite } from './utils'
+
+type DispatchPositionSizes = ContractFunctionArgs<
+  typeof panopticPoolV2Abi,
+  'nonpayable',
+  'dispatch'
+>[2]
 
 /**
  * Parameters for settling accumulated premia.
@@ -55,6 +64,16 @@ export interface SettleParams {
    * explicitly to eliminate that window.
    */
   positionSizes?: bigint[]
+  /** Buyers holding longs against the short chunks being settled. */
+  targets?: SettleSequenceTarget[]
+  /**
+   * Skip the SDK preflight when the caller already simulated or intentionally
+   * accepts settlement risk. The transaction itself is still simulated by
+   * the write client. Default false.
+   */
+  skipPreflight?: boolean
+  /** Allow irreducible forfeiture on positions with no available protection. */
+  allowForfeit?: boolean
   /** Whether to use premia as collateral */
   usePremiaAsCollateral?: boolean
   /** Builder code */
@@ -93,6 +112,9 @@ export async function settleAccumulatedPremia(params: SettleParams): Promise<TxR
     positionIdList,
     finalPositionIdList,
     positionSizes: providedSizes,
+    targets = [],
+    skipPreflight = false,
+    allowForfeit = false,
     usePremiaAsCollateral = false,
     builderCode = 0n,
     txOverrides,
@@ -111,9 +133,43 @@ export async function settleAccumulatedPremia(params: SettleParams): Promise<TxR
   const positionSizes: bigint[] =
     providedSizes ??
     (await getCurrentPositionSizes({ client, poolAddress, account, positionIdList }))
-  const tickAndSpreadLimits: TickAndSpreadLimits[] = positionIdList.map(
-    () => [-887272n, 887272n, 0n] as const,
-  )
+  const heldPositions = finalPositionIdList ?? positionIdList
+  if (!skipPreflight) {
+    const simulation = await simulateSettle({
+      client,
+      poolAddress,
+      account,
+      positionIdList,
+      finalPositionIdList: heldPositions,
+      positionSizes,
+      targets,
+      usePremiaAsCollateral,
+      builderCode,
+      allowForfeit,
+    })
+    if (!simulation.success) throw simulation.error
+  }
+
+  const { dispatch } = buildProtectedSettlePlan({
+    positionIdList,
+    finalPositionIdList: heldPositions,
+    positionSizes,
+    usePremiaAsCollateral,
+    builderCode,
+  })
+
+  if (targets.length > 0) {
+    return executeSettleSequence({
+      client,
+      walletClient,
+      account,
+      poolAddress,
+      positionIdListFrom: heldPositions,
+      targets,
+      dispatch,
+      txOverrides,
+    })
+  }
 
   return submitWrite({
     client,
@@ -123,14 +179,14 @@ export async function settleAccumulatedPremia(params: SettleParams): Promise<TxR
     abi: panopticPoolV2Abi,
     functionName: 'dispatch',
     args: [
-      positionIdList,
-      finalPositionIdList ?? positionIdList,
-      positionSizes.map((s) => BigInt(s) as unknown as bigint & { readonly __uint128: true }),
-      tickAndSpreadLimits.map(
+      dispatch.positionIdList,
+      dispatch.finalPositionIdList,
+      dispatch.positionSizes as DispatchPositionSizes,
+      dispatch.tickAndSpreadLimits.map(
         (t) => [Number(t[0]), Number(t[1]), Number(t[2])] as readonly [number, number, number],
       ),
-      usePremiaAsCollateral,
-      builderCode,
+      dispatch.usePremiaAsCollateral,
+      dispatch.builderCode,
     ],
     txOverrides,
   })

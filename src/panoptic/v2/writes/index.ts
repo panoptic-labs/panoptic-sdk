@@ -102,6 +102,12 @@ export {
 
 // Settlement
 export {
+  type BuildProtectedSettleDispatchParams,
+  type ProtectedSettlePlan,
+  buildProtectedSettleDispatch,
+  buildProtectedSettlePlan,
+} from './protectedSettle'
+export {
   type SettleParams,
   settleAccumulatedPremia,
   settleAccumulatedPremiaAndWait,

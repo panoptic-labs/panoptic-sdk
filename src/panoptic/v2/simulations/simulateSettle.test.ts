@@ -1,7 +1,8 @@
-import { decodeFunctionData } from 'viem'
+import { decodeFunctionData, encodeFunctionResult } from 'viem'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { panopticPoolV2Abi } from '../../../generated'
+import { createTokenIdBuilder } from '../tokenId'
 import { simulateSettle } from './simulateSettle'
 
 vi.mock('../clients', () => ({
@@ -13,17 +14,45 @@ vi.mock('../clients', () => ({
 const getCurrentPositionSizes = vi.hoisted(() => vi.fn())
 vi.mock('../reads/positionSizes', () => ({ getCurrentPositionSizes }))
 
+const getForfeitablePremium = vi.hoisted(() => vi.fn())
+vi.mock('../reads/premia', () => ({ getForfeitablePremium }))
+
 const simulateWithTokenFlow = vi.hoisted(() => vi.fn())
 vi.mock('./tokenFlow', () => ({ simulateWithTokenFlow }))
 
+const simulateSettlePremiumBatch = vi.hoisted(() => vi.fn())
+vi.mock('./simulateSettlePremiumBatch', () => ({ simulateSettlePremiumBatch }))
+
 const account = '0x0000000000000000000000000000000000000001' as `0x${string}`
 const poolAddress = '0x0000000000000000000000000000000000000002' as `0x${string}`
+const shortTokenId = createTokenIdBuilder(10n << 48n)
+  .addPut({ strike: 0n, width: 10n, optionRatio: 1n, isLong: false })
+  .build()
 
-const client = { getBlockNumber: vi.fn().mockResolvedValue(1n) } as never
+const simulateContract = vi.fn()
+const client = { getBlockNumber: vi.fn().mockResolvedValue(1n), simulateContract } as never
 
 beforeEach(() => {
   getCurrentPositionSizes.mockReset()
   simulateWithTokenFlow.mockReset()
+  getForfeitablePremium.mockReset()
+  getForfeitablePremium.mockResolvedValue({ forfeit0: 0n, forfeit1: 0n })
+  simulateSettlePremiumBatch.mockReset()
+  simulateContract.mockReset()
+  simulateContract.mockResolvedValue({
+    result: [
+      encodeFunctionResult({
+        abi: panopticPoolV2Abi,
+        functionName: 'getFullPositionsData',
+        result: [0n, 0n, [], [], []],
+      }),
+      encodeFunctionResult({
+        abi: panopticPoolV2Abi,
+        functionName: 'getFullPositionsData',
+        result: [10n + (20n << 128n), 0n, [], [], []],
+      }),
+    ],
+  })
   simulateWithTokenFlow.mockResolvedValue({
     success: true,
     tokenFlow: { delta0: -50n, delta1: 200n, balanceAfter0: 0n, balanceAfter1: 0n },
@@ -106,5 +135,60 @@ describe('simulateSettle', () => {
       positionSizes: [1n],
     })
     expect(result.success).toBe(false)
+  })
+
+  it('fails closed when any required buyer cannot settle', async () => {
+    getForfeitablePremium.mockResolvedValue({ forfeit0: 10n, forfeit1: 0n })
+    simulateSettlePremiumBatch.mockResolvedValue({ unsettleableCount: 1 })
+    const result = await simulateSettle({
+      client,
+      poolAddress,
+      account,
+      positionIdList: [11n],
+      positionSizes: [1n],
+      targets: [
+        {
+          user: '0x0000000000000000000000000000000000000003',
+          positionIdList: [33n],
+          tokenId: 33n,
+        },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(result.error.name).toBe('UnsafePremiumSettlementError')
+    expect(simulateWithTokenFlow).not.toHaveBeenCalled()
+  })
+
+  it('reports irreducible forfeit when the caller explicitly accepts it', async () => {
+    getForfeitablePremium.mockResolvedValue({ forfeit0: 10n, forfeit1: 20n })
+    const result = await simulateSettle({
+      client,
+      poolAddress,
+      account,
+      positionIdList: [shortTokenId],
+      positionSizes: [1n],
+      allowForfeit: true,
+    })
+
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.data.remainingForfeit).toEqual([10n, 20n])
+    expect(result.data.premiumProtected).toEqual([0n, 0n])
+  })
+
+  it('fails closed on irreducible forfeit by default', async () => {
+    getForfeitablePremium.mockResolvedValue({ forfeit0: 10n, forfeit1: 0n })
+    const result = await simulateSettle({
+      client,
+      poolAddress,
+      account,
+      positionIdList: [11n],
+      positionSizes: [1n],
+    })
+
+    expect(result.success).toBe(false)
+    expect(simulateWithTokenFlow).not.toHaveBeenCalled()
   })
 })

@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type * as MainnetVaultPoolHistoryModule from '../mainnetVaultPoolHistory'
-import { getMainnetVaultPoolConfigurationAtBlock } from '../mainnetVaultPoolHistory'
-import { verifyVaultOpenTokenIdsAtBlock } from '../utils/vaultManagerInput'
+import {
+  resolveVaultPoolInfosAtBlock,
+  verifyVaultOpenTokenIdsAtBlock,
+} from '../utils/vaultManagerInput'
 import { getVaultApyStrategy, setVaultApyStrategyOverride } from './strategies'
 
 vi.mock('../chainDeployments', () => ({
@@ -34,17 +35,12 @@ vi.mock('../hypoVaultManagerConfigs/vaultToConfig', () => ({
   getHypoVaultConfigForVault: vi.fn(() => null),
 }))
 
-vi.mock('../mainnetVaultPoolHistory', async (importOriginal) => ({
-  ...(await importOriginal<typeof MainnetVaultPoolHistoryModule>()),
-  getMainnetVaultPoolConfigurationAtBlock: vi.fn(() => null),
-}))
-
 vi.mock('../utils/buildManagerInputAtBlock', () => ({
   buildManagerInputAtBlock: vi.fn(async () => '0x1234'),
 }))
 
 vi.mock('../utils/vaultManagerInput', () => ({
-  getVaultPoolInfos: vi.fn(() => [
+  getVaultCandidatePoolInfos: vi.fn(() => [
     {
       maxPriceDeviation: 100,
       pool: '0x00000000000000000000000000000000000000aa',
@@ -53,6 +49,14 @@ vi.mock('../utils/vaultManagerInput', () => ({
     },
   ]),
   resolveVaultTokenIdsByPool: vi.fn(async () => [[]]),
+  resolveVaultPoolInfosAtBlock: vi.fn(async () => [
+    {
+      maxPriceDeviation: 100,
+      pool: '0x00000000000000000000000000000000000000aa',
+      token0: '0x00000000000000000000000000000000000000bb',
+      token1: '0x00000000000000000000000000000000000000cc',
+    },
+  ]),
   resolveVaultHistoricalCandidatesByPool: vi.fn(async () => []),
   verifyVaultOpenTokenIdsAtBlock: vi.fn(async () => [[]]),
 }))
@@ -194,9 +198,7 @@ describe('getVaultApyStrategy', () => {
         token1: '0x00000000000000000000000000000000000000cc',
       },
     ] as const
-    vi.mocked(getMainnetVaultPoolConfigurationAtBlock).mockReturnValueOnce({
-      poolInfos,
-    } as never)
+    vi.mocked(resolveVaultPoolInfosAtBlock).mockResolvedValueOnce(poolInfos)
     const candidates = [
       { poolAddress: poolInfos[0].pool, candidates: [11n] },
       { poolAddress: poolInfos[1].pool, candidates: [] },

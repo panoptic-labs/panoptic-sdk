@@ -120,6 +120,7 @@ export {
   UnauthorizedUniswapCallbackError,
   UnderOverFlowError,
   UnhealthyPoolError,
+  UnsafePremiumSettlementError,
   WrongPoolIdError,
   WrongUniswapPoolError,
   ZeroAddressError,
@@ -684,6 +685,7 @@ export type {
   ApproveParams,
   ApprovePoolParams,
   BorrowParams,
+  BuildProtectedSettleDispatchParams,
   CancelParams,
   CheckApprovalParams,
   ClosePositionParams,
@@ -703,6 +705,7 @@ export type {
   PreviewBorrowParams,
   PreviewBorrowResult,
   PreviewWrapParams,
+  ProtectedSettlePlan,
   RedeemParams,
   RepayParams,
   RollPositionParams,
@@ -737,6 +740,8 @@ export {
   buildCreditSwapCall,
   // Position operations
   buildOpenPositionCalldata,
+  buildProtectedSettleDispatch,
+  buildProtectedSettlePlan,
   buildSettleSequenceCalls,
   // Loan utilities
   buildUniqueCredit,
@@ -987,6 +992,17 @@ export {
   // Display formatters
   truncateAddress,
 } from './formatters'
+
+// ============================================================================
+// Strike ladder (pure, width-scaled)
+// ============================================================================
+export type { LadderStrike, StrikeClassification, StrikeOrientation } from './strike'
+export {
+  classifyStrike,
+  ladderStrikeSequence,
+  resolveLadderStrike,
+  STRIKE_LADDER_TARGET_STRIKES,
+} from './strike'
 
 // ============================================================================
 // Greeks (Client-side)

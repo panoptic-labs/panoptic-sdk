@@ -13,12 +13,12 @@ import { MainnetWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/Mainn
 import { SepoliaUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 import { SepoliaWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaWETHPLPVaultPoolInfos'
 import { getHypoVaultConfigForVault } from '../hypoVaultManagerConfigs/vaultToConfig'
-import { getMainnetVaultPoolConfigurationAtBlock } from '../mainnetVaultPoolHistory'
 import { buildManagerInputAtBlock } from '../utils/buildManagerInputAtBlock'
 import {
-  getVaultPoolInfos,
+  getVaultCandidatePoolInfos,
   recoverVaultCandidateTokenIdsByPool,
   resolveVaultHistoricalCandidatesByPool,
+  resolveVaultPoolInfosAtBlock,
   resolveVaultTokenIdsByPool,
   verifyVaultOpenTokenIdsAtBlock,
 } from '../utils/vaultManagerInput'
@@ -53,22 +53,23 @@ function getPlpManagerAddress(chainId: number, vaultAddress: Address): Address |
   )
 }
 
-function getPlpPoolInfosAtBlock({
+async function getPlpPoolInfosAtBlock({
   chainId,
+  client,
   vaultAddress,
   blockNumber,
 }: {
   chainId: number
+  client: Parameters<typeof resolveVaultPoolInfosAtBlock>[0]['viemClient']
   vaultAddress: Address
   blockNumber: bigint
 }) {
-  return (
-    getMainnetVaultPoolConfigurationAtBlock({
-      chainId,
-      vaultAddress,
-      blockNumber,
-    })?.poolInfos ?? getVaultPoolInfos(vaultAddress, chainId)
-  )
+  return resolveVaultPoolInfosAtBlock({
+    viemClient: client,
+    chainId,
+    vaultAddress,
+    blockNumber,
+  })
 }
 
 function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
@@ -76,7 +77,7 @@ function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
     enabledMetrics: ['nav'],
     resolveCandidates: async ({ chainId, vault }) => {
       const vaultAddress = vault.id as Address
-      const poolInfos = getVaultPoolInfos(vaultAddress, chainId)
+      const poolInfos = getVaultCandidatePoolInfos(vaultAddress, chainId)
       if (poolInfos.length === 0) {
         return []
       }
@@ -94,7 +95,12 @@ function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
         chainId,
         vaultAddress,
         candidatesByPool: candidates,
-        poolInfos: getPlpPoolInfosAtBlock({ chainId, vaultAddress, blockNumber }),
+        poolInfos: await getPlpPoolInfosAtBlock({
+          chainId,
+          client,
+          vaultAddress,
+          blockNumber,
+        }),
         blockNumber,
         fromBlock,
       })
@@ -109,7 +115,12 @@ function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
         })
       }
 
-      const poolInfos = getPlpPoolInfosAtBlock({ chainId, vaultAddress, blockNumber })
+      const poolInfos = await getPlpPoolInfosAtBlock({
+        chainId,
+        client,
+        vaultAddress,
+        blockNumber,
+      })
       if (poolInfos.length === 0) {
         return DEFAULT_MANAGER_INPUT
       }
