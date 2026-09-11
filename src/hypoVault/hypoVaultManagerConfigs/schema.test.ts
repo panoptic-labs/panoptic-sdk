@@ -299,9 +299,11 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     expect(MainnetWETHPLPLegacyVaultPoolInfos.poolInfos[0]?.pool).toBe(
       '0x000000007588B488d180899cDEa2080a886D2441',
     )
+    expect(MainnetWETHPLPLegacyVaultPoolInfos.poolInfos[0]?.maxPriceDeviation).toBe(5000)
     expect(MainnetWETHPLPLegacyVaultPoolInfos.poolInfos[0]?.positionScanFromBlock).toBe(24_822_309n)
     expect(MainnetUSDCPLPLegacyVaultPoolInfos.poolInfos[0]?.pool).toBe(
       '0x000000007588B488d180899cDEa2080a886D2441',
     )
+    expect(MainnetUSDCPLPLegacyVaultPoolInfos.poolInfos[0]?.maxPriceDeviation).toBe(5000)
   })
 })

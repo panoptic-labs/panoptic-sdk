@@ -17,6 +17,12 @@ export {
   DISPATCH_SELECTOR,
   roleKey,
 } from './roles/dispatchCustomRole'
+export type { LiquidatorConditionsParams } from './roles/liquidator'
+export {
+  buildLiquidatorConditions,
+  buildLiquidatorRoleSteps,
+  LIQUIDATE_SELECTOR,
+} from './roles/liquidator'
 export {
   buildDepositConditions,
   buildLoanOnlyDispatchConditions,

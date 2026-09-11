@@ -32,7 +32,7 @@ const PREFIX_TOKEN1 = '0x0000000000000000000000000000000000000011'
 const PREFIX_TRACKER0 = '0x0000000000000000000000000000000000000020'
 const PREFIX_TRACKER1 = '0x0000000000000000000000000000000000000021'
 const PREFIX_META = { blockNumber: 123n, blockTimestamp: 456n, blockHash: '0x01' as const }
-const PREFIX_POOL_ADDRESS = '0x0000000000000000000000000000000000000030'
+const PREFIX_POOL_ADDRESS = '0x0000000000000000000000000000000000000030' as const
 const PREFIX_RISK_ENGINE = '0x0000000000000000000000000000000000000050'
 
 const collateralTracker = (address: `0x${string}`, token: `0x${string}`, symbol: string) => ({
@@ -325,7 +325,12 @@ describe('quoteTokenShortfallRecovery', () => {
       })
 
     const client = { getBlockNumber: vi.fn().mockResolvedValue(123n) } as unknown as PublicClient
+    const settleSequence = {
+      positionIdListFrom: [11n],
+      targets: [{ user: PREFIX_POOL_ADDRESS, tokenId: 21n, positionIdList: [21n] }],
+    }
     const result = await quoteTokenShortfallRecovery({
+      settleSequence,
       client,
       poolAddress: '0x0000000000000000000000000000000000000030',
       account: '0x0000000000000000000000000000000000000040',
@@ -353,6 +358,92 @@ describe('quoteTokenShortfallRecovery', () => {
     expect(result.quote.dispatch.finalPositionIdList).toEqual(baseDispatch.finalPositionIdList)
     expect(simulateDispatch).toHaveBeenCalledTimes(2)
     expect(vi.mocked(simulateDispatch).mock.calls[1]?.[0].measurePremia).toBe(true)
+    expect(vi.mocked(simulateDispatch).mock.calls[0]?.[0].settleSequence).toBeUndefined()
+    expect(vi.mocked(simulateDispatch).mock.calls[1]?.[0].settleSequence).toEqual(settleSequence)
+  })
+
+  // `balanceBefore` is read before the transaction, so it cannot see the
+  // settlement proceeds that fund the swap. Affordability is decided by the
+  // settlement-aware recovery simulation, never by a pre-transaction balance.
+  it('quotes an exact-out recovery funded by settlement the pre-balance cannot cover', async () => {
+    const token0 = '0x0000000000000000000000000000000000000010'
+    const token1 = '0x0000000000000000000000000000000000000011'
+    const tracker0 = '0x0000000000000000000000000000000000000020'
+    const tracker1 = '0x0000000000000000000000000000000000000021'
+    vi.mocked(getPool).mockResolvedValue({
+      poolId: 1n,
+      currentTick: 0n,
+      tickSpacing: 10n,
+      collateralTracker0: { address: tracker0, token: token0 },
+      collateralTracker1: { address: tracker1, token: token1 },
+    } as unknown as Awaited<ReturnType<typeof getPool>>)
+
+    const meta = { blockNumber: 123n, blockTimestamp: 456n, blockHash: '0x01' as const }
+    const data = {
+      netAmount0: 0n,
+      netAmount1: 0n,
+      premiaReceived0: null,
+      premiaReceived1: null,
+      positionsCreated: [],
+      positionsClosed: [],
+      postCollateral0: 0n,
+      postCollateral1: 0n,
+      preMarginExcess0: null,
+      preMarginExcess1: null,
+      postMarginExcess0: null,
+      postMarginExcess1: null,
+    }
+    // Swap costs ~100 token1 (maximumAmountIn ~101) against a pre-balance of
+    // 40. The removed guard refused this outright.
+    const swapTokenFlow = {
+      delta0: 6n,
+      delta1: -100n,
+      balanceBefore0: 4n,
+      balanceBefore1: 40n,
+      balanceAfter0: 10n,
+      balanceAfter1: -60n,
+      tickBefore: 0n,
+      tickAfter: 0n,
+    }
+    vi.mocked(simulateDispatch)
+      .mockResolvedValueOnce({
+        success: true,
+        data,
+        gasEstimate: 1n,
+        tokenFlow: swapTokenFlow,
+        _meta: meta,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data,
+        gasEstimate: 2n,
+        tokenFlow: { ...swapTokenFlow, delta0: 0n, balanceAfter0: 4n },
+        _meta: meta,
+      })
+
+    const settleSequence = {
+      positionIdListFrom: [11n],
+      targets: [{ user: PREFIX_POOL_ADDRESS, tokenId: 21n, positionIdList: [21n] }],
+    }
+    const result = await quoteTokenShortfallRecovery({
+      settleSequence,
+      client: { getBlockNumber: vi.fn().mockResolvedValue(123n) } as unknown as PublicClient,
+      poolAddress: PREFIX_POOL_ADDRESS,
+      account: '0x0000000000000000000000000000000000000040',
+      chainId: 1n,
+      existingPositionIds: [11n],
+      dispatch: baseDispatch,
+      error: new NotEnoughTokensError(tracker0, 10n, 4n),
+      slippageBps: 50n,
+      tickLimitLow: -50n,
+      tickLimitHigh: 50n,
+    })
+
+    expect(result.available).toBe(true)
+    if (!result.available) throw new Error('Expected a recovery quote')
+    expect(result.quote.direction).toBe('exact-out')
+    expect(result.quote.maximumAmountIn).toBeGreaterThan(swapTokenFlow.balanceBefore1)
+    expect(vi.mocked(simulateDispatch).mock.calls[1]?.[0].settleSequence).toEqual(settleSequence)
   })
 
   it('prepends an exact-input swap when zero output balance cannot pay the credit fee', async () => {
@@ -434,16 +525,105 @@ describe('quoteTokenShortfallRecovery', () => {
     expect(vi.mocked(simulateDispatch).mock.calls[2]?.[0].measurePremia).toBe(true)
   })
 
-  it('rejects a prefixed swap whose input exceeds the source balance', async () => {
+  it.each([0, 1])(
+    'completes the swap first when token%s remains unavailable during mint',
+    async (tokenIndex) => {
+      mockPrefixedPool()
+      const flow =
+        tokenIndex === 0
+          ? prefixedSuccess({ delta0: 6n, delta1: -7n })
+          : prefixedSuccess({ delta0: -7n, delta1: 6n, balanceBefore0: 100n })
+      const tracker = tokenIndex === 0 ? PREFIX_TRACKER0 : PREFIX_TRACKER1
+      vi.mocked(simulateDispatch)
+        .mockResolvedValueOnce(flow)
+        .mockResolvedValueOnce({
+          success: false,
+          error: new NotEnoughTokensError(tracker, 10n, 4n),
+          _meta: PREFIX_META,
+        })
+        .mockResolvedValueOnce(flow)
+        .mockResolvedValueOnce(flow)
+      const result = await quoteTokenShortfallRecovery({
+        client: prefixedClient(),
+        poolAddress: PREFIX_POOL_ADDRESS,
+        account: '0x0000000000000000000000000000000000000040',
+        chainId: 1n,
+        existingPositionIds: [9n],
+        dispatch: baseDispatch,
+        error: new NotEnoughTokensError(tracker, 10n, 4n),
+        slippageBps: 50n,
+      })
+      expect(result.available).toBe(true)
+      if (!result.available) return
+      expect(result.quote.direction).toBe('exact-in')
+      expect(result.quote.dispatch.positionIdList).toEqual([
+        result.quote.creditTokenId,
+        result.quote.creditTokenId,
+        ...baseDispatch.positionIdList,
+      ])
+      expect(simulateDispatch).toHaveBeenCalledTimes(4)
+      for (const [call] of vi.mocked(simulateDispatch).mock.calls) {
+        expect(call.existingPositionIdList).toEqual([9n])
+        expect(call.blockNumber).toBe(123n)
+      }
+    },
+  )
+
+  // A pre-transaction balance cannot decide affordability: the settlement runs
+  // ahead of the prefixed swap inside the same transaction. The quoter defers
+  // to the settlement-aware recovery simulation, which reverts if it truly
+  // cannot pay.
+  it('lets the recovery simulation reject a prefixed swap it cannot fund', async () => {
     mockPrefixedPool()
     vi.mocked(simulateDispatch)
       .mockResolvedValueOnce(bootstrapFailure())
       .mockResolvedValueOnce(prefixedSuccess({ delta0: 6n, delta1: -7n, balanceBefore1: 6n }))
+      .mockResolvedValueOnce({
+        success: false as const,
+        error: new PanopticError('NotEnoughCollateral'),
+        _meta: PREFIX_META,
+      })
 
     await expect(quotePrefixedRecovery()).resolves.toMatchObject({
       available: false,
-      reason: 'swap-unavailable',
+      reason: 'recovery-unavailable',
     })
+    expect(simulateDispatch).toHaveBeenCalledTimes(3)
+  })
+
+  it('quotes a prefixed exact-input recovery funded by settlement', async () => {
+    mockPrefixedPool()
+    const settleSequence = {
+      positionIdListFrom: [11n],
+      targets: [{ user: PREFIX_POOL_ADDRESS, tokenId: 21n, positionIdList: [21n] }],
+    }
+    vi.mocked(simulateDispatch)
+      .mockResolvedValueOnce(bootstrapFailure())
+      // Swap costs 7 token1 against a pre-balance of 6. The removed guard
+      // refused this outright; the settled premium covers the difference.
+      .mockResolvedValueOnce(prefixedSuccess({ delta0: 6n, delta1: -7n, balanceBefore1: 6n }))
+      .mockResolvedValueOnce(prefixedSuccess({ delta0: 6n, delta1: -7n, balanceBefore1: 6n }))
+
+    const result = await quoteTokenShortfallRecovery({
+      settleSequence,
+      client: prefixedClient(),
+      poolAddress: PREFIX_POOL_ADDRESS,
+      account: '0x0000000000000000000000000000000000000040',
+      chainId: 1n,
+      existingPositionIds: [],
+      dispatch: baseDispatch,
+      error: new NotEnoughTokensError(PREFIX_TRACKER0, 6n, 0n),
+      slippageBps: 50n,
+    })
+
+    expect(result.available).toBe(true)
+    if (!result.available) throw new Error('Expected a recovery quote')
+    expect(result.quote.direction).toBe('exact-in')
+    expect(result.quote.estimatedAmountIn).toBeGreaterThan(6n)
+    // The swap probe prices the credit legs alone; only the recovery run
+    // carries the settlements.
+    expect(vi.mocked(simulateDispatch).mock.calls[1]?.[0].settleSequence).toBeUndefined()
+    expect(vi.mocked(simulateDispatch).mock.calls[2]?.[0].settleSequence).toEqual(settleSequence)
   })
 
   it('reports a failed prefixed swap simulation as swap-unavailable', async () => {

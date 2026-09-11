@@ -82,6 +82,10 @@ export async function swapExactInViaRouter(params: SwapExactInViaRouterParams): 
   const resolvedDeadline =
     deadline ?? (await getBlockMeta({ client })).blockTimestamp + DEFAULT_DEADLINE_SECONDS
 
+  if (!quote.data.poolKey) {
+    throw new PanopticError('v4 swap requires a poolKey from the quote')
+  }
+
   const { args, value } = buildV4SwapExecuteArgs({
     poolKey: quote.data.poolKey,
     zeroForOne: quote.data.zeroForOne,
@@ -169,6 +173,10 @@ export async function swapExactOutViaRouter(
 
   const resolvedDeadline =
     deadline ?? (await getBlockMeta({ client })).blockTimestamp + DEFAULT_DEADLINE_SECONDS
+
+  if (!quote.data.poolKey) {
+    throw new PanopticError('v4 swap requires a poolKey from the quote')
+  }
 
   const { args, value } = buildV4ExactOutSwapExecuteArgs({
     poolKey: quote.data.poolKey,

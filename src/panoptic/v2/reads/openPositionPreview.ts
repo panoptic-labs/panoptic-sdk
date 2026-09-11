@@ -7,7 +7,7 @@
 import type { Address, Client, PublicClient } from 'viem'
 
 import type { NotEnoughTokensError } from '../errors'
-import { AccountInsolventError } from '../errors'
+import { AccountInsolventError, PanopticError } from '../errors'
 import { parsePanopticError } from '../errors/parser'
 import type { SimulateOpenPositionParams } from '../simulations/simulateOpenPosition'
 import { simulateOpenPosition } from '../simulations/simulateOpenPosition'
@@ -20,6 +20,10 @@ import { getAccountBuyingPower } from './buyingPower'
  * Parameters for getOpenPositionPreview.
  */
 export interface GetOpenPositionPreviewParams {
+  /** Snapshot for the same client, account, pool, position list and explicit blockNumber. */
+  buyingPower?: AccountBuyingPower | Promise<AccountBuyingPower>
+  /** Skip gas estimation for interactive previews; defaults to true. */
+  estimateGas?: boolean
   /** viem PublicClient */
   client: PublicClient
   /** PanopticPool address */
@@ -125,17 +129,20 @@ export async function getOpenPositionPreview(
     blockNumber,
   } = params
 
-  // Run both calls in parallel
+  const targetBlockNumber = blockNumber ?? (await client.getBlockNumber())
+  // Preserve parallelism even when the caller is still fetching the shared snapshot.
   const [currentBuyingPower, simulation] = await Promise.all([
-    getAccountBuyingPower({
-      client: client as Client,
-      poolAddress,
-      account,
-      tokenIds: existingPositionIds,
-      queryAddress,
-      blockNumber,
-    }),
+    params.buyingPower ??
+      getAccountBuyingPower({
+        client: client as Client,
+        poolAddress,
+        account,
+        tokenIds: existingPositionIds,
+        queryAddress,
+        blockNumber: targetBlockNumber,
+      }),
     simulateOpenPosition({
+      estimateGas: params.estimateGas,
       client,
       poolAddress,
       account,
@@ -148,9 +155,12 @@ export async function getOpenPositionPreview(
       swapAtMint,
       usePremiaAsCollateral,
       chainId,
-      blockNumber,
+      blockNumber: targetBlockNumber,
     } satisfies SimulateOpenPositionParams),
   ])
+  if (currentBuyingPower._meta.blockNumber !== targetBlockNumber) {
+    throw new PanopticError('Buying power snapshot block does not match the preview block')
+  }
 
   // Two distinct failures, kept apart because they have different remedies:
   //   AccountInsolvent  -> not enough buying power; the size must come down.

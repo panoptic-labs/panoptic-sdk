@@ -1683,6 +1683,237 @@ export const panopticGuardianAbi = [
 ] as const
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// PanopticLiquidator
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+export const panopticLiquidatorAbi = [
+  {
+    type: 'constructor',
+    inputs: [
+      { name: 'morpho', internalType: 'contract IMorpho', type: 'address' },
+      { name: 'owner_', internalType: 'address', type: 'address' },
+    ],
+    stateMutability: 'nonpayable',
+  },
+  { type: 'receive', stateMutability: 'payable' },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'MORPHO',
+    outputs: [{ name: '', internalType: 'contract IMorpho', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'target', internalType: 'address', type: 'address' },
+      { name: 'value', internalType: 'uint256', type: 'uint256' },
+      { name: 'data', internalType: 'bytes', type: 'bytes' },
+    ],
+    name: 'execute',
+    outputs: [{ name: 'ret', internalType: 'bytes', type: 'bytes' }],
+    stateMutability: 'payable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
+    ],
+    name: 'initializePool',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'params',
+        internalType: 'struct PanopticLiquidator.LiquidateParams',
+        type: 'tuple',
+        components: [
+          {
+            name: 'pool',
+            internalType: 'contract PanopticPoolV2',
+            type: 'address',
+          },
+          { name: 'account', internalType: 'address', type: 'address' },
+          {
+            name: 'positionIdListTo',
+            internalType: 'TokenId[]',
+            type: 'uint256[]',
+          },
+          {
+            name: 'usePremiaAsCollateral',
+            internalType: 'LeftRightUnsigned',
+            type: 'uint256',
+          },
+          { name: 'flashToken', internalType: 'address', type: 'address' },
+          { name: 'flashAmount', internalType: 'uint256', type: 'uint256' },
+          {
+            name: 'nativeFundingAmount',
+            internalType: 'uint256',
+            type: 'uint256',
+          },
+          { name: 'preSwapTarget', internalType: 'address', type: 'address' },
+          { name: 'preSwapCallData', internalType: 'bytes', type: 'bytes' },
+          { name: 'preSwapTokenIn', internalType: 'address', type: 'address' },
+          { name: 'preSwapAmountIn', internalType: 'uint256', type: 'uint256' },
+          { name: 'swapTarget', internalType: 'address', type: 'address' },
+          { name: 'swapCallData', internalType: 'bytes', type: 'bytes' },
+          { name: 'swapTokenIn', internalType: 'address', type: 'address' },
+          { name: 'swapAmountIn', internalType: 'uint256', type: 'uint256' },
+          { name: 'minDelta0', internalType: 'int256', type: 'int256' },
+          { name: 'minDelta1', internalType: 'int256', type: 'int256' },
+        ],
+      },
+    ],
+    name: 'liquidate',
+    outputs: [
+      { name: 'delta0', internalType: 'int256', type: 'int256' },
+      { name: 'delta1', internalType: 'int256', type: 'int256' },
+    ],
+    stateMutability: 'payable',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'data', internalType: 'bytes[]', type: 'bytes[]' }],
+    name: 'multicall',
+    outputs: [{ name: 'results', internalType: 'bytes[]', type: 'bytes[]' }],
+    stateMutability: 'payable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'assets', internalType: 'uint256', type: 'uint256' },
+      { name: 'data', internalType: 'bytes', type: 'bytes' },
+    ],
+    name: 'onMorphoFlashLoan',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'owner',
+    outputs: [{ name: '', internalType: 'address', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'params',
+        internalType: 'struct PanopticLiquidator.LiquidateParams',
+        type: 'tuple',
+        components: [
+          {
+            name: 'pool',
+            internalType: 'contract PanopticPoolV2',
+            type: 'address',
+          },
+          { name: 'account', internalType: 'address', type: 'address' },
+          {
+            name: 'positionIdListTo',
+            internalType: 'TokenId[]',
+            type: 'uint256[]',
+          },
+          {
+            name: 'usePremiaAsCollateral',
+            internalType: 'LeftRightUnsigned',
+            type: 'uint256',
+          },
+          { name: 'flashToken', internalType: 'address', type: 'address' },
+          { name: 'flashAmount', internalType: 'uint256', type: 'uint256' },
+          {
+            name: 'nativeFundingAmount',
+            internalType: 'uint256',
+            type: 'uint256',
+          },
+          { name: 'preSwapTarget', internalType: 'address', type: 'address' },
+          { name: 'preSwapCallData', internalType: 'bytes', type: 'bytes' },
+          { name: 'preSwapTokenIn', internalType: 'address', type: 'address' },
+          { name: 'preSwapAmountIn', internalType: 'uint256', type: 'uint256' },
+          { name: 'swapTarget', internalType: 'address', type: 'address' },
+          { name: 'swapCallData', internalType: 'bytes', type: 'bytes' },
+          { name: 'swapTokenIn', internalType: 'address', type: 'address' },
+          { name: 'swapAmountIn', internalType: 'uint256', type: 'uint256' },
+          { name: 'minDelta0', internalType: 'int256', type: 'int256' },
+          { name: 'minDelta1', internalType: 'int256', type: 'int256' },
+        ],
+      },
+    ],
+    name: 'quoteLiquidation',
+    outputs: [
+      { name: 'bonus0', internalType: 'int256', type: 'int256' },
+      { name: 'bonus1', internalType: 'int256', type: 'int256' },
+      { name: 'shortfall0', internalType: 'uint256', type: 'uint256' },
+      { name: 'shortfall1', internalType: 'uint256', type: 'uint256' },
+      { name: 'protocolLoss0', internalType: 'uint256', type: 'uint256' },
+      { name: 'protocolLoss1', internalType: 'uint256', type: 'uint256' },
+    ],
+    stateMutability: 'payable',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'newOwner', internalType: 'address', type: 'address' }],
+    name: 'setOwner',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'token', internalType: 'address', type: 'address' },
+      { name: 'to', internalType: 'address', type: 'address' },
+      { name: 'amount', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'sweep',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      { name: 'user', internalType: 'address', type: 'address', indexed: true },
+      {
+        name: 'newOwner',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+    ],
+    name: 'OwnerUpdated',
+  },
+  { type: 'error', inputs: [], name: 'ApproveFailed' },
+  { type: 'error', inputs: [], name: 'CallFailed' },
+  {
+    type: 'error',
+    inputs: [
+      { name: 'delta0', internalType: 'int256', type: 'int256' },
+      { name: 'delta1', internalType: 'int256', type: 'int256' },
+    ],
+    name: 'InsufficientDelta',
+  },
+  { type: 'error', inputs: [], name: 'SwapFailed' },
+  {
+    type: 'error',
+    inputs: [
+      { name: 'token', internalType: 'address', type: 'address' },
+      { name: 'from', internalType: 'address', type: 'address' },
+      { name: 'amount', internalType: 'uint256', type: 'uint256' },
+      { name: 'balance', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'TransferFailed',
+  },
+  { type: 'error', inputs: [], name: 'UntrustedFlashLoanInitiator' },
+] as const
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // PanopticPoolV2
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2195,7 +2426,11 @@ export const panopticQueryAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
       { name: 'account', internalType: 'address', type: 'address' },
       { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
     ],
@@ -2227,7 +2462,11 @@ export const panopticQueryAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
       { name: 'account', internalType: 'address', type: 'address' },
       { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
       { name: 'atTick', internalType: 'int24', type: 'int24' },
@@ -2245,7 +2484,11 @@ export const panopticQueryAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
       { name: 'account', internalType: 'address', type: 'address' },
       { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
     ],
@@ -2260,25 +2503,43 @@ export const panopticQueryAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
       { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
+      {
+        name: 'shortPremium',
+        internalType: 'LeftRightUnsigned',
+        type: 'uint256',
+      },
+      {
+        name: 'longPremium',
+        internalType: 'LeftRightUnsigned',
+        type: 'uint256',
+      },
+      {
+        name: 'positionBalanceArray',
+        internalType: 'PositionBalance[]',
+        type: 'uint256[]',
+      },
+      { name: 'atTicks', internalType: 'int24[]', type: 'int24[]' },
     ],
-    name: 'getChunkData',
-    outputs: [{ name: '', internalType: 'uint256[2][4][]', type: 'uint256[2][4][]' }],
-    stateMutability: 'view',
+    name: 'computeNetLiquidationValue',
+    outputs: [
+      { name: 'value0', internalType: 'int256[]', type: 'int256[]' },
+      { name: 'value1', internalType: 'int256[]', type: 'int256[]' },
+    ],
+    stateMutability: 'pure',
   },
   {
     type: 'function',
     inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
-      { name: 'account', internalType: 'address', type: 'address' },
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
       { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
     ],
-    name: 'getLiquidationPrices',
-    outputs: [
-      { name: 'liquidationPriceDown', internalType: 'int24', type: 'int24' },
-      { name: 'liquidationPriceUp', internalType: 'int24', type: 'int24' },
-    ],
+    name: 'getChunkData',
+    outputs: [{ name: '', internalType: 'uint256[2][4][]', type: 'uint256[2][4][]' }],
     stateMutability: 'view',
   },
   {
@@ -2302,7 +2563,29 @@ export const panopticQueryAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
+      { name: 'account', internalType: 'address', type: 'address' },
+      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
+    ],
+    name: 'getLiquidationPrices',
+    outputs: [
+      { name: 'liquidationPriceDown', internalType: 'int24', type: 'int24' },
+      { name: 'liquidationPriceUp', internalType: 'int24', type: 'int24' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
       {
         name: 'existingPositionIds',
         internalType: 'TokenId[]',
@@ -2321,23 +2604,31 @@ export const panopticQueryAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
       { name: 'account', internalType: 'address', type: 'address' },
       { name: 'includePendingPremium', internalType: 'bool', type: 'bool' },
       { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
-      { name: 'atTick', internalType: 'int24', type: 'int24' },
+      { name: 'atTicks', internalType: 'int24[]', type: 'int24[]' },
     ],
     name: 'getNetLiquidationValue',
     outputs: [
-      { name: 'value0', internalType: 'int256', type: 'int256' },
-      { name: 'value1', internalType: 'int256', type: 'int256' },
+      { name: 'value0', internalType: 'int256[]', type: 'int256[]' },
+      { name: 'value1', internalType: 'int256[]', type: 'int256[]' },
     ],
     stateMutability: 'view',
   },
   {
     type: 'function',
     inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
       { name: 'account', internalType: 'address', type: 'address' },
       { name: 'atTick', internalType: 'int24', type: 'int24' },
       { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
@@ -2352,22 +2643,11 @@ export const panopticQueryAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
-      { name: 'account', internalType: 'address', type: 'address' },
-      { name: 'atTicks', internalType: 'int24[]', type: 'int24[]' },
-      { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
-    ],
-    name: 'getPortfolioValueAtTicks',
-    outputs: [
-      { name: 'value0', internalType: 'int256[]', type: 'int256[]' },
-      { name: 'value1', internalType: 'int256[]', type: 'int256[]' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
       { name: 'tokenId', internalType: 'TokenId', type: 'uint256' },
       { name: 'atTick', internalType: 'int24', type: 'int24' },
     ],
@@ -2378,7 +2658,11 @@ export const panopticQueryAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
       { name: 'startTick', internalType: 'int24', type: 'int24' },
       { name: 'nTicks', internalType: 'uint256', type: 'uint256' },
     ],
@@ -2392,7 +2676,49 @@ export const panopticQueryAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      {
+        name: 'univ3pool',
+        internalType: 'contract IUniswapV3Pool',
+        type: 'address',
+      },
+      { name: 'startTick', internalType: 'int24', type: 'int24' },
+      { name: 'nTicks', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'getTickNetsV3',
+    outputs: [
+      { name: 'tickData', internalType: 'int256[]', type: 'int256[]' },
+      { name: 'liquidityNets', internalType: 'int256[]', type: 'int256[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'manager',
+        internalType: 'contract IPoolManager',
+        type: 'address',
+      },
+      { name: 'poolId', internalType: 'PoolId', type: 'bytes32' },
+      { name: 'tickSpacing', internalType: 'int24', type: 'int24' },
+      { name: 'startTick', internalType: 'int24', type: 'int24' },
+      { name: 'nTicks', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'getTickNetsV4',
+    outputs: [
+      { name: 'tickData', internalType: 'int256[]', type: 'int256[]' },
+      { name: 'liquidityNets', internalType: 'int256[]', type: 'int256[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
       { name: 'account', internalType: 'address', type: 'address' },
       { name: 'positionIdList', internalType: 'TokenId[]', type: 'uint256[]' },
       { name: 'atTick', internalType: 'int24', type: 'int24' },
@@ -2404,7 +2730,11 @@ export const panopticQueryAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
       { name: 'atTick', internalType: 'int24', type: 'int24' },
       { name: 'tokenId', internalType: 'TokenId', type: 'uint256' },
     ],
@@ -2415,7 +2745,11 @@ export const panopticQueryAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'pool', internalType: 'contract PanopticPool', type: 'address' },
+      {
+        name: 'pool',
+        internalType: 'contract PanopticPoolV2',
+        type: 'address',
+      },
       { name: 'tickLower', internalType: 'int24', type: 'int24' },
       { name: 'tickUpper', internalType: 'int24', type: 'int24' },
       { name: 'width', internalType: 'int24', type: 'int24' },

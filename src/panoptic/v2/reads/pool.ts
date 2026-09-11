@@ -667,7 +667,7 @@ export async function getUtilization(params: GetUtilizationParams): Promise<Util
  * @param poolData - `getPoolData()` tuple: [depositedAssets, insideAMM, creditedShares, utilization]
  * @param totalSupply - Collateral tracker share supply, for the share→asset conversion
  */
-function availableToBorrow(
+export function availableToBorrow(
   poolData: readonly [bigint, bigint, bigint, bigint],
   totalSupply: bigint,
 ): bigint {
@@ -1079,3 +1079,21 @@ export async function fetchPoolId(params: FetchPoolIdParams): Promise<FetchPoolI
 }
 
 export { tickToSqrtPriceX96 }
+
+/** Read the pool's spot tick without fetching collateral or risk configuration. */
+export async function getPoolCurrentTick({
+  client,
+  poolAddress,
+  blockNumber,
+}: {
+  client: PublicClient
+  poolAddress: Address
+  blockNumber?: bigint
+}) {
+  return client.readContract({
+    address: poolAddress,
+    abi: panopticPoolV2Abi,
+    functionName: 'getCurrentTick',
+    blockNumber,
+  })
+}

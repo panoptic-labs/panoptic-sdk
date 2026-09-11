@@ -107,6 +107,15 @@ function invalidateKeys(
   queryClient: QueryClient,
   keysToInvalidate: readonly (readonly string[])[],
 ): void {
+  // Candidate previews and sizing depend on balances changed by these mutations.
+  for (const namespace of [
+    'openPositionPreview',
+    'previewAccountSnapshot',
+    'maxPositionSizeBounds',
+    'collateralRequiredBase',
+  ]) {
+    void queryClient.invalidateQueries({ queryKey: [...queryKeys.all, namespace] })
+  }
   const seen = new Set<string>()
 
   for (const key of keysToInvalidate) {

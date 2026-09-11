@@ -13,6 +13,7 @@ import {
   calculatePositionGamma,
   calculatePositionGreeks,
   calculatePositionValue,
+  calculatePositionValues,
   getLegDelta,
   getLegDeltaInVaultFrame,
   getLegGamma,
@@ -203,6 +204,29 @@ describe('greeks module', () => {
   })
 
   describe('calculatePositionValue', () => {
+    it('batch valuation preserves mixed-frame netting independently at every tick', () => {
+      const ticks = [-1000n, -50n, 0n, 50n, 1000n, -1000n]
+      for (const assetIndex of [0n, 1n]) {
+        for (const swapAtMint of [undefined, false, true]) {
+          const input = {
+            legs: [
+              createLeg({ asset: assetIndex }),
+              createLeg({ index: 1n, asset: 1n - assetIndex, tokenType: 1n, isLong: true }),
+              createLeg({ index: 2n, width: 0n, isLong: true }),
+              createLeg({ index: 3n, width: 0n, tokenType: 1n }),
+            ],
+            mintTick: 100n,
+            positionSize: 1000000n,
+            poolTickSpacing: 10n,
+            assetIndex,
+            swapAtMint,
+          }
+          expect(calculatePositionValues(input, ticks)).toEqual(
+            ticks.map((currentTick) => calculatePositionValue({ ...input, currentTick })),
+          )
+        }
+      }
+    })
     it('should sum values across all legs', () => {
       const legs = [
         createLeg({ strike: 0n, width: 10n, isLong: false }),

@@ -53,6 +53,35 @@ function createMockClient(): PublicClient {
 }
 
 describe('getOpenPositionPreview', () => {
+  it('reuses a supplied snapshot and pins simulation to its explicit block', async () => {
+    vi.clearAllMocks()
+    vi.mocked(simulateOpenPosition).mockResolvedValue({
+      success: false,
+      error: new PanopticError('test revert'),
+      _meta: MOCK_META,
+    })
+    const params = {
+      client: createMockClient(),
+      poolAddress: POOL_ADDRESS,
+      account: ACCOUNT,
+      existingPositionIds: [],
+      tokenId: 1n,
+      positionSize: 100n,
+      queryAddress: QUERY_ADDRESS,
+      tickLimitLow: -887272n,
+      tickLimitHigh: 887272n,
+      blockNumber: 100n,
+      buyingPower: Promise.resolve(mockBuyingPower),
+    }
+    await getOpenPositionPreview(params)
+    expect(getAccountBuyingPower).not.toHaveBeenCalled()
+    expect(simulateOpenPosition).toHaveBeenCalledWith(
+      expect.objectContaining({ blockNumber: 100n }),
+    )
+    const mismatchedPreview = getOpenPositionPreview({ ...params, blockNumber: 101n })
+    await expect(mismatchedPreview).rejects.toBeInstanceOf(PanopticError)
+    await expect(mismatchedPreview).rejects.toThrow('snapshot block')
+  })
   it('should return isSolvent=true when simulation succeeds', async () => {
     const client = createMockClient()
 

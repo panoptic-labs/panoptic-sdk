@@ -1,5 +1,6 @@
 /**
- * Quote an exact-in single-hop swap against a Uniswap v3 pool via QuoterV2.
+ * Quote exact-in and exact-out single-hop swaps against a Uniswap v3 pool via
+ * QuoterV2.
  * @module uniswap/v3/router/quote
  */
 
@@ -20,7 +21,6 @@ export interface QuoteV3ExactInParams {
   tokenOut: Address
   fee: bigint
   amountIn: bigint
-  /** Slippage tolerance in bps, used to compute `amountOutMinimum`. */
   slippageBps: bigint
   blockNumber?: bigint
   addresses?: Partial<UniswapV3Addresses>
@@ -42,9 +42,7 @@ export async function quoteV3ExactIn(params: QuoteV3ExactInParams): Promise<V3Ex
   if (amountIn < 0n || amountIn > UINT128_MAX) {
     throw new PanopticError(`amountIn ${amountIn} exceeds uint128 maximum`)
   }
-  if (slippageBps < 0n || slippageBps > BPS_DENOMINATOR) {
-    throw new PanopticError(`invalid slippageBps ${slippageBps}, must be 0..10000`)
-  }
+  assertSlippageBps(slippageBps)
 
   const { quoterV2 } = getUniswapV3Addresses(chainId, params.addresses)
 
@@ -61,13 +59,66 @@ export async function quoteV3ExactIn(params: QuoteV3ExactInParams): Promise<V3Ex
     return { amountOut, amountOutMinimum, gasEstimate }
   } catch (err) {
     if (isRevert(err)) return null
-    // Transport/RPC/timeout errors are NOT "no liquidity" — rethrow so routing
-    // doesn't silently treat an unreachable node as an empty pool.
     throw err
   }
 }
 
-/** True only for genuine contract reverts (missing pool / no liquidity). */
+export interface QuoteV3ExactOutParams {
+  client: PublicClient
+  chainId: bigint
+  tokenIn: Address
+  tokenOut: Address
+  fee: bigint
+  amountOut: bigint
+  slippageBps: bigint
+  blockNumber?: bigint
+  addresses?: Partial<UniswapV3Addresses>
+}
+
+export interface V3ExactOutQuote {
+  amountIn: bigint
+  amountInMaximum: bigint
+  gasEstimate: bigint
+}
+
+/**
+ * Quote an exact-out v3 swap. Returns `null` on revert (no pool / no liquidity).
+ */
+export async function quoteV3ExactOut(
+  params: QuoteV3ExactOutParams,
+): Promise<V3ExactOutQuote | null> {
+  const { client, chainId, tokenIn, tokenOut, fee, amountOut, slippageBps, blockNumber } = params
+  if (amountOut < 0n || amountOut > UINT128_MAX) {
+    throw new PanopticError(`amountOut ${amountOut} exceeds uint128 maximum`)
+  }
+  assertSlippageBps(slippageBps)
+
+  const { quoterV2 } = getUniswapV3Addresses(chainId, params.addresses)
+
+  try {
+    const { result } = await client.simulateContract({
+      address: quoterV2,
+      abi: quoterV2Abi,
+      functionName: 'quoteExactOutputSingle',
+      blockNumber,
+      args: [{ tokenIn, tokenOut, amount: amountOut, fee: Number(fee), sqrtPriceLimitX96: 0n }],
+    })
+    const [amountIn, , , gasEstimate] = result
+    const amountInMaximum =
+      (amountIn * (BPS_DENOMINATOR + slippageBps) + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
+    return { amountIn, amountInMaximum, gasEstimate }
+  } catch (err) {
+    if (isRevert(err)) return null
+    throw err
+  }
+}
+
+function assertSlippageBps(slippageBps: bigint): void {
+  if (slippageBps < 0n || slippageBps > BPS_DENOMINATOR) {
+    throw new PanopticError(`invalid slippageBps ${slippageBps}, must be 0..10000`)
+  }
+}
+
 function isRevert(err: unknown): boolean {
   return (
     err instanceof BaseError &&

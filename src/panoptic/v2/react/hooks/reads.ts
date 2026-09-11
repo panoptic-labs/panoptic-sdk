@@ -3,9 +3,8 @@
  * @module v2/react/hooks/reads
  */
 
-import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
-import type { Address, PublicClient } from 'viem'
-import { zeroAddress } from 'viem'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { type Address, type PublicClient, zeroAddress } from 'viem'
 
 import { estimateBlockNumbers, resolveBlockNumbers } from '../../clients/blocksByTimestamp'
 import { PanopticValidationError } from '../../errors'
@@ -24,13 +23,13 @@ import {
   type UniswapV4PoolKey,
   createFlowNeutralTokenId,
   estimateCollateralBreakdown,
-  estimateCollateralRequired,
   getAccountCollateral,
   getAccountGreeks,
   getAccountPremia,
   getAccountSummaryBasic,
   getAccountSummaryRisk,
   getCollateralData,
+  getCollateralRequiredBase,
   getCurrentRates,
   getEnforcedTickLimits,
   getFactoryConstructMetadata,
@@ -76,9 +75,11 @@ import {
   previewWithdraw,
   resolvePanopticPoolFromPoolId,
   resolveUniswapV4PoolKey,
+  scaleCollateralRequired,
   simulateDeployNewPool,
   validateBuilderCode,
 } from '../../reads'
+import { getAccountBuyingPower, getPoolCollateralAddresses } from '../../reads/buyingPower'
 import { getPriceHistory } from '../../reads/priceHistory'
 import { optimizeTokenIdRiskPartners } from '../../reads/queryUtils'
 import type { StreamiaLeg } from '../../reads/streamiaHistory'
@@ -96,7 +97,12 @@ import {
 import type { PoolVersionConfig } from '../../types/poolConfig'
 import { interpolateBlocks } from '../../utils/interpolateBlocks'
 import { previewBorrow } from '../../writes/lending'
-import { getAtTickCacheKey, getClientCacheScopeKey, getStorageCacheScopeKey } from '../cacheScopes'
+import {
+  getAtTickCacheKey,
+  getClientCacheScopeKey,
+  getPositionIdsCacheKey,
+  getStorageCacheScopeKey,
+} from '../cacheScopes'
 import { usePanopticContext, useRequireStorage } from '../provider'
 import { queryKeys } from '../queryKeys'
 
@@ -912,33 +918,36 @@ export function useEstimateCollateralRequired(
   tokenId: bigint,
   positionSize: bigint,
   queryAddress: Address,
-  account?: Address,
-  options?: QueryOptions & { atTick?: bigint },
+  _account?: Address,
+  options?: QueryOptions & { atTick?: bigint; blockNumber?: bigint },
 ) {
   const ctx = usePanopticContext()
   // `getRequiredBase` is account-agnostic (it evaluates a synthetic position under
   // `address(0xdead)`), so the estimate must NOT be gated on a connected account.
   // Gating it here was what made a disconnected / view-only user fall through to the
   // UI's buggy client-side per-leg math instead of this on-chain number.
-  const resolvedAccount = account ?? ctx.account ?? zeroAddress
   return useQuery({
     queryKey: [
-      ...queryKeys.collateralEstimate(ctx.chainId, poolAddress, resolvedAccount, tokenId),
+      ...queryKeys.all,
+      'collateralRequiredBase',
+      ctx.chainId.toString(),
+      poolAddress,
+      String(tokenId),
       getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
-      positionSize,
       queryAddress,
-      options?.atTick,
+      getAtTickCacheKey(options?.atTick),
+      getAtTickCacheKey(options?.blockNumber),
     ],
     queryFn: () =>
-      estimateCollateralRequired({
+      getCollateralRequiredBase({
         client: ctx.publicClient,
         poolAddress,
-        account: resolvedAccount,
         tokenId,
-        positionSize,
         queryAddress,
         atTick: options?.atTick,
+        blockNumber: options?.blockNumber,
       }),
+    select: (base) => scaleCollateralRequired(base, positionSize),
     enabled: options?.enabled ?? true,
     refetchInterval: options?.refetchInterval,
     staleTime: options?.staleTime,
@@ -1109,6 +1118,7 @@ export function useMaxPositionSize(
   },
 ) {
   const ctx = usePanopticContext()
+  const queryClient = useQueryClient()
   const resolvedAccount = account ?? ctx.account
   return useQuery({
     queryKey: [
@@ -1120,15 +1130,41 @@ export function useMaxPositionSize(
       ),
       getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
       queryAddress,
-      options?.existingPositionIds?.map(String).join(',') ?? '',
-      options?.existingPositionIds,
+      getPositionIdsCacheKey(options?.existingPositionIds),
       options?.swapAtMint ?? false,
       options?.precisionPct ?? 1,
       options?.usePremiaAsCollateral ?? false,
     ],
-    queryFn: () => {
+    queryFn: async ({ signal }) => {
       if (!resolvedAccount) throw new Error('account required for getMaxPositionSize')
+      const bounds = await queryClient.fetchQuery({
+        queryKey: [
+          ...queryKeys.all,
+          'maxPositionSizeBounds',
+          ctx.chainId.toString(),
+          getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
+          poolAddress,
+          resolvedAccount,
+          String(tokenId),
+          queryAddress,
+          getPositionIdsCacheKey(options?.existingPositionIds),
+        ],
+        queryFn: () =>
+          getMaxPositionSize({
+            client: ctx.publicClient,
+            poolAddress,
+            account: resolvedAccount,
+            tokenId,
+            queryAddress,
+            existingPositionIds: options?.existingPositionIds,
+            refine: false,
+          }),
+        staleTime: 2000,
+      })
+      signal.throwIfAborted()
       return getMaxPositionSize({
+        signal,
+        bounds,
         client: ctx.publicClient,
         poolAddress,
         account: resolvedAccount,
@@ -1142,7 +1178,7 @@ export function useMaxPositionSize(
     },
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
     refetchInterval: options?.refetchInterval,
-    placeholderData: keepPreviousData,
+    // A max for a different tokenId or mode must never size the current mint.
   })
 }
 
@@ -1260,6 +1296,7 @@ export function useOpenPositionPreview(
   tickLimitLow: bigint,
   tickLimitHigh: bigint,
   options?: QueryOptions & {
+    estimateGas?: boolean
     spreadLimit?: bigint
     swapAtMint?: boolean
     usePremiaAsCollateral?: boolean
@@ -1267,32 +1304,74 @@ export function useOpenPositionPreview(
   },
 ) {
   const ctx = usePanopticContext()
+  const queryClient = useQueryClient()
   const resolvedAccount = account ?? ctx.account
   return useQuery({
-    // eslint-disable-next-line @tanstack/query/exhaustive-deps -- deps serialized as strings
     queryKey: [
       ...queryKeys.all,
       'openPositionPreview',
-      ctx.chainId.toString(),
+      options?.estimateGas ?? true,
+      String(ctx.chainId),
       poolAddress,
-      resolvedAccount!,
+      resolvedAccount,
       getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
-      tokenId.toString(),
-      positionSize.toString(),
-      existingPositionIds.map(String).join(','),
+      String(tokenId),
+      String(positionSize),
+      getPositionIdsCacheKey(existingPositionIds),
       queryAddress,
-      tickLimitLow.toString(),
-      tickLimitHigh.toString(),
-      options?.spreadLimit?.toString(),
+      String(tickLimitLow),
+      String(tickLimitHigh),
+      getAtTickCacheKey(options?.spreadLimit),
       options?.swapAtMint,
       options?.usePremiaAsCollateral,
-      options?.blockNumber?.toString(),
+      getAtTickCacheKey(options?.blockNumber),
     ],
-    queryFn: () =>
-      getOpenPositionPreview({
+    queryFn: async ({ signal }) => {
+      if (!resolvedAccount) throw new Error('account required for getOpenPositionPreview')
+      const blockNumber =
+        options?.blockNumber ?? (await ctx.publicClient.getBlockNumber({ cacheTime: 0 }))
+      signal.throwIfAborted()
+      const buyingPower = queryClient.fetchQuery({
+        queryKey: [
+          ...queryKeys.all,
+          'previewAccountSnapshot',
+          ctx.chainId.toString(),
+          poolAddress,
+          resolvedAccount,
+          getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
+          getPositionIdsCacheKey(existingPositionIds),
+          String(blockNumber),
+        ],
+        queryFn: async () => {
+          const collateralAddresses = await queryClient.fetchQuery({
+            queryKey: [
+              ...queryKeys.all,
+              'poolCollateralAddresses',
+              ctx.chainId.toString(),
+              poolAddress,
+              getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
+            ],
+            queryFn: () => getPoolCollateralAddresses({ client: ctx.publicClient, poolAddress }),
+            staleTime: Infinity,
+          })
+          return getAccountBuyingPower({
+            client: ctx.publicClient,
+            poolAddress,
+            account: resolvedAccount,
+            tokenIds: existingPositionIds,
+            collateralAddresses,
+            blockNumber,
+          })
+        },
+        staleTime: Infinity,
+        gcTime: 30_000,
+      })
+      return getOpenPositionPreview({
+        buyingPower,
+        estimateGas: options?.estimateGas,
         client: ctx.publicClient,
         poolAddress,
-        account: resolvedAccount!,
+        account: resolvedAccount,
         existingPositionIds,
         tokenId,
         positionSize,
@@ -1303,8 +1382,9 @@ export function useOpenPositionPreview(
         swapAtMint: options?.swapAtMint,
         usePremiaAsCollateral: options?.usePremiaAsCollateral,
         chainId: ctx.chainId,
-        blockNumber: options?.blockNumber,
-      }),
+        blockNumber,
+      })
+    },
     enabled: (options?.enabled ?? true) && !!resolvedAccount && tokenId !== 0n,
     staleTime: options?.staleTime ?? 0,
   })
@@ -1893,7 +1973,7 @@ export function useUniswapV3PoolLiquidities(
       getClientCacheScopeKey(publicClient, clientScope),
     ],
     queryFn: () => {
-      if (!poolAddress || !queryAddress || !args) {
+      if (!poolAddress || !queryAddress || queryAddress === zeroAddress || !args) {
         throw new PanopticValidationError('useUniswapV3PoolLiquidities: missing required args')
       }
       const { startTick, nTicks } = args
@@ -1905,7 +1985,12 @@ export function useUniswapV3PoolLiquidities(
         nTicks,
       })
     },
-    enabled: (options?.enabled ?? true) && !!poolAddress && !!queryAddress && !!args,
+    enabled:
+      (options?.enabled ?? true) &&
+      !!poolAddress &&
+      !!queryAddress &&
+      queryAddress !== zeroAddress &&
+      !!args,
     refetchInterval: options?.refetchInterval,
     staleTime: options?.staleTime,
     gcTime: options?.gcTime,

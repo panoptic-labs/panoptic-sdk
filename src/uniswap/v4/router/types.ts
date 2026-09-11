@@ -72,8 +72,8 @@ export interface SwapExactInQuote {
   zeroForOne: boolean
   /** Output token address (`address(0)` for native ETH). */
   tokenOut: Address
-  /** Resolved v4 PoolKey (reused by the swap calldata builder). */
-  poolKey: PoolKey
+  /** Resolved v4 PoolKey (reused by the v4 swap calldata builder; absent for v3). */
+  poolKey?: PoolKey
   /** Quoter's gas estimate. */
   gasEstimate: bigint
 }
@@ -142,8 +142,8 @@ export interface SwapExactOutQuote {
   zeroForOne: boolean
   /** Output token address (`address(0)` for native ETH). */
   tokenOut: Address
-  /** Resolved v4 PoolKey (reused by the swap calldata builder). */
-  poolKey: PoolKey
+  /** Resolved v4 PoolKey (reused by the v4 swap calldata builder; absent for v3). */
+  poolKey?: PoolKey
   /** Quoter's gas estimate. */
   gasEstimate: bigint
 }

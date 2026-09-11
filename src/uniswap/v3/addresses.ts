@@ -3,7 +3,7 @@
  * Router. The Universal Router itself is shared with v4 (see
  * `uniswap/v4/addresses`); only the v3 QuoterV2 is specific to v3.
  *
- * v1 supports mainnet only; other chains throw {@link UnsupportedChainError}
+ * Supports Ethereum mainnet and Robinhood; other chains throw {@link UnsupportedChainError}
  * unless the address is supplied via overrides (fork tests / new chains).
  *
  * @module uniswap/v3/addresses
@@ -29,6 +29,10 @@ export const UNISWAP_V3_ADDRESSES: Record<number, UniswapV3Addresses> = {
   1: {
     quoterV2: '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
     nonfungiblePositionManager: '0xC36442b4a4522E871399CD717aBDD847Ab11FE88',
+  },
+  4663: {
+    quoterV2: '0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7',
+    nonfungiblePositionManager: '0x73991a25c818bf1f1128deaab1492d45638de0d3',
   },
 }
 

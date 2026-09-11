@@ -4,14 +4,19 @@ import { MAINNET_CHAIN_ID, requireChainDeployment } from './chainDeployments'
 import {
   MainnetUSDCPLPPreviousVaultPoolInfos,
   MainnetUSDCPLPV3AuthorizedVaultPoolInfos,
+  MainnetUSDCPLPVaultPoolInfos,
 } from './hypoVaultManagerArtifacts/MainnetUSDCPLPVaultPoolInfos'
 import {
   MainnetWETHPLPPreviousVaultPoolInfos,
   MainnetWETHPLPV3AuthorizedVaultPoolInfos,
+  MainnetWETHPLPVaultPoolInfos,
 } from './hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
 import type { PoolInfo } from './utils/buildManagerInput'
 
 const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
+const MAINNET_POOL_RETIREMENT_BLOCK = 25_898_997n
+const MAINNET_POOL_RETIREMENT_TRANSACTION =
+  '0xfca6a6dd0f081649dd6f50496175a58e6a119d574b594390beab23618b05ba2c' as const
 
 const POOL_INFO_ARRAY_ABI = {
   type: 'tuple[]',
@@ -100,6 +105,11 @@ const MAINNET_VAULT_HISTORIES: readonly VaultHistory[] = [
         '0xb6d62abb10728655c4c9b612abcd82af9e93c5906357eb6be41cabb224b32118',
         MainnetWETHPLPV3AuthorizedVaultPoolInfos.poolInfos,
       ),
+      poolConfiguration(
+        MAINNET_POOL_RETIREMENT_BLOCK,
+        MAINNET_POOL_RETIREMENT_TRANSACTION,
+        MainnetWETHPLPVaultPoolInfos.poolInfos,
+      ),
     ],
     managerRootTransitions: [
       {
@@ -116,6 +126,11 @@ const MAINNET_VAULT_HISTORIES: readonly VaultHistory[] = [
         activationBlockNumber: 25_704_951n,
         transactionHash: '0xb6d62abb10728655c4c9b612abcd82af9e93c5906357eb6be41cabb224b32118',
         manageRoot: '0x4d2fb008ac93d2a363881e31e65f31bacbefef39efb44cf2f95b65cf49c65c7d',
+      },
+      {
+        activationBlockNumber: MAINNET_POOL_RETIREMENT_BLOCK,
+        transactionHash: MAINNET_POOL_RETIREMENT_TRANSACTION,
+        manageRoot: '0x99baae2a0ddf55db31bf2e340856e6e76c87d37add86e95483bd7d1bad93e95c',
       },
     ],
   },
@@ -142,6 +157,11 @@ const MAINNET_VAULT_HISTORIES: readonly VaultHistory[] = [
         '0xb6d62abb10728655c4c9b612abcd82af9e93c5906357eb6be41cabb224b32118',
         MainnetUSDCPLPV3AuthorizedVaultPoolInfos.poolInfos,
       ),
+      poolConfiguration(
+        MAINNET_POOL_RETIREMENT_BLOCK,
+        MAINNET_POOL_RETIREMENT_TRANSACTION,
+        MainnetUSDCPLPVaultPoolInfos.poolInfos,
+      ),
     ],
     managerRootTransitions: [
       {
@@ -163,6 +183,11 @@ const MAINNET_VAULT_HISTORIES: readonly VaultHistory[] = [
         activationBlockNumber: 25_704_951n,
         transactionHash: '0xb6d62abb10728655c4c9b612abcd82af9e93c5906357eb6be41cabb224b32118',
         manageRoot: '0x3223880461fe3e61dc96d9d81579ae943507ec95f17cba100b462cec53967e14',
+      },
+      {
+        activationBlockNumber: MAINNET_POOL_RETIREMENT_BLOCK,
+        transactionHash: MAINNET_POOL_RETIREMENT_TRANSACTION,
+        manageRoot: '0x29587b0f67aefbf4a11ecffe3bfb56ebef54e441df95fa260d44273d182027b7',
       },
     ],
   },

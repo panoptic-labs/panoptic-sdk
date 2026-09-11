@@ -26,12 +26,14 @@ import { decodeFunctionResult, encodeFunctionData } from 'viem'
 
 import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import { panopticQueryAbi } from '../abis/panopticQuery'
+import type { MulticallContract, multicallRead } from '../clients'
+import { MulticallResultMissingError, PanopticError } from '../errors'
 import { tickToSqrtPriceX96 } from '../formatters/tick'
 import type { BlockMeta } from '../types'
 import { NO_LOWER_LIQUIDATION_TICK, NO_UPPER_LIQUIDATION_TICK } from '../utils/constants'
 import { decodeLeftRightUnsigned } from '../writes/utils'
 import { type MintBufferRatio, mintableAfterBuffer } from './mintBuffer'
-import { type MulticallBlockCall, readBlockAndAggregate, requireReturnData } from './multicallBlock'
+import { readBlockAndAggregate } from './multicallBlock'
 
 const FP96 = 1n << 96n
 const Q128 = 1n << 128n
@@ -229,54 +231,125 @@ export async function getMarginBuffer(params: GetMarginBufferParams): Promise<Ma
     collateralToken1 = addrs[1]
   }
 
+  const plan = prepareMarginBufferRead({
+    poolAddress,
+    account,
+    tokenIds,
+    queryAddress,
+    mintBuffer,
+    collateralAddresses: { collateralToken0, collateralToken1 },
+  })
+  const { _meta, results } = await readBlockAndAggregate({
+    client,
+    calls: plan.contracts.map((contract) => ({
+      target: contract.address,
+      callData: encodeFunctionData({
+        abi: contract.abi,
+        functionName: contract.functionName,
+        args: contract.args,
+      }),
+    })),
+    blockNumber: targetBlockNumber,
+  })
+  const decodedResults: MulticallResult[] = results.map((result, index) => {
+    const contract = plan.contracts[index]
+    if (!contract) {
+      return {
+        status: 'failure',
+        error: new MulticallResultMissingError('margin read contract', index),
+      }
+    }
+    if (!result.success) {
+      return { status: 'failure', error: new PanopticError(`Margin read ${index} failed`) }
+    }
+    return {
+      status: 'success',
+      result: decodeFunctionResult({
+        abi: contract.abi,
+        functionName: contract.functionName,
+        data: result.returnData,
+      }),
+    }
+  })
+  return plan.decode(decodedResults, _meta)
+}
+
+type MulticallResult = Awaited<ReturnType<typeof multicallRead>>['results'][number]
+
+function requireMulticallResult(
+  results: readonly MulticallResult[],
+  index: number,
+  label: string,
+): unknown {
+  const result = results[index]
+  if (result === undefined) throw new MulticallResultMissingError(label, index)
+  if (result.status === 'failure') throw result.error
+  return result.result
+}
+
+function requireBigIntResult(
+  results: readonly MulticallResult[],
+  index: number,
+  label: string,
+): bigint {
+  const result = requireMulticallResult(results, index, label)
+  if (typeof result !== 'bigint' && typeof result !== 'number') {
+    throw new PanopticError(`${label} returned an invalid value`)
+  }
+  return BigInt(result)
+}
+
+export function prepareMarginBufferRead({
+  poolAddress,
+  account,
+  tokenIds,
+  queryAddress,
+  collateralAddresses,
+  mintBuffer,
+}: Pick<
+  GetMarginBufferParams,
+  'poolAddress' | 'account' | 'tokenIds' | 'queryAddress' | 'mintBuffer'
+> & {
+  collateralAddresses: NonNullable<GetMarginBufferParams['collateralAddresses']>
+}) {
   const hasPositions = tokenIds.length > 0
-  const calls: MulticallBlockCall[] = [
+  const contracts: MulticallContract[] = [
     {
-      target: poolAddress,
-      callData: encodeFunctionData({
-        abi: panopticPoolV2Abi,
-        functionName: 'getCurrentTick',
-      }),
+      address: poolAddress,
+      abi: panopticPoolV2Abi,
+      functionName: 'getCurrentTick',
     },
     {
-      target: collateralToken0,
-      callData: encodeFunctionData({
-        abi: collateralTrackerV2Abi,
-        functionName: 'assetsOf',
-        args: [account],
-      }),
+      address: collateralAddresses.collateralToken0,
+      abi: collateralTrackerV2Abi,
+      functionName: 'assetsOf',
+      args: [account],
     },
     {
-      target: collateralToken1,
-      callData: encodeFunctionData({
-        abi: collateralTrackerV2Abi,
-        functionName: 'assetsOf',
-        args: [account],
-      }),
+      address: collateralAddresses.collateralToken1,
+      abi: collateralTrackerV2Abi,
+      functionName: 'assetsOf',
+      args: [account],
     },
   ]
 
-  const positionDataIndex = hasPositions ? calls.length : null
+  const positionDataIndex = hasPositions ? contracts.length : null
   if (positionDataIndex !== null) {
-    calls.push({
-      target: poolAddress,
-      callData: encodeFunctionData({
-        abi: panopticPoolV2Abi,
-        functionName: 'getFullPositionsData',
-        args: [account, true, tokenIds],
-      }),
+    contracts.push({
+      address: poolAddress,
+      abi: panopticPoolV2Abi,
+      functionName: 'getFullPositionsData',
+      args: [account, true, tokenIds],
     })
   }
 
-  const liqPricesIndex = hasPositions ? calls.length : null
+  const liqPricesIndex = hasPositions ? contracts.length : null
   if (liqPricesIndex !== null) {
-    calls.push({
-      target: queryAddress,
-      callData: encodeFunctionData({
-        abi: panopticQueryAbi,
-        functionName: 'getLiquidationPrices',
-        args: [poolAddress, account, tokenIds],
-      }),
+    contracts.push({
+      address: queryAddress,
+      abi: panopticQueryAbi,
+      functionName: 'getLiquidationPrices',
+      args: [poolAddress, account, tokenIds],
     })
   }
 
@@ -284,65 +357,73 @@ export async function getMarginBuffer(params: GetMarginBufferParams): Promise<Ma
   // latestObservation) so it needs no tick input and fits this same multicall.
   // We read index 0 (currentTick) to stay consistent with the liquidation price
   // and the risk chart, which are also anchored there.
-  const checkCollateralIndex = hasPositions ? calls.length : null
+  const checkCollateralIndex = hasPositions ? contracts.length : null
   if (checkCollateralIndex !== null) {
-    calls.push({
-      target: queryAddress,
-      callData: encodeFunctionData({
-        abi: panopticQueryAbi,
-        functionName: 'checkCollateral',
-        args: [poolAddress, account, tokenIds],
-      }),
+    contracts.push({
+      address: queryAddress,
+      abi: panopticQueryAbi,
+      functionName: 'checkCollateral',
+      args: [poolAddress, account, tokenIds],
     })
   }
 
-  const { _meta, results } = await readBlockAndAggregate({
-    client,
-    calls,
-    blockNumber: targetBlockNumber,
-  })
+  return {
+    contracts,
+    decode: (results: readonly MulticallResult[], _meta: BlockMeta): MarginBuffer =>
+      decodeMarginBufferResults({
+        results,
+        _meta,
+        positionDataIndex,
+        liqPricesIndex,
+        checkCollateralIndex,
+        mintBuffer,
+      }),
+  }
+}
 
-  const currentTickResult = decodeFunctionResult({
-    abi: panopticPoolV2Abi,
-    functionName: 'getCurrentTick',
-    data: requireReturnData(results, 0, 'PanopticPool.getCurrentTick'),
-  })
-  const currentTick = BigInt(currentTickResult)
-  const assets0 = decodeFunctionResult({
-    abi: collateralTrackerV2Abi,
-    functionName: 'assetsOf',
-    data: requireReturnData(results, 1, 'CollateralTracker.assetsOf token0'),
-  })
-  const assets1 = decodeFunctionResult({
-    abi: collateralTrackerV2Abi,
-    functionName: 'assetsOf',
-    data: requireReturnData(results, 2, 'CollateralTracker.assetsOf token1'),
-  })
+function decodeMarginBufferResults({
+  results,
+  _meta,
+  positionDataIndex,
+  liqPricesIndex,
+  checkCollateralIndex,
+  mintBuffer,
+}: {
+  results: readonly MulticallResult[]
+  _meta: BlockMeta
+  positionDataIndex: number | null
+  liqPricesIndex: number | null
+  checkCollateralIndex: number | null
+  mintBuffer: MintBufferRatio | undefined
+}): MarginBuffer {
+  const currentTick = requireBigIntResult(results, 0, 'PanopticPool.getCurrentTick')
+  const assets0 = requireBigIntResult(results, 1, 'CollateralTracker.assetsOf token0')
+  const assets1 = requireBigIntResult(results, 2, 'CollateralTracker.assetsOf token1')
   const positionDataResult =
     positionDataIndex === null
       ? null
-      : (decodeFunctionResult({
-          abi: panopticPoolV2Abi,
-          functionName: 'getFullPositionsData',
-          data: requireReturnData(results, positionDataIndex, 'PanopticPool.getFullPositionsData'),
-        }) as readonly [bigint, bigint, readonly bigint[], readonly bigint[], readonly bigint[]])
+      : (requireMulticallResult(
+          results,
+          positionDataIndex,
+          'PanopticPool.getFullPositionsData',
+        ) as readonly [bigint, bigint, readonly bigint[], readonly bigint[], readonly bigint[]])
   const liqPricesResult =
     liqPricesIndex === null
       ? null
-      : (decodeFunctionResult({
-          abi: panopticQueryAbi,
-          functionName: 'getLiquidationPrices',
-          data: requireReturnData(results, liqPricesIndex, 'PanopticQuery.getLiquidationPrices'),
-        }) as readonly [number, number])
+      : (requireMulticallResult(
+          results,
+          liqPricesIndex,
+          'PanopticQuery.getLiquidationPrices',
+        ) as readonly [number, number])
 
   const checkCollateralResult =
     checkCollateralIndex === null
       ? null
-      : (decodeFunctionResult({
-          abi: panopticQueryAbi,
-          functionName: 'checkCollateral',
-          data: requireReturnData(results, checkCollateralIndex, 'PanopticQuery.checkCollateral'),
-        }) as readonly [readonly bigint[], readonly bigint[], readonly bigint[], readonly bigint[]])
+      : (requireMulticallResult(
+          results,
+          checkCollateralIndex,
+          'PanopticQuery.checkCollateral',
+        ) as readonly [readonly bigint[], readonly bigint[], readonly bigint[], readonly bigint[]])
 
   // Usage against the binding constraint, at the current tick (index 0).
   // checkCollateral has already applied the live cross-buffer, so this reflects

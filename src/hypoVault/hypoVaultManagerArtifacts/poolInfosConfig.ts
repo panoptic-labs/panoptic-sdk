@@ -14,6 +14,8 @@ export const MAX_PRICE_DEVIATION = 100 as const
 export const WSPCXX_USDC_MAX_PRICE_DEVIATION = 10000 as const
 export const DEFAULT_TRIGGER_TICK = 150 as const
 
+const MAINNET_LEGACY_MAX_PRICE_DEVIATION = 5000 as const
+
 const MAINNET_USDC_WETH_5BPS_V3_POOL = MAINNET_DEPLOYMENT.panoptic.additionalPools?.ethUsdc5bpsV3
 
 if (MAINNET_USDC_WETH_5BPS_V3_POOL === undefined) {
@@ -81,7 +83,7 @@ export const MAINNET_USDC_PLP_POOL_INFOS = [
 
 export const MAINNET_LEGACY_DEFAULT_POOL_INFOS = [
   {
-    maxPriceDeviation: MAX_PRICE_DEVIATION,
+    maxPriceDeviation: MAINNET_LEGACY_MAX_PRICE_DEVIATION,
     pool: '0x000000007588B488d180899cDEa2080a886D2441',
     token0: getEthUsdcMarket(MAINNET_DEPLOYMENT).currency0,
     token1: getEthUsdcMarket(MAINNET_DEPLOYMENT).currency1,

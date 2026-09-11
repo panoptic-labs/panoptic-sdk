@@ -2,7 +2,7 @@
  * Per-chain Uniswap v4 infrastructure addresses (Universal Router, V4Quoter,
  * PoolManager, Permit2).
  *
- * v1 supports mainnet only; other chains throw {@link UnsupportedChainError}
+ * Supports Ethereum mainnet and Robinhood; other chains throw {@link UnsupportedChainError}
  * unless every address is supplied via the `overrides` argument (e.g. anvil
  * fork tests, or bots targeting a not-yet-listed chain).
  *
@@ -48,6 +48,13 @@ export const UNISWAP_V4_ADDRESSES: Record<number, UniswapV4Addresses> = {
     v4Quoter: '0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203',
     poolManager: '0x000000000004444c5dc75cB358380D2e3dE08A90',
     positionManager: '0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e',
+    permit2: PERMIT2_ADDRESS,
+  },
+  4663: {
+    universalRouter: '0x8876789976decbfcbbbe364623c63652db8c0904',
+    v4Quoter: '0x8dc178efb8111bb0973dd9d722ebeff267c98f94',
+    poolManager: '0x8366a39cc670b4001a1121b8f6a443a643e40951',
+    positionManager: '0x58daec3116aae6d93017baaea7749052e8a04fa7',
     permit2: PERMIT2_ADDRESS,
   },
 }

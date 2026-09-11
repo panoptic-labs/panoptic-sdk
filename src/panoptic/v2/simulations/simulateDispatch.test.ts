@@ -40,6 +40,37 @@ describe('simulateDispatch', () => {
     simulateWithTokenFlow.mockReset()
   })
 
+  it('executes buyer settlements before every operation of a wrapped reduction', async () => {
+    simulateWithTokenFlow.mockResolvedValue({ success: false, error: 'settlement reverted' })
+    const result = await simulateDispatch({
+      client,
+      poolAddress,
+      account,
+      positionIdList: [99n, 12n, 11n, 99n],
+      finalPositionIdList: [12n],
+      positionSizes: [5n, 10n, 0n, 0n],
+      tickAndSpreadLimits: Array.from({ length: 4 }, () => [-10n, 10n, 0n]),
+      settleSequence: {
+        positionIdListFrom: [11n],
+        targets: [{ user: account, tokenId: 21n, positionIdList: [21n, 22n] }],
+      },
+    })
+    const decoded = decodeFunctionData({
+      abi: panopticPoolV2Abi,
+      data: simulateWithTokenFlow.mock.calls[0]?.[0].callData,
+    })
+    expect(decoded.functionName).toBe('multicall')
+    if (decoded.functionName !== 'multicall') throw new Error('Expected multicall')
+    const calls = decoded.args[0].map((data) =>
+      decodeFunctionData({ abi: panopticPoolV2Abi, data }),
+    )
+    expect(calls.map((call) => call.functionName)).toEqual(['dispatchFrom', 'dispatch'])
+    expect(calls[0]?.args).toEqual([[11n], account, [22n, 21n], [22n, 21n], 0n])
+    expect(calls[1]?.args?.[0]).toEqual([99n, 12n, 11n, 99n])
+    expect(result.success).toBe(false)
+    expect(simulateWithTokenFlow).toHaveBeenCalledTimes(1)
+  })
+
   it('reports validated premia independently from the transaction token flow', async () => {
     simulateWithTokenFlow.mockResolvedValue({
       success: true,

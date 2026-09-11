@@ -1,9 +1,9 @@
 /**
- * TanStack Query v5 hooks for the Uniswap v4 Universal Router swap path.
+ * TanStack Query v5 hooks for the Uniswap Universal Router swap path.
  *
- * Mirrors the writes/simulations hook ergonomics (usePanopticContext injection,
- * OmitInjected* params, cache invalidation) but targets the generic Uniswap v4
- * router functions in `src/uniswap`.
+ * Version-aware: dispatches to v3 or v4 quote/swap functions based on pool
+ * metadata (`isV4`). The consumer passes a pool address and gets back a
+ * `SimulationResult` regardless of version.
  *
  * @module v2/react/hooks/uniswapRouter
  */
@@ -11,6 +11,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Address, WalletClient } from 'viem'
 
+import type { UniswapV3Addresses } from '../../../../uniswap/v3/addresses'
+import {
+  quoteSwapExactInViaV3Router,
+  quoteSwapExactOutViaV3Router,
+  swapExactInViaV3Router,
+  swapExactOutViaV3Router,
+} from '../../../../uniswap/v3/router'
+import type { UniswapV4Addresses } from '../../../../uniswap/v4/addresses'
 import {
   type ApproveErc20ForPermit2Params,
   type ApproveRouterViaPermit2Params,
@@ -28,17 +36,21 @@ import {
   swapExactOutViaRouter,
 } from '../../../../uniswap/v4/router'
 import { PanopticError } from '../../errors'
+import { getPoolMetadata } from '../../reads/pool'
 import { getClientCacheScopeKey } from '../cacheScopes'
 import { mutationEffects } from '../mutationEffects'
 import { usePanopticContext } from '../provider'
 import { queryKeys } from '../queryKeys'
 
+type RouterAddresses = Partial<UniswapV3Addresses & UniswapV4Addresses>
 type OmitInjectedWithPoolAndChain<T> = Omit<
   T,
-  'client' | 'walletClient' | 'account' | 'poolAddress' | 'chainId'
->
+  'client' | 'walletClient' | 'account' | 'poolAddress' | 'chainId' | 'addresses'
+> & { addresses?: RouterAddresses }
 type OmitInjectedWithChain<T> = Omit<T, 'client' | 'walletClient' | 'account' | 'chainId'>
-type OmitClientPoolAndChain<T> = Omit<T, 'client' | 'poolAddress' | 'chainId'>
+type OmitClientPoolAndChain<T> = Omit<T, 'client' | 'poolAddress' | 'chainId' | 'addresses'> & {
+  addresses?: RouterAddresses
+}
 
 function requireWallet(walletClient?: WalletClient, account?: Address) {
   if (!walletClient || !account) {
@@ -50,22 +62,44 @@ function requireWallet(walletClient?: WalletClient, account?: Address) {
 }
 
 /**
- * Quote an exact-in spot swap via the Universal Router (V4Quoter-backed).
- * Returns a `SimulationResult`, matching `useSimulateSwapExactIn`'s shape.
+ * Fetch the immutable `isV4` flag for a pool. Cached indefinitely (metadata
+ * never changes for a given pool address).
+ */
+export function usePoolVersion(poolAddress: Address) {
+  const { publicClient } = usePanopticContext()
+  const isRealPool = poolAddress !== '0x0000000000000000000000000000000000000000'
+  const { data, isLoading, isError } = useQuery({
+    // eslint-disable-next-line @tanstack/query/exhaustive-deps
+    queryKey: [...queryKeys.all, 'poolVersion', poolAddress] as const,
+    queryFn: async () => {
+      const meta = await getPoolMetadata({ client: publicClient, poolAddress })
+      return meta.isV4
+    },
+    enabled: isRealPool,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: 3,
+  })
+  return { isV4: data, isLoading: isRealPool && isLoading, isError }
+}
+
+/**
+ * Quote an exact-in spot swap via the Universal Router.
+ * Dispatches to v3 or v4 quoter based on pool version.
  */
 export function useQuoteSwapExactInViaRouter(
   poolAddress: Address,
   params?: OmitClientPoolAndChain<QuoteSwapExactInViaRouterParams>,
 ) {
   const { publicClient, chainId, clientScope } = usePanopticContext()
+  const { isV4 } = usePoolVersion(poolAddress)
   return useQuery({
-    // Raw `params` carries bigints that break TanStack v5's JSON key hashing; the
-    // stringified scalars below fully capture the query identity.
     // eslint-disable-next-line @tanstack/query/exhaustive-deps
     queryKey: [
       ...queryKeys.all,
       'uniswapRouter',
       'quote',
+      isV4 ? 'v4' : 'v3',
       chainId,
       poolAddress,
       params?.tokenIn,
@@ -73,35 +107,35 @@ export function useQuoteSwapExactInViaRouter(
       params?.slippageBps?.toString(),
       getClientCacheScopeKey(publicClient, clientScope),
     ] as const,
-    queryFn: () =>
-      quoteSwapExactInViaRouter({
-        client: publicClient,
-        poolAddress,
-        chainId,
-        ...params!,
-      }),
-    enabled: params !== undefined,
+    queryFn: () => {
+      if (!params) throw new PanopticError('params is required')
+      if (isV4) {
+        return quoteSwapExactInViaRouter({ client: publicClient, poolAddress, chainId, ...params })
+      }
+      return quoteSwapExactInViaV3Router({ client: publicClient, poolAddress, chainId, ...params })
+    },
+    enabled: params !== undefined && isV4 !== undefined,
     staleTime: 0,
   })
 }
 
 /**
- * Quote an exact-out spot swap via the Universal Router (V4Quoter-backed).
- * Returns a `SimulationResult` carrying the required input + `amountInMaximum`.
+ * Quote an exact-out spot swap via the Universal Router.
+ * Dispatches to v3 or v4 quoter based on pool version.
  */
 export function useQuoteSwapExactOutViaRouter(
   poolAddress: Address,
   params?: OmitClientPoolAndChain<QuoteSwapExactOutViaRouterParams>,
 ) {
   const { publicClient, chainId, clientScope } = usePanopticContext()
+  const { isV4 } = usePoolVersion(poolAddress)
   return useQuery({
-    // Raw `params` carries bigints that break TanStack v5's JSON key hashing; the
-    // stringified scalars below fully capture the query identity.
     // eslint-disable-next-line @tanstack/query/exhaustive-deps
     queryKey: [
       ...queryKeys.all,
       'uniswapRouter',
       'quoteExactOut',
+      isV4 ? 'v4' : 'v3',
       chainId,
       poolAddress,
       params?.tokenIn,
@@ -109,14 +143,19 @@ export function useQuoteSwapExactOutViaRouter(
       params?.slippageBps?.toString(),
       getClientCacheScopeKey(publicClient, clientScope),
     ] as const,
-    queryFn: () =>
-      quoteSwapExactOutViaRouter({
-        client: publicClient,
-        poolAddress,
-        chainId,
-        ...params!,
-      }),
-    enabled: params !== undefined,
+    queryFn: () => {
+      if (!params) throw new PanopticError('params is required')
+      if (isV4) {
+        return quoteSwapExactOutViaRouter({
+          client: publicClient,
+          poolAddress,
+          chainId,
+          ...params,
+        })
+      }
+      return quoteSwapExactOutViaV3Router({ client: publicClient, poolAddress, chainId, ...params })
+    },
+    enabled: params !== undefined && isV4 !== undefined,
     staleTime: 0,
   })
 }
@@ -127,8 +166,6 @@ export function useQuoteSwapExactOutViaRouter(
 export function useCheckRouterApproval(params?: OmitInjectedWithChain<CheckRouterApprovalParams>) {
   const { publicClient, chainId, clientScope } = usePanopticContext()
   return useQuery({
-    // Raw `params` carries bigints that break TanStack v5's JSON key hashing; the
-    // stringified scalars below fully capture the query identity.
     // eslint-disable-next-line @tanstack/query/exhaustive-deps
     queryKey: [
       ...queryKeys.all,
@@ -148,15 +185,29 @@ export function useCheckRouterApproval(params?: OmitInjectedWithChain<CheckRoute
 
 /**
  * Execute an exact-in spot swap via the Universal Router.
+ * Dispatches to v3 or v4 swap path based on pool version.
  */
 export function useSwapExactInViaRouter(poolAddress: Address) {
   const { publicClient, chainId, walletClient, account } = usePanopticContext()
+  const { isV4 } = usePoolVersion(poolAddress)
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (params: OmitInjectedWithPoolAndChain<SwapExactInViaRouterParams>) => {
       const wallet = requireWallet(walletClient, account)
-      return swapExactInViaRouter({
+      if (isV4 === undefined) {
+        throw new PanopticError('Pool version unknown — cannot route swap')
+      }
+      if (isV4) {
+        return swapExactInViaRouter({
+          client: publicClient,
+          ...wallet,
+          poolAddress,
+          chainId,
+          ...params,
+        })
+      }
+      return swapExactInViaV3Router({
         client: publicClient,
         ...wallet,
         poolAddress,
@@ -175,15 +226,29 @@ export function useSwapExactInViaRouter(poolAddress: Address) {
 
 /**
  * Execute an exact-out spot swap via the Universal Router.
+ * Dispatches to v3 or v4 swap path based on pool version.
  */
 export function useSwapExactOutViaRouter(poolAddress: Address) {
   const { publicClient, chainId, walletClient, account } = usePanopticContext()
+  const { isV4 } = usePoolVersion(poolAddress)
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (params: OmitInjectedWithPoolAndChain<SwapExactOutViaRouterParams>) => {
       const wallet = requireWallet(walletClient, account)
-      return swapExactOutViaRouter({
+      if (isV4 === undefined) {
+        throw new PanopticError('Pool version unknown — cannot route swap')
+      }
+      if (isV4) {
+        return swapExactOutViaRouter({
+          client: publicClient,
+          ...wallet,
+          poolAddress,
+          chainId,
+          ...params,
+        })
+      }
+      return swapExactOutViaV3Router({
         client: publicClient,
         ...wallet,
         poolAddress,

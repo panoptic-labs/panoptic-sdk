@@ -25,6 +25,23 @@ import { type MulticallBlockCall, readBlockAndAggregate, requireReturnData } fro
 
 const Q128 = 1n << 128n
 
+/** Immutable collateral tracker addresses, suitable for a pool-scoped cache. */
+export async function getPoolCollateralAddresses(params: {
+  client: Client
+  poolAddress: Address
+  blockNumber?: bigint
+}) {
+  const [collateralToken0, collateralToken1] = await multicall(params.client, {
+    contracts: [
+      { address: params.poolAddress, abi: panopticPoolV2Abi, functionName: 'collateralToken0' },
+      { address: params.poolAddress, abi: panopticPoolV2Abi, functionName: 'collateralToken1' },
+    ],
+    blockNumber: params.blockNumber,
+    allowFailure: false,
+  })
+  return { collateralToken0, collateralToken1 }
+}
+
 function convert0to1(amount: bigint, sqrtPriceX96: bigint): bigint {
   if (sqrtPriceX96 < Q128) {
     return (amount * sqrtPriceX96 * sqrtPriceX96) >> 192n
@@ -115,16 +132,9 @@ export async function getAccountBuyingPower(
     collateralToken0 = params.collateralAddresses.collateralToken0
     collateralToken1 = params.collateralAddresses.collateralToken1
   } else {
-    const addrs = await multicall(client, {
-      contracts: [
-        { address: poolAddress, abi: panopticPoolV2Abi, functionName: 'collateralToken0' },
-        { address: poolAddress, abi: panopticPoolV2Abi, functionName: 'collateralToken1' },
-      ],
-      blockNumber,
-      allowFailure: false,
-    })
-    collateralToken0 = addrs[0]
-    collateralToken1 = addrs[1]
+    const addresses = await getPoolCollateralAddresses({ client, poolAddress, blockNumber })
+    collateralToken0 = addresses.collateralToken0
+    collateralToken1 = addresses.collateralToken1
   }
 
   const calls: MulticallBlockCall[] = [

@@ -17,7 +17,7 @@
 
 import type { Address, PublicClient } from 'viem'
 
-import { PanopticError } from '../errors'
+import type { PanopticError } from '../errors'
 import { getPool } from '../reads/pool'
 import type { BlockMeta, TokenFlow } from '../types'
 import { MAX_TICK, MIN_TICK } from '../utils/constants'
@@ -28,7 +28,7 @@ import {
   type DispatchIntent,
   buildCreditWrappedDispatch,
 } from './creditWrap'
-import { simulateDispatch } from './simulateDispatch'
+import { type SimulateDispatchParams, simulateDispatch } from './simulateDispatch'
 import { getNotEnoughTokensError, quoteTokenShortfallRecovery } from './tokenShortfallRecovery'
 
 const BPS_DENOMINATOR = 10_000n
@@ -44,6 +44,8 @@ const BPS_DENOMINATOR = 10_000n
 export const DEFAULT_MIN_SWAP_RATIO_BPS = 50n
 
 export interface OneTokenFlowQuoteParams {
+  /** Buyer settlements included in the quoted transaction. */
+  settleSequence?: SimulateDispatchParams['settleSequence']
   client: PublicClient
   poolAddress: Address
   account: Address
@@ -143,10 +145,6 @@ function deltaAt(tokenFlow: TokenFlow, index: bigint): bigint {
   return index === 0n ? tokenFlow.delta0 : tokenFlow.delta1
 }
 
-function balanceBeforeAt(tokenFlow: TokenFlow, index: bigint): bigint {
-  return index === 0n ? tokenFlow.balanceBefore0 : tokenFlow.balanceBefore1
-}
-
 function abs(value: bigint): bigint {
   return value < 0n ? -value : value
 }
@@ -224,7 +222,11 @@ export async function quoteOneTokenFlow(
   // 1. The user's dispatch as-is. When it reverts because the account is short
   //    the non-target token, the revert itself quantifies the flow to cancel —
   //    so one-token-out subsumes the plain shortfall-recovery case.
-  const baseSimulation = await simulateDispatch({ ...simulateArgs, ...params.dispatch })
+  const baseSimulation = await simulateDispatch({
+    ...simulateArgs,
+    ...params.dispatch,
+    settleSequence: params.settleSequence,
+  })
   let swapAmount: bigint
   let direction: CreditWrapDirection
   // The target-token flow of the user's ops alone. Null when the base dispatch
@@ -283,6 +285,7 @@ export async function quoteOneTokenFlow(
       chainId: params.chainId,
       existingPositionIds: params.existingPositionIds,
       dispatch: params.dispatch,
+      settleSequence: params.settleSequence,
       error: shortfall,
       slippageBps: params.slippageBps,
       tickLimitLow: params.tickLimitLow,
@@ -380,8 +383,13 @@ export async function quoteOneTokenFlow(
     placement,
   } as const
 
-  // 2. For exact-out ONLY, the credit legs alone: prices the swap and proves the
-  //    account can cover it out of the target token before it is committed to.
+  // 2. For exact-out ONLY, the credit legs alone: prices the swap.
+  //
+  //    Affordability is NOT judged here. `balanceBefore` is read before the
+  //    whole transaction, so it excludes the settlement proceeds and the user's
+  //    own op flow that actually fund the swap. The settlement-aware wrapped
+  //    simulation in step 3 is the only honest test, and it reverts when the
+  //    account truly cannot pay.
   //
   //    Deliberately skipped for exact-in. There, the token being sold does not
   //    exist until the user's ops have run, so a swap-only simulation reverts
@@ -415,15 +423,6 @@ export async function quoteOneTokenFlow(
     }
     estimatedCounterAmount = abs(deltaAt(swapSimulation.tokenFlow, targetTokenIndex))
     maximumAmountIn = padForSlippage(estimatedCounterAmount, params.slippageBps)
-    const sourceBalance = balanceBeforeAt(swapSimulation.tokenFlow, targetTokenIndex)
-    if (sourceBalance < maximumAmountIn) {
-      return {
-        available: false,
-        reason: 'swap-unavailable',
-        detail: `source balance ${sourceBalance} < maximumAmountIn ${maximumAmountIn} (estimated ${estimatedCounterAmount}, slippageBps ${params.slippageBps})`,
-        error: new PanopticError('Insufficient collateral to fund the one-token-out swap'),
-      }
-    }
   }
 
   // 3. The wrapped dispatch. Single pass — the swap itself shifts fees and
@@ -433,7 +432,11 @@ export async function quoteOneTokenFlow(
     ...creditWrapArgs,
     dispatch: params.dispatch,
   })
-  const wrappedSimulation = await simulateDispatch({ ...simulateArgs, ...wrappedDispatch })
+  const wrappedSimulation = await simulateDispatch({
+    ...simulateArgs,
+    ...wrappedDispatch,
+    settleSequence: params.settleSequence,
+  })
   if (!wrappedSimulation.success || wrappedSimulation.tokenFlow === undefined) {
     return {
       available: false,

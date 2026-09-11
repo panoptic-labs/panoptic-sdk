@@ -1,16 +1,17 @@
+import type { ContractFunctionArgs, ContractFunctionName } from 'viem'
+
 import { rolesV2Abi } from './rolesAbi'
 
-/** One idempotent Roles-modifier configuration call. */
-export interface ScopeStep {
-  name: string
-  functionName:
-    | 'assignRoles'
-    | 'scopeTarget'
-    | 'scopeFunction'
-    | 'allowFunction'
-    | 'setTransactionUnwrapper'
-  args: unknown[]
-}
+type ScopeFunctionName = ContractFunctionName<typeof rolesV2Abi, 'nonpayable'>
+
+/** One idempotent Roles-modifier configuration call, paired with its ABI arguments. */
+export type ScopeStep = {
+  [Name in ScopeFunctionName]: {
+    name: string
+    functionName: Name
+    args: ContractFunctionArgs<typeof rolesV2Abi, 'nonpayable', Name>
+  }
+}[ScopeFunctionName]
 
 /**
  * Minimal structural client shapes (instead of viem's `PublicClient` /

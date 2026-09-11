@@ -13,6 +13,25 @@ import {
   simulateOpenPosition,
   simulateWithdraw,
 } from './index'
+import { simulateWithTokenFlow } from './tokenFlow'
+
+it('returns interactive token flow without waiting for gas estimation', async () => {
+  const client = createMockPublicClient({
+    simulateContract: createMulticallSimulateContract(100n, 200n, 90n, 180n),
+    estimateGas: vi.fn(() => new Promise<bigint>(() => {})),
+  })
+  const result = await simulateWithTokenFlow({
+    client,
+    poolAddress: MOCK_TOKEN0,
+    user: MOCK_TOKEN1,
+    callData: '0x',
+    estimateGas: false,
+  })
+  expect(result.success).toBe(true)
+  expect(result.tokenFlow?.delta0).toBe(-10n)
+  expect(client.estimateGas).not.toHaveBeenCalled()
+  expect(result.gasEstimate).toBe(0n)
+})
 
 // Mock addresses
 const MOCK_TOKEN0 = '0x4444444444444444444444444444444444444444' as const

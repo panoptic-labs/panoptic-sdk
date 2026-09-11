@@ -60,6 +60,41 @@ function createMockClient(): PublicClient {
 }
 
 describe('Collateral Estimation with PanopticQuery', () => {
+  it('stops superseded MAX searches before another refinement round', async () => {
+    const controller = new AbortController()
+    const client = createMockClient()
+    const simulateContract = vi.fn().mockImplementation(async () => {
+      controller.abort()
+      return { result: [] }
+    })
+    Object.assign(client, { simulateContract })
+    await expect(
+      getMaxPositionSize({
+        client,
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        queryAddress: QUERY_ADDRESS,
+        tokenId: 1n,
+        existingPositionIds: [],
+        signal: controller.signal,
+        bounds: {
+          maxSize: 100n,
+          maxSizeAtMinUtil: 10000n,
+          maxSizeAtMaxUtil: 100n,
+          _meta: {
+            blockNumber: MOCK_BLOCK.number,
+            blockHash: MOCK_BLOCK.hash,
+            blockTimestamp: MOCK_BLOCK.timestamp,
+          },
+        },
+      }),
+    ).rejects.toThrow()
+    expect(simulateContract).toHaveBeenCalledTimes(5)
+    expect(client.readContract).not.toHaveBeenCalled()
+    expect(simulateContract).toHaveBeenCalledWith(
+      expect.objectContaining({ blockNumber: MOCK_BLOCK.number }),
+    )
+  })
   // getRequiredBase computes at type(uint64).max size; estimateCollateralRequired
   // scales the raw result down by positionSize / MAX_UINT64.
   const MAX_UINT64 = 2n ** 64n - 1n

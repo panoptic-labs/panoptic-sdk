@@ -11,7 +11,7 @@ import {
   type DispatchIntent,
   buildCreditWrappedDispatch,
 } from './creditWrap'
-import { simulateDispatch } from './simulateDispatch'
+import { type SimulateDispatchParams, simulateDispatch } from './simulateDispatch'
 
 const BPS_DENOMINATOR = 10_000n
 const MAX_RECOVERY_QUOTE_ATTEMPTS = 8
@@ -19,6 +19,8 @@ const MAX_RECOVERY_QUOTE_ATTEMPTS = 8
 export type { DispatchIntent }
 
 export interface TokenShortfallRecoveryQuoteParams {
+  /** Buyer settlements included in the quoted transaction. */
+  settleSequence?: SimulateDispatchParams['settleSequence']
   client: PublicClient
   poolAddress: Address
   account: Address
@@ -179,10 +181,6 @@ function getInputAmount(tokenFlow: TokenFlow, tokenInIndex: 0n | 1n): bigint {
   return delta < 0n ? -delta : delta
 }
 
-function getBalanceBefore(tokenFlow: TokenFlow, tokenIndex: 0n | 1n): bigint {
-  return tokenIndex === 0n ? tokenFlow.balanceBefore0 : tokenFlow.balanceBefore1
-}
-
 function getOutputAmount(tokenFlow: TokenFlow, tokenOutIndex: 0n | 1n): bigint {
   const delta = tokenOutIndex === 0n ? tokenFlow.delta0 : tokenFlow.delta1
   return delta > 0n ? delta : 0n
@@ -327,15 +325,10 @@ export async function quoteTokenShortfallRecovery(
 
       const estimatedAmountIn = getInputAmount(swapSimulation.tokenFlow, tokenInIndex)
       const estimatedAmountOut = getOutputAmount(swapSimulation.tokenFlow, tokenOutIndex)
-      const sourceBalance = getBalanceBefore(swapSimulation.tokenFlow, tokenInIndex)
-      if (sourceBalance < estimatedAmountIn) {
-        return {
-          available: false,
-          reason: 'swap-unavailable',
-          detail: `source balance ${sourceBalance} < exact input cost ${estimatedAmountIn}`,
-          error: new PanopticError('Insufficient source collateral for the recovery swap'),
-        }
-      }
+      // Affordability is deliberately NOT pre-checked here. `balanceBefore` is
+      // sampled before the whole transaction, so it cannot see the settlement
+      // proceeds that land ahead of this prefixed swap. The settlement-aware
+      // recovery simulation below is the only honest test.
       if (estimatedAmountOut < requiredOutput) {
         creditInput =
           estimatedAmountOut > 0n
@@ -354,6 +347,7 @@ export async function quoteTokenShortfallRecovery(
         account: params.account,
         existingPositionIdList: params.existingPositionIds,
         ...recoveredDispatch,
+        settleSequence: params.settleSequence,
         measurePremia: true,
         blockNumber: targetBlockNumber,
       })
@@ -495,7 +489,6 @@ export async function quoteTokenShortfallRecovery(
     const estimatedAmountIn = getInputAmount(swapSimulation.tokenFlow, tokenInIndex)
     const maxAmountIn = maximumAmountIn(estimatedAmountIn, params.slippageBps)
     const swapOutput = getOutputAmount(swapSimulation.tokenFlow, tokenOutIndex)
-    const sourceBalance = getBalanceBefore(swapSimulation.tokenFlow, tokenInIndex)
     if (swapOutput < amountOut) {
       // Grow the credit's output sizing by the ratio needed vs got, plus a
       // 1-wei safety, and try again. Falls through to the exact-in path only
@@ -504,21 +497,17 @@ export async function quoteTokenShortfallRecovery(
         swapOutput > 0n ? ceilDiv(creditOutSize * amountOut, swapOutput) + 1n : creditOutSize * 2n
       continue
     }
-    if (sourceBalance < maxAmountIn) {
-      return {
-        available: false,
-        reason: 'swap-unavailable',
-        detail: `source balance ${sourceBalance} < maximumAmountIn ${maxAmountIn} (estimated ${estimatedAmountIn}, slippageBps ${params.slippageBps})`,
-        error: new PanopticError('Insufficient source collateral for the recovery swap'),
-      }
-    }
-
+    // Affordability is deliberately NOT pre-checked here: `balanceBefore` is
+    // read before the whole transaction, so it excludes the settlement proceeds
+    // that fund the swap. The settlement-aware recovery simulation below is the
+    // only honest test.
     const recoverySimulation = await simulateDispatch({
       client: params.client,
       poolAddress: params.poolAddress,
       account: params.account,
       existingPositionIdList: params.existingPositionIds,
       ...recoveredDispatch,
+      settleSequence: params.settleSequence,
       measurePremia: true,
       blockNumber: targetBlockNumber,
     })
@@ -578,6 +567,12 @@ export async function quoteTokenShortfallRecovery(
     // MAX_RECOVERY_QUOTE_ATTEMPTS: the loop exits after that many iterations and
     // returns `recovery-unavailable` rather than looping unboundedly.
     const decodedShortfall = remainingShortfall.assetsRequested - remainingShortfall.assetBalance
+    // A straddled credit can produce the right final flow without making the
+    // output spendable during the user's mint. Increasing it cannot repair
+    // that ordering constraint: complete an exact-input swap first instead.
+    if (decodedShortfall >= shortfallError.assetsRequested - shortfallError.assetBalance) {
+      return quotePrefixedExactInput(amountOut)
+    }
     const additionalAmountOut = decodedShortfall > 0n ? decodedShortfall : amountOut
     amountOut += additionalAmountOut
     // Immediately rescale the credit sizing to the new (larger) target so the
@@ -587,10 +582,5 @@ export async function quoteTokenShortfallRecovery(
       swapOutput > 0n ? ceilDiv(creditOutSize * amountOut, swapOutput) + 1n : creditOutSize * 2n
   }
 
-  return {
-    available: false,
-    reason: 'recovery-unavailable',
-    detail: `still short after ${MAX_RECOVERY_QUOTE_ATTEMPTS} sizing attempts (last target ${amountOut})`,
-    error: new PanopticError('Could not cover recovery swap costs within the quote attempt limit'),
-  }
+  return quotePrefixedExactInput(shortfallError.assetsRequested - shortfallError.assetBalance)
 }

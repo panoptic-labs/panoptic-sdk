@@ -104,7 +104,14 @@ export const REQUIRED_BASE_ERROR_SENTINEL = 2n ** 128n - 1n
 export async function estimateCollateralRequired(
   params: EstimateCollateralRequiredParams,
 ): Promise<CollateralEstimate> {
-  const { client, poolAddress, tokenId, positionSize, atTick, queryAddress, blockNumber } = params
+  return scaleCollateralRequired(await getCollateralRequiredBase(params), params.positionSize)
+}
+
+/** Account- and size-independent requirement, with its valuation tick and block. */
+export async function getCollateralRequiredBase(
+  params: Omit<EstimateCollateralRequiredParams, 'account' | 'positionSize'>,
+) {
+  const { client, poolAddress, tokenId, atTick, queryAddress, blockNumber } = params
 
   const targetBlockNumber =
     blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
@@ -134,6 +141,16 @@ export async function estimateCollateralRequired(
     }),
     params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
   ])
+
+  return { requiredBase, effectiveTick, _meta }
+}
+
+/** Preserve the contract sentinel and integer rounding when scaling a cached base. */
+export function scaleCollateralRequired(
+  base: Awaited<ReturnType<typeof getCollateralRequiredBase>>,
+  positionSize: bigint,
+): CollateralEstimate {
+  const { requiredBase, effectiveTick, _meta } = base
 
   // getRequiredBase computes the requirement at type(uint64).max size. The
   // requirement is linear in size, so scale down to the requested positionSize.
@@ -169,6 +186,10 @@ export interface MaxPositionSize {
  * Parameters for getMaxPositionSize.
  */
 export interface GetMaxPositionSizeParams {
+  /** Abort superseded searches between RPC rounds. */
+  signal?: AbortSignal
+  /** Bounds fetched for this account, candidate and block (shared across modes). */
+  bounds?: MaxPositionSize
   /** viem PublicClient */
   client: PublicClient
   /** PanopticPool address */
@@ -220,6 +241,7 @@ export interface GetMaxPositionSizeParams {
 export async function getMaxPositionSize(
   params: GetMaxPositionSizeParams,
 ): Promise<MaxPositionSize> {
+  params.signal?.throwIfAborted()
   const {
     client,
     poolAddress,
@@ -237,7 +259,13 @@ export async function getMaxPositionSize(
   } = params
 
   const targetBlockNumber =
-    blockNumber ?? params._meta?.blockNumber ?? (await client.getBlockNumber())
+    blockNumber ??
+    params.bounds?._meta.blockNumber ??
+    params._meta?.blockNumber ??
+    (await client.getBlockNumber())
+  if (params.bounds && params.bounds._meta.blockNumber !== targetBlockNumber) {
+    throw new PanopticError('MAX bounds block does not match the refinement block')
+  }
 
   // Get existing position IDs
   let positionIds: bigint[]
@@ -258,17 +286,22 @@ export async function getMaxPositionSize(
   }
   // Get bounds and block meta in parallel
   const [boundsResult, _meta] = await Promise.all([
-    client.readContract({
-      address: queryAddress,
-      abi: panopticQueryAbi,
-      functionName: 'getMaxPositionSizeBounds',
-      args: [poolAddress, positionIds, account, tokenId],
-      blockNumber: targetBlockNumber,
-    }),
-    params._meta ?? getBlockMeta({ client, blockNumber: targetBlockNumber }),
+    params.bounds
+      ? ([params.bounds.maxSizeAtMinUtil, params.bounds.maxSizeAtMaxUtil] as const)
+      : client.readContract({
+          address: queryAddress,
+          abi: panopticQueryAbi,
+          functionName: 'getMaxPositionSizeBounds',
+          args: [poolAddress, positionIds, account, tokenId],
+          blockNumber: targetBlockNumber,
+        }),
+    params.bounds?._meta ??
+      params._meta ??
+      getBlockMeta({ client, blockNumber: targetBlockNumber }),
   ])
 
   const [maxSizeAtMinUtil, maxSizeAtMaxUtil] = boundsResult
+  params.signal?.throwIfAborted()
 
   // If bounds are equal or very close, or refinement disabled, return conservative estimate
   const precisionDivisor = BigInt(Math.floor(100 / precisionPct))
@@ -298,6 +331,8 @@ export async function getMaxPositionSize(
     precisionDivisor,
     swapAtMint,
     usePremiaAsCollateral,
+    blockNumber: targetBlockNumber,
+    signal: params.signal,
   })
 
   return {
@@ -313,6 +348,8 @@ export async function getMaxPositionSize(
  * Tests 5 points per round (sextiles), narrowing the range by 6x each iteration.
  */
 async function binarySearchMaxSize(params: {
+  signal?: AbortSignal
+  blockNumber: bigint
   client: PublicClient
   poolAddress: Address
   account: Address
@@ -346,9 +383,11 @@ async function binarySearchMaxSize(params: {
       positionSize,
       swapAtMint,
       usePremiaAsCollateral,
+      blockNumber: params.blockNumber,
     })
 
   while (high - low > 1n && high - low > low / precisionDivisor) {
+    params.signal?.throwIfAborted()
     const range = high - low
     const p1 = low + range / 6n
     const p2 = low + (range * 2n) / 6n
@@ -363,6 +402,7 @@ async function binarySearchMaxSize(params: {
       trySize(p4),
       trySize(p5),
     ])
+    params.signal?.throwIfAborted()
 
     if (s5) {
       low = p5
@@ -390,6 +430,7 @@ async function binarySearchMaxSize(params: {
  * Try to simulate opening a position with the given size.
  */
 async function tryDispatchSimulation(params: {
+  blockNumber: bigint
   client: PublicClient
   poolAddress: Address
   account: Address
@@ -445,6 +486,7 @@ async function tryDispatchSimulation(params: {
       functionName: 'multicall',
       args: [[callData]],
       account,
+      blockNumber: params.blockNumber,
     })
 
     return true

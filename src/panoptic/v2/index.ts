@@ -9,6 +9,8 @@
 // ============================================================================
 // Utilities
 // ============================================================================
+export { type LpFundingPolicy, assertLpPositionFunded } from './reads/lpFunding'
+export { getExecutableLpMaxSize } from './reads/lpMaxSize'
 export type { DecodedOraclePack, OracleTiming } from './utils'
 export type {
   OracleEmaPeriods,
@@ -435,6 +437,7 @@ export {
   // Collateral reads
   getCollateralAddresses,
   getCollateralData,
+  getCollateralRequiredBase,
   getCollateralSharePrices,
   // Collateral total assets
   getCollateralTotalAssetsBatch,
@@ -464,6 +467,7 @@ export {
   getOracleRiskParameters,
   getOracleState,
   getPool,
+  getPoolCurrentTick,
   // Pool liquidity
   getPoolLiquidities,
   // PanopticQuery utilities
@@ -494,6 +498,7 @@ export {
   RATE_AT_TARGET_BITS,
   ratePerSecWadToAprPct,
   REQUIRED_BASE_ERROR_SENTINEL,
+  scaleCollateralRequired,
   SECONDS_PER_YEAR,
   UNREALIZED_INTEREST_BITS,
   utilizationBpsToWad,
@@ -676,6 +681,19 @@ export {
   syncPositions,
   verifyBlockContinuity,
 } from './sync'
+
+// ============================================================================
+// Liquidator helpers (PanopticLiquidator)
+// ============================================================================
+export type {
+  HelperLiquidateParams,
+  LiquidationGateTicks,
+  LiquidationQuote,
+  QuoteLiquidationParams,
+  ScreenAccountExactParams,
+  ScreenAccountExactResult,
+} from './liquidator'
+export { emptyLiquidateParams, quoteLiquidation, screenAccountExact } from './liquidator'
 
 // ============================================================================
 // Write Functions
@@ -1021,15 +1039,18 @@ export {
   calculatePositionGreeks,
   // Position-level greeks
   calculatePositionValue,
+  calculatePositionValues,
   getLegDelta,
   getLegDeltaInVaultFrame,
   getLegGamma,
   // Leg-level greeks
   getLegNetValueWidth0,
   getLegValue,
+  getPositionDeltaMetrics,
   // Helpers
   isCall,
   isDefinedRisk,
+  preparePositionValue,
   toVaultFrameAtTick,
 } from './greeks'
 
@@ -1147,10 +1168,29 @@ export type {
 // consumers (bots) importing it need wagmi installed. Re-export the handful of
 // non-React symbols bots need here so they can stay on '@panoptic-eng/sdk/v2'.
 
-export { collateralTrackerV2Abi, panopticPoolV2Abi, riskEngineAbi } from '../../generated'
+export type {
+  IndicatorCandle,
+  IndicatorPoint,
+  MarketIndicator,
+} from '../../analytics/market-indicators'
+export {
+  calculateMarketIndicator,
+  calculateVarianceProfile,
+  MARKET_INDICATOR_PERIODS,
+  prepareIndicatorCandles,
+  VARIANCE_RATIO_LAG,
+} from '../../analytics/market-indicators'
+export {
+  collateralTrackerV2Abi,
+  panopticLiquidatorAbi,
+  panopticPoolV2Abi,
+  panopticQueryAbi,
+  riskEngineAbi,
+} from '../../generated'
 export type { ChainDeployment } from '../../hypoVault/chainDeployments'
 export {
   getChainDeployment,
   isSupportedChain,
   requireChainDeployment,
 } from '../../hypoVault/chainDeployments'
+export { type HedgeLimitEstimate, getHedgeLimits } from './reads/hedgeLimits'

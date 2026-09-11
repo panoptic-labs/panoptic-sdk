@@ -78,6 +78,8 @@ export interface TokenFlow {
  * Parameters for simulateWithTokenFlow.
  */
 export interface SimulateWithTokenFlowParams {
+  /** Defaults to true. False returns the existing 0n (unavailable) gas sentinel. */
+  estimateGas?: boolean
   /** viem public client */
   client: PublicClient
   /** PanopticPool address */
@@ -247,12 +249,14 @@ export async function simulateWithTokenFlow(
     // Estimate gas for the target call directly
     let gasEstimate = 0n
     try {
-      gasEstimate = await client.estimateGas({
-        account: user,
-        to: poolAddress,
-        data: callData,
-        blockNumber,
-      })
+      if (params.estimateGas !== false) {
+        gasEstimate = await client.estimateGas({
+          account: user,
+          to: poolAddress,
+          data: callData,
+          blockNumber,
+        })
+      }
     } catch {
       // Gas estimation may fail, use 0
     }

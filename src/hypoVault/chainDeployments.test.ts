@@ -1,16 +1,31 @@
+import { zeroAddress } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import {
   getChainDeployment,
   getEthUsdcMarket,
   isSupportedChain,
+  MAINNET_PANOPTIC_V2_ADDRESSES,
   requireChainDeployment,
+  ROBINHOOD_CHAIN_ID,
   SEPOLIA_CHAIN_ID,
   SEPOLIA_HYPOVAULT_ADDRESSES,
   SEPOLIA_PANOPTIC_V2_ADDRESSES,
 } from './chainDeployments'
 
 describe('chainDeployments', () => {
+  it('resolves Robinhood without advertising an undeployed market', () => {
+    const deployment = requireChainDeployment(ROBINHOOD_CHAIN_ID)
+
+    expect(isSupportedChain(ROBINHOOD_CHAIN_ID)).toBe(true)
+    expect(deployment.panoptic.v2.panopticQuery).toBe('0x0000000000000e1aE9c66C1c3B0A547D23389C93')
+    expect(deployment.panoptic.pool.panopticPool).toBe(zeroAddress)
+    expect(deployment.hypovault.vaults.usdcPlpVault).toBe(zeroAddress)
+    expect(deployment.riskEngines).toContain(deployment.panoptic.v2.riskEngine)
+    expect(deployment.panoptic.v2).toEqual(MAINNET_PANOPTIC_V2_ADDRESSES)
+    expect(() => getEthUsdcMarket(deployment)).toThrow('Missing ETH/USDC market for chainId 4663')
+  })
+
   it('contains required Sepolia deployment fields', () => {
     const deployment = requireChainDeployment(SEPOLIA_CHAIN_ID)
 

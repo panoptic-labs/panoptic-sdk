@@ -16,7 +16,7 @@ const TOKEN1 = '0x0000000000000000000000000000000000000011'
 const TRACKER0 = '0x0000000000000000000000000000000000000020'
 const TRACKER1 = '0x0000000000000000000000000000000000000021'
 const POOL = '0x0000000000000000000000000000000000000030'
-const ACCOUNT = '0x0000000000000000000000000000000000000040'
+const ACCOUNT = '0x0000000000000000000000000000000000000040' as const
 
 const META = { blockNumber: 123n, blockTimestamp: 456n, blockHash: '0x01' as const }
 
@@ -175,6 +175,34 @@ describe('quoteOneTokenFlow', () => {
     vi.clearAllMocks()
     mockPool()
   })
+
+  it.each([0n, 1n])(
+    'sizes token %s output from the flow including buyer settlements',
+    async (targetTokenIndex) => {
+      const settleSequence = {
+        positionIdListFrom: [11n],
+        targets: [{ user: ACCOUNT, tokenId: 21n, positionIdList: [21n] }],
+      }
+      vi.mocked(simulateDispatch)
+        .mockResolvedValueOnce(
+          ok(
+            targetTokenIndex === 1n ? { delta0: 6n, delta1: -100n } : { delta0: -100n, delta1: 6n },
+          ),
+        )
+        .mockResolvedValueOnce(
+          ok(targetTokenIndex === 1n ? { delta0: 0n, delta1: 10n } : { delta0: 10n, delta1: 0n }),
+        )
+      const result = await quote({ targetTokenIndex, settleSequence })
+      expect(result.available).toBe(true)
+      if (!result.available) throw new Error('Expected a protected quote')
+      expect(result.quote.swapAmount).toBe(6n)
+      expect(result.quote.residualOtherChange).toBe(0n)
+      expect(vi.mocked(simulateDispatch).mock.calls.map(([args]) => args.settleSequence)).toEqual([
+        settleSequence,
+        settleSequence,
+      ])
+    },
+  )
 
   it('sources the other token with an exact-output credit when the account pays it', async () => {
     vi.mocked(simulateDispatch)
@@ -338,17 +366,53 @@ describe('quoteOneTokenFlow', () => {
     })
   })
 
-  it('refuses an exact-output swap the target balance cannot fund', async () => {
+  // A pre-transaction balance cannot decide affordability: the settlement
+  // proceeds and the user's own ops land mid-transaction. The quoter therefore
+  // defers to the wrapped simulation instead of pre-checking `balanceBefore`.
+  it('lets the wrapped simulation reject an exact-output swap it cannot fund', async () => {
     vi.mocked(simulateDispatch)
       .mockResolvedValueOnce(ok({ delta0: -6n, delta1: 100n }))
       .mockResolvedValueOnce(ok({ delta0: 6n, delta1: -120n, balanceBefore1: 100n }))
+      .mockResolvedValueOnce({
+        success: false as const,
+        error: new PanopticError('NotEnoughCollateral'),
+        _meta: META,
+      })
 
     await expect(quote({ targetTokenIndex: 1n })).resolves.toMatchObject({
       available: false,
-      reason: 'swap-unavailable',
+      reason: 'wrap-unavailable',
     })
-    // never reaches the wrapped simulation
-    expect(simulateDispatch).toHaveBeenCalledTimes(2)
+    expect(simulateDispatch).toHaveBeenCalledTimes(3)
+  })
+
+  it('quotes an exact-output swap funded by settlement the pre-balance cannot cover', async () => {
+    const settleSequence = {
+      positionIdListFrom: [11n],
+      targets: [{ user: ACCOUNT, tokenId: 21n, positionIdList: [21n] }],
+    }
+    vi.mocked(simulateDispatch)
+      // base: pays token0, receives token1 → target is token1
+      .mockResolvedValueOnce(ok({ delta0: -6n, delta1: 100n }))
+      // swap-only: costs 120 token1 against a pre-balance of only 100. Under the
+      // old guard this was refused outright.
+      .mockResolvedValueOnce(ok({ delta0: 6n, delta1: -120n, balanceBefore1: 100n }))
+      // wrapped, settlements included: the settled premium covers the swap.
+      .mockResolvedValueOnce(ok({ delta0: 0n, delta1: 80n, balanceBefore1: 100n }))
+
+    const result = await quote({ targetTokenIndex: 1n, settleSequence })
+
+    expect(result.available).toBe(true)
+    if (!result.available) throw new Error('Expected a protected quote')
+    expect(result.quote.direction).toBe('exact-out')
+    expect(result.quote.residualOtherChange).toBe(0n)
+    // The base and wrapped runs are priced against the settlements; the
+    // swap-only probe prices the credit legs alone and must not include them.
+    expect(vi.mocked(simulateDispatch).mock.calls.map(([args]) => args.settleSequence)).toEqual([
+      settleSequence,
+      undefined,
+      settleSequence,
+    ])
   })
 
   it('surfaces a revert of the wrapped dispatch', async () => {

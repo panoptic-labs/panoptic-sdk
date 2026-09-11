@@ -126,11 +126,12 @@ export {
   useSimulateWithdraw,
 } from './simulations'
 
-// Uniswap v4 router swap hooks
+// Uniswap Universal Router swap hooks (version-aware: v3 + v4)
 export {
   useApproveErc20ForPermit2,
   useApproveRouterViaPermit2,
   useCheckRouterApproval,
+  usePoolVersion,
   useQuoteSwapExactInViaRouter,
   useQuoteSwapExactOutViaRouter,
   useSwapExactInViaRouter,

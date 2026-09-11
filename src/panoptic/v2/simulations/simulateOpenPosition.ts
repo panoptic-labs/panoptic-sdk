@@ -20,6 +20,8 @@ import { simulateWithTokenFlow } from './tokenFlow'
  * Parameters for simulating position opening.
  */
 export interface SimulateOpenPositionParams {
+  /** Skip gas estimation for interactive previews; defaults to true. */
+  estimateGas?: boolean
   /** Public client */
   client: PublicClient
   /** PanopticPool address */
@@ -158,6 +160,7 @@ export async function simulateOpenPosition(
 
     // Simulate with token flow measurement using PanopticPool.multicall + getAssetsOf
     const flowResult = await simulateWithTokenFlow({
+      estimateGas: params.estimateGas,
       client,
       poolAddress,
       user: account,

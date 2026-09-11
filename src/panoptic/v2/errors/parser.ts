@@ -450,7 +450,7 @@ function extractErrorData(error: unknown): `0x${string}` | null {
  */
 export function isPanopticErrorType<T extends PanopticError>(
   error: PanopticError,
-  errorClass: new (...args: unknown[]) => T,
+  errorClass: abstract new (...args: never[]) => T,
 ): error is T {
   return error instanceof errorClass
 }

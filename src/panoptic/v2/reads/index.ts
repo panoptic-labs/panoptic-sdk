@@ -65,6 +65,7 @@ export {
   getOracleRiskParameters,
   getOracleState,
   getPool,
+  getPoolCurrentTick,
   getPoolMetadata,
   getRiskParameters,
   getUtilization,
@@ -167,12 +168,14 @@ export {
   type RequiredCreditForITM,
   createFlowNeutralTokenId,
   estimateCollateralRequired,
+  getCollateralRequiredBase,
   getItmAmounts,
   getMaxPositionSize,
   getMaxRedeem,
   getMaxWithdrawable,
   getRequiredCreditForITM,
   REQUIRED_BASE_ERROR_SENTINEL,
+  scaleCollateralRequired,
 } from './collateralEstimate'
 
 // Collateral strategy classification + requirement attribution
@@ -387,3 +390,5 @@ export {
   EnrichmentCallError,
   getPositionEnrichmentData,
 } from './enrichment'
+export { type HedgeLimitEstimate, getHedgeLimits } from './hedgeLimits'
+export { type LpFundingPolicy, assertLpPositionFunded } from './lpFunding'

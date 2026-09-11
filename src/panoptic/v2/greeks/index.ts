@@ -707,28 +707,33 @@ export interface PositionGreeksInput {
  * Calculate total value across all legs.
  */
 export function calculatePositionValue(input: PositionGreeksInput): bigint {
-  const { legs, currentTick, mintTick, positionSize, poolTickSpacing, assetIndex, swapAtMint } =
-    input
+  return preparePositionValue(input)(input.currentTick)
+}
+
+/** Prepare mint-time invariants once for an arbitrary series of valuation ticks. */
+export function preparePositionValue(input: Omit<PositionGreeksInput, 'currentTick'>) {
+  const { legs, mintTick, positionSize, poolTickSpacing, assetIndex, swapAtMint } = input
   const definedRisk = isDefinedRisk(legs)
 
   // Fast path: without swapAtMint there is no width=0 net-payoff (delta/greeks aggregation),
   // so no ITM netting is needed — value each leg independently.
   if (swapAtMint === undefined) {
-    return legs.reduce(
-      (sum, leg) =>
-        sum +
-        getLegValue(
-          leg,
-          currentTick,
-          mintTick,
-          positionSize,
-          poolTickSpacing,
-          definedRisk,
-          assetIndex,
-          swapAtMint,
-        ),
-      0n,
-    )
+    return (currentTick: bigint) =>
+      legs.reduce(
+        (sum, leg) =>
+          sum +
+          getLegValue(
+            leg,
+            currentTick,
+            mintTick,
+            positionSize,
+            poolTickSpacing,
+            definedRisk,
+            assetIndex,
+            swapAtMint,
+          ),
+        0n,
+      )
   }
 
   // Pass 1: accumulate each option leg's mint-time ITM into a per-side notional pool. Under
@@ -750,41 +755,55 @@ export function calculatePositionValue(input: PositionGreeksInput): bigint {
     else assetItmPool += itm
   }
 
-  // Pass 2: sum leg values, netting width=0 legs against the matching ITM pool (consumed once).
-  let sum = 0n
-  for (const leg of legs) {
-    if (leg.width === 0n) {
-      const isAssetToken0 = resolveAssetDirection(leg, assetIndex)
-      const borrowsAsset = isCall(leg.tokenType, isAssetToken0)
-      const offset = borrowsAsset ? assetItmPool : numeraireItmPool
-      if (borrowsAsset) assetItmPool = 0n
-      else numeraireItmPool = 0n
-      const qCurrentTick = quoteTick(currentTick, isAssetToken0)
-      const qMintTick = quoteTick(mintTick, isAssetToken0)
-      const m = leg.isLong ? -(positionSize * leg.optionRatio) : positionSize * leg.optionRatio
-      sum += getLegNetValueWidth0(
-        leg,
-        m,
-        qCurrentTick,
-        qMintTick,
-        isAssetToken0,
-        swapAtMint,
-        offset,
-      )
-    } else {
-      sum += getLegValue(
-        leg,
-        currentTick,
-        mintTick,
-        positionSize,
-        poolTickSpacing,
-        definedRisk,
-        assetIndex,
-        swapAtMint,
-      )
+  const initialNumeraireItm = numeraireItmPool
+  const initialAssetItm = assetItmPool
+  return (currentTick: bigint) => {
+    let numeraireItmPool = initialNumeraireItm
+    let assetItmPool = initialAssetItm
+    // Each tick consumes its own copy of the mint-time pools.
+    let sum = 0n
+    for (const leg of legs) {
+      if (leg.width === 0n) {
+        const isAssetToken0 = resolveAssetDirection(leg, assetIndex)
+        const borrowsAsset = isCall(leg.tokenType, isAssetToken0)
+        const offset = borrowsAsset ? assetItmPool : numeraireItmPool
+        if (borrowsAsset) assetItmPool = 0n
+        else numeraireItmPool = 0n
+        const qCurrentTick = quoteTick(currentTick, isAssetToken0)
+        const qMintTick = quoteTick(mintTick, isAssetToken0)
+        const m = leg.isLong ? -(positionSize * leg.optionRatio) : positionSize * leg.optionRatio
+        sum += getLegNetValueWidth0(
+          leg,
+          m,
+          qCurrentTick,
+          qMintTick,
+          isAssetToken0,
+          swapAtMint,
+          offset,
+        )
+      } else {
+        sum += getLegValue(
+          leg,
+          currentTick,
+          mintTick,
+          positionSize,
+          poolTickSpacing,
+          definedRisk,
+          assetIndex,
+          swapAtMint,
+        )
+      }
     }
+    return sum
   }
-  return sum
+}
+
+/** Value a tick series without repeating position preparation. */
+export function calculatePositionValues(
+  input: Omit<PositionGreeksInput, 'currentTick'>,
+  ticks: readonly bigint[],
+): bigint[] {
+  return ticks.map(preparePositionValue(input))
 }
 
 /**
@@ -843,6 +862,23 @@ export function calculatePositionDeltaDebtOnly(
       ),
     0n,
   )
+}
+
+/** Delta and one strategy contract's notional, both in the requested asset frame. */
+export function getPositionDeltaMetrics(
+  input: Omit<PositionGreeksInput, 'assetIndex' | 'swapAtMint'> & { assetIndex: 0n | 1n },
+) {
+  const orderedLegs = [...input.legs].sort((a, b) =>
+    a.index < b.index ? -1 : a.index > b.index ? 1 : 0,
+  )
+  const nativeLeg = orderedLegs.find((leg) => leg.width > 0n) ?? orderedLegs[0]
+  return {
+    delta: calculatePositionDeltaDebtOnly(input),
+    // Ratios belong to the strategy's exposure, not its number of contracts.
+    contractSize: nativeLeg
+      ? toVaultFrameAtTick(input.positionSize, nativeLeg.asset, input.assetIndex, input.currentTick)
+      : 0n,
+  }
 }
 
 /**

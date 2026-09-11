@@ -33,6 +33,9 @@ import { AmountExceedsUint128Error } from '../../v4/router/errors'
 /** Universal Router command byte for a v3 exact-in swap. */
 export const V3_SWAP_EXACT_IN = 0x00
 
+/** Universal Router command byte for a v3 exact-out swap. */
+export const V3_SWAP_EXACT_OUT = 0x01
+
 /**
  * Universal Router recipient sentinel: the router maps `address(1)` to
  * `msg.sender` (the `execute` caller). Uniswap `Constants.MSG_SENDER`.
@@ -122,6 +125,65 @@ export function buildV3SwapExecuteCalldata(args: BuildV3SwapCalldataArgs): {
   value: bigint
 } {
   const { args: executeArgs, value } = buildV3SwapExecuteArgs(args)
+  const data = encodeFunctionData({
+    abi: universalRouterAbi,
+    functionName: 'execute',
+    args: executeArgs,
+  })
+  return { data, value }
+}
+
+export interface BuildV3ExactOutSwapCalldataArgs {
+  tokenIn: Address
+  tokenOut: Address
+  fee: bigint
+  amountOut: bigint
+  amountInMaximum: bigint
+  deadline: bigint
+}
+
+const v3ExactOutInputAbi = [
+  { name: 'recipient', type: 'address' },
+  { name: 'amountOut', type: 'uint256' },
+  { name: 'amountInMaximum', type: 'uint256' },
+  { name: 'path', type: 'bytes' },
+  { name: 'payerIsUser', type: 'bool' },
+] as const
+
+/**
+ * Build the typed `execute(...)` args for an exact-out single-hop v3 swap.
+ * The v3 exact-out path is reversed: `tokenOut ++ fee ++ tokenIn`.
+ */
+export function buildV3ExactOutSwapExecuteArgs(args: BuildV3ExactOutSwapCalldataArgs): {
+  args: readonly [Hex, readonly Hex[], bigint]
+  value: bigint
+} {
+  const { tokenIn, tokenOut, fee, amountOut, amountInMaximum, deadline } = args
+
+  if (tokenIn === zeroAddress || tokenOut === zeroAddress) {
+    throw new PanopticError('native ETH is not supported by the v3 exact-out router builder')
+  }
+  assertUint128(amountOut)
+  assertUint128(amountInMaximum)
+
+  const path = encodeV3Path(tokenOut, fee, tokenIn)
+  const input = encodeAbiParameters(v3ExactOutInputAbi, [
+    MSG_SENDER,
+    amountOut,
+    amountInMaximum,
+    path,
+    true,
+  ])
+
+  const commands = encodePacked(['uint8'], [V3_SWAP_EXACT_OUT])
+  return { args: [commands, [input], deadline] as const, value: 0n }
+}
+
+export function buildV3ExactOutSwapExecuteCalldata(args: BuildV3ExactOutSwapCalldataArgs): {
+  data: Hex
+  value: bigint
+} {
+  const { args: executeArgs, value } = buildV3ExactOutSwapExecuteArgs(args)
   const data = encodeFunctionData({
     abi: universalRouterAbi,
     functionName: 'execute',

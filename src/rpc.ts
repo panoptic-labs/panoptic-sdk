@@ -5,6 +5,7 @@ const alchemyChains = {
   8453: 'base-mainnet',
   10: 'opt-mainnet',
   130: 'unichain-mainnet',
+  4663: 'robinhood-mainnet',
   11155111: 'eth-sepolia',
 } as const
 

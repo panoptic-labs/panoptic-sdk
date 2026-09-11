@@ -29,3 +29,8 @@ export function getStorageCacheScopeKey(storage: unknown, scope?: string): strin
 export function getAtTickCacheKey(atTick?: bigint): string {
   return atTick === undefined ? 'latest' : atTick.toString()
 }
+
+/** Preserve position order while making the query key JSON-serializable. */
+export function getPositionIdsCacheKey(positionIds: readonly bigint[] = []): string {
+  return positionIds.map(String).join(',')
+}

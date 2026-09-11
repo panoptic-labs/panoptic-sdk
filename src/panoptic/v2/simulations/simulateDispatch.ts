@@ -11,6 +11,7 @@ import { getBlockMeta } from '../clients'
 import { PanopticError } from '../errors'
 import type { DispatchSimulation, SimulationResult, TokenFlow } from '../types'
 import type { TickAndSpreadLimits } from '../writes/position'
+import { type SettleSequenceCallsParams, buildSettleSequenceCalls } from '../writes/settleSequence'
 import { decodeLeftRightUnsigned } from '../writes/utils'
 import { simulateWithTokenFlow } from './tokenFlow'
 
@@ -18,6 +19,8 @@ import { simulateWithTokenFlow } from './tokenFlow'
  * Parameters for simulating dispatch.
  */
 export interface SimulateDispatchParams {
+  /** Buyer settlements executed atomically before the dispatch. */
+  settleSequence?: Pick<SettleSequenceCallsParams, 'positionIdListFrom' | 'targets'>
   /** Public client */
   client: PublicClient
   /** PanopticPool address */
@@ -144,7 +147,13 @@ export async function simulateDispatch(
       client,
       poolAddress,
       user: account,
-      callData,
+      callData: params.settleSequence?.targets.length
+        ? encodeFunctionData({
+            abi: panopticPoolV2Abi,
+            functionName: 'multicall',
+            args: [[...buildSettleSequenceCalls(params.settleSequence), callData]],
+          })
+        : callData,
       blockNumber: targetBlockNumber,
       preCallData: preFullPositionsCallData
         ? [preFullPositionsCallData, ...(prePremiaCallData ? [prePremiaCallData] : [])]

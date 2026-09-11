@@ -22,7 +22,10 @@ export default defineConfig({
     foundry({
       project: '../panoptic-helper/',
       forge: { build: false },
-      include: ['PanopticQuery.sol/PanopticQuery.json'],
+      include: [
+        'PanopticQuery.sol/PanopticQuery.json',
+        'PanopticLiquidator.sol/PanopticLiquidator.json',
+      ],
       exclude: ['src/**'],
     }),
   ],
