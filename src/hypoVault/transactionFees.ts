@@ -4,6 +4,7 @@ import { estimateFeesPerGas, getBlock, getFeeHistory } from 'viem/actions'
 
 export const MIN_VAULT_PRIORITY_FEE_PER_GAS = 100_000_000n // 0.1 gwei
 export const MAX_VAULT_PRIORITY_FEE_PER_GAS = 3_000_000_000n // 3 gwei
+export const MAX_STALE_DELTA_HEDGE_PRIORITY_FEE_PER_GAS = 8_000_000_000n // 8 gwei
 export const MAX_VAULT_TRANSACTION_GAS_COST = 15_000_000_000_000_000n // 0.015 ETH
 
 const FEE_HISTORY_BLOCK_COUNT = 20
@@ -13,6 +14,12 @@ const BASE_FEE_BUFFER_NUMERATOR = 1_125n
 const BASE_FEE_BUFFER_DENOMINATOR = 1_000n
 const REPLACEMENT_FEE_BUMP_NUMERATOR = 1_125n
 const REPLACEMENT_FEE_BUMP_DENOMINATOR = 1_000n
+const DELTA_HEDGE_PRIORITY_FEE_BUMP_NUMERATOR = 1_300n
+const DELTA_HEDGE_PRIORITY_FEE_BUMP_DENOMINATOR = 1_000n
+// Leave the mandatory 12.5% replacement headroom for a final 3 gwei replacement.
+const MAX_DELTA_HEDGE_PRIORITY_FEE_PER_GAS =
+  (MAX_VAULT_PRIORITY_FEE_PER_GAS * REPLACEMENT_FEE_BUMP_DENOMINATOR) /
+  REPLACEMENT_FEE_BUMP_NUMERATOR
 const GAS_ESTIMATE_BUFFER_NUMERATOR = 3n
 const GAS_ESTIMATE_BUFFER_DENOMINATOR = 2n
 
@@ -92,7 +99,7 @@ export class VaultTransactionGasCostLimitError extends Error {
 }
 
 export class VaultTransactionReplacementLimitError extends Error {
-  readonly code: 'GasCostCapExceeded'
+  readonly code: 'GasCostCapExceeded' | 'PriorityFeeCapExceeded'
   readonly requiredMaxFeePerGas: bigint
   readonly requiredMaxPriorityFeePerGas: bigint
   readonly maximumAffordableFeePerGas: bigint
@@ -104,7 +111,7 @@ export class VaultTransactionReplacementLimitError extends Error {
     requiredMaxPriorityFeePerGas,
     maximumAffordableFeePerGas,
   }: {
-    code: 'GasCostCapExceeded'
+    code: 'GasCostCapExceeded' | 'PriorityFeeCapExceeded'
     gasLimit: bigint
     requiredMaxFeePerGas: bigint
     requiredMaxPriorityFeePerGas: bigint
@@ -243,50 +250,91 @@ export function getVaultTransactionReplacementFeeQuote({
   originalQuote,
   historicalQuote,
   gasLimit,
+  finalReplacement = false,
+  staleBoundsReplacement = false,
 }: {
   originalQuote: Pick<VaultTransactionFeeQuote, 'maxFeePerGas' | 'maxPriorityFeePerGas'>
   historicalQuote: VaultDeltaHedgeFeeQuote
   gasLimit: bigint
+  finalReplacement?: boolean
+  staleBoundsReplacement?: boolean
 }): VaultDeltaHedgeFeeQuote {
   if (gasLimit <= 0n) {
     throw new Error(`Vault transaction gas limit must be positive, received ${gasLimit.toString()}`)
   }
 
-  const bumpedPriorityFee = ceilMultiplyFraction(
-    originalQuote.maxPriorityFeePerGas,
-    REPLACEMENT_FEE_BUMP_NUMERATOR,
-    REPLACEMENT_FEE_BUMP_DENOMINATOR,
-  )
+  const bumpedPriorityFee = staleBoundsReplacement
+    ? ceilMultiplyFraction(
+        originalQuote.maxPriorityFeePerGas,
+        REPLACEMENT_FEE_BUMP_NUMERATOR,
+        REPLACEMENT_FEE_BUMP_DENOMINATOR,
+      )
+    : ceilMultiplyFraction(
+        originalQuote.maxPriorityFeePerGas,
+        DELTA_HEDGE_PRIORITY_FEE_BUMP_NUMERATOR,
+        DELTA_HEDGE_PRIORITY_FEE_BUMP_DENOMINATOR,
+      )
   const bumpedMaxFee = ceilMultiplyFraction(
     originalQuote.maxFeePerGas,
     REPLACEMENT_FEE_BUMP_NUMERATOR,
     REPLACEMENT_FEE_BUMP_DENOMINATOR,
   )
-  // The historical p25 quote is already clamped to 3 gwei. A same-nonce
-  // replacement may exceed that estimate cap when the required bump does.
-  const requiredMaxPriorityFeePerGas =
+  const escalatingPriorityFee =
     historicalQuote.maxPriorityFeePerGas > bumpedPriorityFee
       ? historicalQuote.maxPriorityFeePerGas
       : bumpedPriorityFee
+  const priorityFeeLimit = staleBoundsReplacement
+    ? MAX_STALE_DELTA_HEDGE_PRIORITY_FEE_PER_GAS
+    : finalReplacement
+      ? MAX_VAULT_PRIORITY_FEE_PER_GAS
+      : MAX_DELTA_HEDGE_PRIORITY_FEE_PER_GAS
+  const desiredMaxPriorityFeePerGas = finalReplacement
+    ? MAX_VAULT_PRIORITY_FEE_PER_GAS
+    : staleBoundsReplacement
+      ? bumpedPriorityFee
+      : escalatingPriorityFee
+  const requiredReplacementPriorityFee = ceilMultiplyFraction(
+    originalQuote.maxPriorityFeePerGas,
+    REPLACEMENT_FEE_BUMP_NUMERATOR,
+    REPLACEMENT_FEE_BUMP_DENOMINATOR,
+  )
+  const requiredMaxPriorityFeePerGas =
+    desiredMaxPriorityFeePerGas < priorityFeeLimit ? desiredMaxPriorityFeePerGas : priorityFeeLimit
+  if (requiredMaxPriorityFeePerGas < requiredReplacementPriorityFee) {
+    throw new VaultTransactionReplacementLimitError({
+      code: 'PriorityFeeCapExceeded',
+      gasLimit,
+      requiredMaxFeePerGas: originalQuote.maxFeePerGas,
+      requiredMaxPriorityFeePerGas: requiredReplacementPriorityFee,
+      maximumAffordableFeePerGas: MAX_VAULT_TRANSACTION_GAS_COST / gasLimit,
+    })
+  }
   const bufferedBaseFee = historicalQuote.minimumMaxFeePerGas - MIN_VAULT_PRIORITY_FEE_PER_GAS
   const currentMarketMaxFee = bufferedBaseFee + requiredMaxPriorityFeePerGas
-  const requiredMaxFeePerGas =
+  const desiredMaxFeePerGas =
     currentMarketMaxFee > bumpedMaxFee ? currentMarketMaxFee : bumpedMaxFee
   const maximumAffordableFeePerGas = MAX_VAULT_TRANSACTION_GAS_COST / gasLimit
 
-  if (requiredMaxFeePerGas > maximumAffordableFeePerGas) {
+  if (
+    bumpedMaxFee > maximumAffordableFeePerGas ||
+    requiredMaxPriorityFeePerGas > maximumAffordableFeePerGas
+  ) {
     throw new VaultTransactionReplacementLimitError({
       code: 'GasCostCapExceeded',
       gasLimit,
-      requiredMaxFeePerGas,
+      requiredMaxFeePerGas: bumpedMaxFee,
       requiredMaxPriorityFeePerGas,
       maximumAffordableFeePerGas,
     })
   }
+  const maxFeePerGas =
+    desiredMaxFeePerGas < maximumAffordableFeePerGas
+      ? desiredMaxFeePerGas
+      : maximumAffordableFeePerGas
 
   return {
     ...historicalQuote,
-    maxFeePerGas: requiredMaxFeePerGas,
+    maxFeePerGas,
     maxPriorityFeePerGas: requiredMaxPriorityFeePerGas,
   }
 }

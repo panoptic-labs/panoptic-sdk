@@ -5,6 +5,7 @@ import {
   applyVaultTransactionGasCostLimit,
   bufferVaultTransactionGasEstimate,
   getVaultTransactionReplacementFeeQuote,
+  MAX_STALE_DELTA_HEDGE_PRIORITY_FEE_PER_GAS,
   MAX_VAULT_PRIORITY_FEE_PER_GAS,
   MAX_VAULT_TRANSACTION_GAS_COST,
   MIN_VAULT_PRIORITY_FEE_PER_GAS,
@@ -249,7 +250,7 @@ describe('delta hedge transaction fee quotes', () => {
     expect(quote?.maxPriorityFeePerGas).toBe(1_000_000_000n)
   })
 
-  it('uses the 12.5 percent replacement bump when p25 is lower', () => {
+  it('increases replacement priority fees by 30 percent when p25 is lower', () => {
     const replacement = getVaultTransactionReplacementFeeQuote({
       originalQuote: { maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n },
       historicalQuote: {
@@ -262,8 +263,8 @@ describe('delta hedge transaction fee quotes', () => {
       gasLimit: 1_000_000n,
     })
     expect(replacement).toMatchObject({
-      maxFeePerGas: 2_250_000_000n,
-      maxPriorityFeePerGas: 1_125_000_000n,
+      maxFeePerGas: 2_300_000_000n,
+      maxPriorityFeePerGas: 1_300_000_000n,
     })
   })
 
@@ -280,13 +281,13 @@ describe('delta hedge transaction fee quotes', () => {
       gasLimit: 1_000_000n,
     })
     expect(replacement).toMatchObject({
-      maxFeePerGas: 11_125_000_000n,
-      maxPriorityFeePerGas: 1_125_000_000n,
+      maxFeePerGas: 11_300_000_000n,
+      maxPriorityFeePerGas: 1_300_000_000n,
     })
   })
 
-  it('allows the required replacement bump above the historical 3 gwei cap', () => {
-    expect(
+  it('reserves enough priority-fee headroom for a final 3 gwei replacement', () => {
+    expect(() =>
       getVaultTransactionReplacementFeeQuote({
         originalQuote: {
           maxFeePerGas: 5_000_000_000n,
@@ -301,10 +302,89 @@ describe('delta hedge transaction fee quotes', () => {
         },
         gasLimit: 1_000_000n,
       }),
-    ).toMatchObject({
-      maxFeePerGas: 5_625_000_000n,
-      maxPriorityFeePerGas: 3_375_000_000n,
+    ).toThrow(VaultTransactionReplacementLimitError)
+  })
+
+  it('uses 3 gwei for a final replacement', () => {
+    const replacement = getVaultTransactionReplacementFeeQuote({
+      originalQuote: {
+        maxFeePerGas: 3_000_000_000n,
+        maxPriorityFeePerGas: 2_666_666_666n,
+      },
+      historicalQuote: {
+        maxFeePerGas: 1_100_000_000n,
+        maxPriorityFeePerGas: 100_000_000n,
+        minimumMaxFeePerGas: 1_100_000_000n,
+        rawPriorityFeePerGas: 1n,
+        source: 'fee_history_p25',
+      },
+      gasLimit: 50_000n,
+      finalReplacement: true,
     })
+    expect(replacement.maxPriorityFeePerGas).toBe(MAX_VAULT_PRIORITY_FEE_PER_GAS)
+    expect(replacement.maxFeePerGas).toBe(4_000_000_000n)
+  })
+
+  it('bumps stale-bound replacements by 12.5% up to the 8 gwei cap', () => {
+    const replacement = getVaultTransactionReplacementFeeQuote({
+      originalQuote: {
+        maxFeePerGas: 4_000_000_000n,
+        maxPriorityFeePerGas: 3_000_000_000n,
+      },
+      historicalQuote: {
+        maxFeePerGas: 1_100_000_000n,
+        maxPriorityFeePerGas: 5_000_000_000n,
+        minimumMaxFeePerGas: 1_100_000_000n,
+        rawPriorityFeePerGas: 1n,
+        source: 'fee_history_p25',
+      },
+      gasLimit: 1_000_000n,
+      staleBoundsReplacement: true,
+    })
+
+    expect(replacement.maxPriorityFeePerGas).toBe(3_375_000_000n)
+    expect(replacement.maxPriorityFeePerGas).toBeLessThan(
+      MAX_STALE_DELTA_HEDGE_PRIORITY_FEE_PER_GAS,
+    )
+  })
+
+  it('rejects stale-bound replacements above the 8 gwei cap', () => {
+    expect(() =>
+      getVaultTransactionReplacementFeeQuote({
+        originalQuote: {
+          maxFeePerGas: 9_000_000_000n,
+          maxPriorityFeePerGas: MAX_STALE_DELTA_HEDGE_PRIORITY_FEE_PER_GAS,
+        },
+        historicalQuote: {
+          maxFeePerGas: 1_100_000_000n,
+          maxPriorityFeePerGas: 100_000_000n,
+          minimumMaxFeePerGas: 1_100_000_000n,
+          rawPriorityFeePerGas: 1n,
+          source: 'fee_history_p25',
+        },
+        gasLimit: 1_000_000n,
+        staleBoundsReplacement: true,
+      }),
+    ).toThrow(VaultTransactionReplacementLimitError)
+  })
+
+  it('saturates max fee at the gas budget when the replacement bump still fits', () => {
+    const replacement = getVaultTransactionReplacementFeeQuote({
+      originalQuote: {
+        maxFeePerGas: 10_000_000_000n,
+        maxPriorityFeePerGas: 1_000_000_000n,
+      },
+      historicalQuote: {
+        maxFeePerGas: 20_000_000_000n,
+        maxPriorityFeePerGas: 1_000_000_000n,
+        minimumMaxFeePerGas: 19_100_000_000n,
+        rawPriorityFeePerGas: 1_000_000_000n,
+        source: 'fee_history_p25',
+      },
+      gasLimit: 1_000_000n,
+    })
+    expect(replacement.maxFeePerGas).toBe(15_000_000_000n)
+    expect(replacement.maxPriorityFeePerGas).toBe(1_300_000_000n)
   })
 
   it('rejects a replacement whose required max fee exceeds the 0.015 ETH cap', () => {

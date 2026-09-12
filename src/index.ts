@@ -297,6 +297,7 @@ export {
   getVaultDeltaHedgeInitialFeeQuote,
   getVaultTransactionFeeQuote,
   getVaultTransactionReplacementFeeQuote,
+  MAX_STALE_DELTA_HEDGE_PRIORITY_FEE_PER_GAS,
   MAX_VAULT_PRIORITY_FEE_PER_GAS,
   MAX_VAULT_TRANSACTION_GAS_COST,
   MIN_VAULT_PRIORITY_FEE_PER_GAS,
