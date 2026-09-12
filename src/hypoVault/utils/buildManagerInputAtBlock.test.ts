@@ -75,4 +75,26 @@ describe('buildManagerInputAtBlock', () => {
       }),
     ).rejects.toThrow('Invalid managerInput tokenIds length')
   })
+
+  it('throws when a pool tokenIds list contains duplicates', async () => {
+    await expect(
+      buildManagerInputAtBlock({
+        viemClient: {} as Client,
+        poolInfos: [
+          {
+            maxPriceDeviation: 100,
+            pool: '0x2aafC1D2Af4dEB9FD8b02cDE5a8C0922cA4D6c78',
+            token0: '0x0000000000000000000000000000000000000000',
+            token1: '0xFFFeD8254566B7F800f6D8CDb843ec75AE49B07A',
+          },
+        ],
+        tokenIds: [[1n, 1n]],
+        underlyingToken: '0x4200000000000000000000000000000000000006',
+        wethAddress: '0x4200000000000000000000000000000000000006',
+        blockNumber: 42n,
+      }),
+    ).rejects.toThrow('Invalid managerInput tokenIds: duplicate tokenId 1 in pool index 0')
+
+    expect(vi.mocked(readContract)).not.toHaveBeenCalled()
+  })
 })
