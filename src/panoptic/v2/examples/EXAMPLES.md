@@ -37,7 +37,8 @@ It is intentionally high-level so individual example READMEs can focus on implem
 - `market-maker`: Continuous quoting/open/roll/close with inventory management.
 - `execution-engine`: Nonce, retry, gas policy, and broadcaster abstraction layer.
 - `reorg-resilient-runner`: Idempotent strategy loop with checkpointed recovery.
-- `gamma-scalping`: Dynamic delta hedging around short gamma exposure.
+- `long-gamma-scalping`: Buy an ATM straddle and hedge delta with a swapAtMint loan.
+- `reverse-gamma-scalping`: Sell an ATM straddle and hedge delta with swapAtMint loans.
 - `spread-multiplier-targeted-selling`: Write options where spread dislocation is largest.
 - `vol-surface-arbitrage`: Relative-value trades across strikes/widths/expiries.
 - `vix-like-replication-calendar-strips`: Variance-style exposure using calendar spread strips to approximate an implied-volatility index profile.

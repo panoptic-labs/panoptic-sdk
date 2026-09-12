@@ -15,7 +15,7 @@ import type { Address, Chain, Hex, PublicClient, WalletClient } from 'viem'
 // ============================================================================
 // Funding Utilities (Sepolia-specific, but exposed for all networks)
 // ============================================================================
-import { parseAbi } from 'viem'
+import { parseAbi, zeroAddress } from 'viem'
 import { mainnet, sepolia } from 'viem/chains'
 
 import {
@@ -264,6 +264,13 @@ export function getNetworkConfigFor(network: SupportedNetwork): NetworkConfig {
 }
 
 /**
+ * Whether a token address represents the native gas token.
+ */
+export function isNativeTokenAddress(address: Address): boolean {
+  return address.toLowerCase() === zeroAddress
+}
+
+/**
  * Get Anvil RPC URL
  */
 export function getAnvilRpcUrl(): string {
@@ -425,7 +432,8 @@ export async function approveCollateralTracker(params: {
  * Fund a test account with tokens for fork testing.
  *
  * On Sepolia:
- * - Wraps ETH to WETH using WETH9.deposit()
+ * - Leaves native ETH in the account when token0 is the zero address
+ * - Wraps ETH to WETH using WETH9.deposit() when token0 is WETH
  * - Mints USDC using the test USDC contract's mint() function
  * - Optionally approves collateral trackers to spend tokens
  *
@@ -455,10 +463,14 @@ export async function fundTestAccount(params: FundingParams): Promise<{
     approveCollateral = true,
   } = params
 
-  // 1. Fund token0 (WETH on Sepolia - wrap ETH)
+  const isNativeToken0 = isNativeTokenAddress(networkConfig.tokens.token0.address)
+
+  // 1. Fund token0. Native ETH is already available on Anvil default accounts.
   if (token0Amount > 0n) {
-    const wrapHash = await wrapEthToWeth({ walletClient, account, amount: token0Amount })
-    await client.waitForTransactionReceipt({ hash: wrapHash })
+    if (!isNativeToken0) {
+      const wrapHash = await wrapEthToWeth({ walletClient, account, amount: token0Amount })
+      await client.waitForTransactionReceipt({ hash: wrapHash })
+    }
   }
 
   // 2. Fund token1 (mintable on Sepolia)
@@ -477,8 +489,8 @@ export async function fundTestAccount(params: FundingParams): Promise<{
   if (approveCollateral) {
     const maxApproval = 2n ** 256n - 1n // MaxUint256
 
-    // Approve token0 for collateralTracker0
-    if (token0Amount > 0n) {
+    // Approve token0 for collateralTracker0 when token0 is ERC20.
+    if (token0Amount > 0n && !isNativeToken0) {
       const approveToken0Hash = await approveCollateralTracker({
         walletClient,
         account,
@@ -503,13 +515,17 @@ export async function fundTestAccount(params: FundingParams): Promise<{
   }
 
   // 4. Return final balances
+  const token0BalancePromise = isNativeToken0
+    ? client.getBalance({ address: account })
+    : client.readContract({
+        address: networkConfig.tokens.token0.address,
+        abi: weth9Abi,
+        functionName: 'balanceOf',
+        args: [account],
+      })
+
   const [token0Balance, token1Balance] = await Promise.all([
-    client.readContract({
-      address: networkConfig.tokens.token0.address,
-      abi: weth9Abi,
-      functionName: 'balanceOf',
-      args: [account],
-    }),
+    token0BalancePromise,
     client.readContract({
       address: networkConfig.tokens.token1.address,
       abi: mintableErc20Abi,
