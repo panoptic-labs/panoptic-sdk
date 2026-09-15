@@ -21,6 +21,14 @@ describe('chainDeployments', () => {
     expect(deployment.panoptic.v2.panopticQuery).toBe('0x0000000000000e1aE9c66C1c3B0A547D23389C93')
     expect(deployment.panoptic.pool.panopticPool).toBe(zeroAddress)
     expect(deployment.hypovault.vaults.usdcPlpVault).toBe(zeroAddress)
+    expect(deployment.hypovault.core).toEqual({
+      hypoVaultImplementation: '0xF16714665955DBd0361D997eFc50fe391D96E8D0',
+      factory: '0xd5049B2647de57141dE7F65E5124707B99A452A3',
+      accountant: '0x9e345d862c41010F87D8E5A279e8D320D2831D36',
+      rolesAuthority: '0xb952D345c413Ddb7850173422bAe4968e0330598',
+      collateralTrackerDecoderAndSanitizer: '0xC87c45d2dbE5acb56013e2591427ECC84Fa251E6',
+    })
+    expect(deployment.subgraphs.hypovault).toContain('/hypovault-subgraph-robinhood/prod/gn')
     expect(deployment.riskEngines).toContain(deployment.panoptic.v2.riskEngine)
     expect(deployment.panoptic.v2).toEqual(MAINNET_PANOPTIC_V2_ADDRESSES)
     expect(() => getEthUsdcMarket(deployment)).toThrow('Missing ETH/USDC market for chainId 4663')
