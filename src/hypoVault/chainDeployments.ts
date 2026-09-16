@@ -9,6 +9,7 @@ export type {
   HypoVaultVaultAddresses,
   PanopticPoolAddresses,
   PanopticV2Addresses,
+  SpyUsdgMarket,
 } from '@panoptic-eng/deployments'
 export {
   BASE_CHAIN_ID,
@@ -23,6 +24,7 @@ export {
   CHAIN_DEPLOYMENTS,
   getChainDeployment,
   getEthUsdcMarket,
+  getSpyUsdgMarket,
   isSupportedChain,
   MAINNET_CHAIN_ID,
   MAINNET_DEPLOYMENT,
@@ -39,6 +41,7 @@ export {
   ROBINHOOD_PANOPTIC_POOL_ADDRESSES,
   ROBINHOOD_PANOPTIC_V2_ADDRESSES,
   ROBINHOOD_RISK_ENGINES,
+  ROBINHOOD_SPY_USDG_MARKET,
   SEPOLIA_CHAIN_ID,
   SEPOLIA_DEPLOYMENT,
   SEPOLIA_ETH_USDC_5BPS_MARKET,

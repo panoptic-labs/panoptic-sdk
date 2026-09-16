@@ -1,14 +1,17 @@
 import {
   BASE_CHAIN_ID,
   getEthUsdcMarket,
+  getSpyUsdgMarket,
   MAINNET_CHAIN_ID,
   requireChainDeployment,
+  ROBINHOOD_CHAIN_ID,
   SEPOLIA_CHAIN_ID,
 } from '../chainDeployments'
 
 const SEPOLIA_DEPLOYMENT = requireChainDeployment(SEPOLIA_CHAIN_ID)
 const BASE_DEPLOYMENT = requireChainDeployment(BASE_CHAIN_ID)
 const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
+const ROBINHOOD_DEPLOYMENT = requireChainDeployment(ROBINHOOD_CHAIN_ID)
 
 export const MAX_PRICE_DEVIATION = 100 as const
 export const WSPCXX_USDC_MAX_PRICE_DEVIATION = 10000 as const
@@ -67,6 +70,16 @@ export const MAINNET_WSPCXX_USDC_POOL_INFO = {
   token0: '0x8e2eeD8b8B5E13Ea7BF38e50d7821d2C57309072',
   token1: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   positionScanFromBlock: 25_302_077n,
+} as const
+
+export const ROBINHOOD_SPY_USDG_POOL_DEPLOYMENT_BLOCK = 62_901_925n
+
+export const ROBINHOOD_SPY_USDG_POOL_INFO = {
+  maxPriceDeviation: MAX_PRICE_DEVIATION,
+  pool: ROBINHOOD_DEPLOYMENT.panoptic.pool.panopticPool,
+  token0: getSpyUsdgMarket(ROBINHOOD_DEPLOYMENT).currency0,
+  token1: getSpyUsdgMarket(ROBINHOOD_DEPLOYMENT).currency1,
+  positionScanFromBlock: ROBINHOOD_SPY_USDG_POOL_DEPLOYMENT_BLOCK,
 } as const
 
 /** Accountant order used by the v3-authorization release. */

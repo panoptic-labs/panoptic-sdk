@@ -17,7 +17,9 @@ const timedRehedgeSchema = z
 
 export const HypoVaultManagerConfigSchema = z.object({
   deployment: z.enum(['dev', 'prod']),
-  artifactSet: z.enum(['base', 'mainnet-prod', 'mainnet-legacy', 'sepolia']).optional(),
+  artifactSet: z
+    .enum(['base', 'mainnet-prod', 'mainnet-legacy', 'robinhood-prod', 'sepolia'])
+    .optional(),
   // Deprecated compatibility field. Pool-local automation derives its delta
   // asset from token roles and must not use this index for decisions.
   vaultAssetIndex: z.union([z.literal(0n), z.literal(1n)]),
@@ -66,6 +68,12 @@ export const HypoVaultManagerConfigSchema = z.object({
   alerts: z
     .object({
       outOfRangeEnabled: z.boolean().optional(),
+    })
+    .optional(),
+  reporting: z
+    .object({
+      assetSymbol: z.string().min(1),
+      vaultLabel: z.string().min(1),
     })
     .optional(),
 })

@@ -9,6 +9,7 @@ import { getVaultApyStrategy, setVaultApyStrategyOverride } from './strategies'
 vi.mock('../chainDeployments', () => ({
   MAINNET_CHAIN_ID: 1,
   BASE_CHAIN_ID: 8453,
+  ROBINHOOD_CHAIN_ID: 4663,
   SEPOLIA_CHAIN_ID: 11155111,
   requireChainDeployment: vi.fn(() => ({
     hypovault: {
@@ -86,6 +87,11 @@ vi.mock('../hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos', () => ({
   },
   MainnetWETHPLPPreviousVaultPoolInfos: { poolInfos: [] },
   MainnetWETHPLPV3AuthorizedVaultPoolInfos: { poolInfos: [] },
+}))
+vi.mock('../hypoVaultManagerArtifacts/RobinhoodUSDGPLPVaultPoolInfos', () => ({
+  RobinhoodUSDGPLPVaultPoolInfos: {
+    vaultAddress: '0x08B24123252Bd9c4DD473b6573D4cF67196FFC4B',
+  },
 }))
 vi.mock('../hypoVaultManagerArtifacts/MainnetUSDCPLPStrategistLeaves', () => ({
   MainnetUSDCPLPStrategistLeaves: {

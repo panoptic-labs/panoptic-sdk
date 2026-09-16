@@ -70,7 +70,11 @@ export {
   simulateCancelDeposit,
 } from './hypoVault/cancelDeposit/cancelDeposit'
 export { useCancelDeposit } from './hypoVault/cancelDeposit/hooks/use-cancel-deposit'
-export type { ChainDeployment, HypoVaultManagerTurnkeySigners } from './hypoVault/chainDeployments'
+export type {
+  ChainDeployment,
+  HypoVaultManagerTurnkeySigners,
+  SpyUsdgMarket,
+} from './hypoVault/chainDeployments'
 export {
   BASE_CHAIN_ID,
   BASE_DEPLOYMENT,
@@ -84,6 +88,7 @@ export {
   CHAIN_DEPLOYMENTS,
   getChainDeployment,
   getEthUsdcMarket,
+  getSpyUsdgMarket,
   isSupportedChain,
   MAINNET_CHAIN_ID,
   MAINNET_DEPLOYMENT,
@@ -100,6 +105,7 @@ export {
   ROBINHOOD_PANOPTIC_POOL_ADDRESSES,
   ROBINHOOD_PANOPTIC_V2_ADDRESSES,
   ROBINHOOD_RISK_ENGINES,
+  ROBINHOOD_SPY_USDG_MARKET,
   SEPOLIA_CHAIN_ID,
   SEPOLIA_DEPLOYMENT,
   SEPOLIA_ETH_USDC_5BPS_MARKET,
@@ -159,6 +165,12 @@ export {
   MainnetWETHPLPV3AuthorizedVaultPoolInfos,
   MainnetWETHPLPVaultPoolInfos,
 } from './hypoVault/hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
+export {
+  ROBINHOOD_USDG_PLP_COMPILED_POOL_POLICY,
+  ROBINHOOD_USDG_PLP_POOL_POLICY,
+  RobinhoodUSDGPLPStrategistLeaves,
+} from './hypoVault/hypoVaultManagerArtifacts/RobinhoodUSDGPLPStrategistLeaves'
+export { RobinhoodUSDGPLPVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts/RobinhoodUSDGPLPVaultPoolInfos'
 export { SepoliaUSDCPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/SepoliaUSDCPLPStrategistLeaves'
 export { SepoliaUSDCPLPVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 export { SepoliaWETHPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/SepoliaWETHPLPStrategistLeaves'
@@ -171,6 +183,7 @@ export {
   UsdcPlpVaultMainnetProdConfig,
   UsdcPlpVaultSepoliaDevConfig,
   UsdcPlpVaultSepoliaProdConfig,
+  UsdgPlpVaultRobinhoodProdConfig,
   WethPlpVaultBaseProdConfig,
   WethPlpVaultMainnetLegacyConfig,
   WethPlpVaultMainnetProdConfig,

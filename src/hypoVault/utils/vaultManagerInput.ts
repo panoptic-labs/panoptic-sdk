@@ -7,6 +7,7 @@ import {
   BASE_CHAIN_ID,
   MAINNET_CHAIN_ID,
   requireChainDeployment,
+  ROBINHOOD_CHAIN_ID,
   SEPOLIA_CHAIN_ID,
 } from '../chainDeployments'
 import { BaseUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/BaseUSDCPLPVaultPoolInfos'
@@ -19,6 +20,7 @@ import {
   MainnetWETHPLPLegacyVaultPoolInfos,
   MainnetWETHPLPVaultPoolInfos,
 } from '../hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
+import { RobinhoodUSDGPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/RobinhoodUSDGPLPVaultPoolInfos'
 import { SepoliaUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 import { SepoliaWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaWETHPLPVaultPoolInfos'
 import {
@@ -49,6 +51,7 @@ const VAULT_POOL_INFOS_BY_CHAIN: Record<number, readonly VaultPoolInfoArtifact[]
   ],
   [SEPOLIA_CHAIN_ID]: [SepoliaUSDCPLPVaultPoolInfos, SepoliaWETHPLPVaultPoolInfos],
   [BASE_CHAIN_ID]: [BaseUSDCPLPVaultPoolInfos, BaseWETHPLPVaultPoolInfos],
+  [ROBINHOOD_CHAIN_ID]: [RobinhoodUSDGPLPVaultPoolInfos],
 }
 
 const GET_POOL_ACCOUNT_BALANCE_CANDIDATES = `

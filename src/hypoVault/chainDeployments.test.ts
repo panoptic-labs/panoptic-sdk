@@ -1,9 +1,9 @@
-import { zeroAddress } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import {
   getChainDeployment,
   getEthUsdcMarket,
+  getSpyUsdgMarket,
   isSupportedChain,
   MAINNET_PANOPTIC_V2_ADDRESSES,
   requireChainDeployment,
@@ -14,13 +14,18 @@ import {
 } from './chainDeployments'
 
 describe('chainDeployments', () => {
-  it('resolves Robinhood without advertising an undeployed market', () => {
+  it('resolves the prepared Robinhood USDG vault and SPY/USDG market', () => {
     const deployment = requireChainDeployment(ROBINHOOD_CHAIN_ID)
 
     expect(isSupportedChain(ROBINHOOD_CHAIN_ID)).toBe(true)
     expect(deployment.panoptic.v2.panopticQuery).toBe('0x0000000000000e1aE9c66C1c3B0A547D23389C93')
-    expect(deployment.panoptic.pool.panopticPool).toBe(zeroAddress)
-    expect(deployment.hypovault.vaults.usdcPlpVault).toBe(zeroAddress)
+    expect(deployment.panoptic.pool.panopticPool).toBe('0x00000000989bcb6f24af4a1Ab2A6d6a31c98A58E')
+    expect(deployment.hypovault.vaults.usdgPlpVault).toBe(
+      '0x08B24123252Bd9c4DD473b6573D4cF67196FFC4B',
+    )
+    expect(deployment.hypovault.managers.usdgPlpVaultManager).toBe(
+      '0x67Edb096585efe88a9A1ee16c5857AB74Fc8EA87',
+    )
     expect(deployment.hypovault.core).toEqual({
       hypoVaultImplementation: '0xF16714665955DBd0361D997eFc50fe391D96E8D0',
       factory: '0xd5049B2647de57141dE7F65E5124707B99A452A3',
@@ -32,6 +37,11 @@ describe('chainDeployments', () => {
     expect(deployment.riskEngines).toContain(deployment.panoptic.v2.riskEngine)
     expect(deployment.panoptic.v2).toEqual(MAINNET_PANOPTIC_V2_ADDRESSES)
     expect(() => getEthUsdcMarket(deployment)).toThrow('Missing ETH/USDC market for chainId 4663')
+    expect(getSpyUsdgMarket(deployment)).toMatchObject({
+      currency0: '0x117cc2133c37B721F49dE2A7a74833232B3B4C0C',
+      currency1: '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168',
+      poolId: '0xfe2a80bb5618fd14984b92ca6d45bf5ba67443ddb1435e28b2e48df2fc1526cd',
+    })
   })
 
   it('contains required Sepolia deployment fields', () => {

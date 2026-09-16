@@ -6,6 +6,7 @@ export {
 } from './usdcPlpVaultMainnetProdConfig'
 export { UsdcPlpVaultSepoliaDevConfig } from './usdcPlpVaultSepoliaDevConfig'
 export { UsdcPlpVaultSepoliaProdConfig } from './usdcPlpVaultSepoliaProdConfig'
+export { UsdgPlpVaultRobinhoodProdConfig } from './usdgPlpVaultRobinhoodProdConfig'
 export { WethPlpVaultBaseProdConfig } from './wethPlpVaultBaseProdConfig'
 export {
   WethPlpVaultMainnetLegacyConfig,

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   MAINNET_CHAIN_ID,
   MAINNET_ETH_USDC_5BPS_V3_PANOPTIC_POOL_ADDRESSES,
+  requireChainDeployment,
+  ROBINHOOD_CHAIN_ID,
 } from '../chainDeployments'
 import { getVaultPoolInfos } from '../utils/vaultManagerInput'
 import { getHypoVaultConfigForVault } from './vaultToConfig'
@@ -68,5 +70,27 @@ describe('getHypoVaultConfigForVault', () => {
       mainnetV3Pool.panopticPool.toLowerCase(),
     )
     expect(getVaultPoolInfos(MAINNET_LEGACY_USDC_VAULT, MAINNET_CHAIN_ID)).toHaveLength(1)
+  })
+
+  it('resolves the prepared Robinhood USDG vault config and pool infos', () => {
+    const deployment = requireChainDeployment(ROBINHOOD_CHAIN_ID)
+    const vault = deployment.hypovault.vaults.usdgPlpVault
+    if (vault === undefined) {
+      throw new Error('Missing Robinhood USDG PLP vault')
+    }
+
+    const config = getHypoVaultConfigForVault(vault, ROBINHOOD_CHAIN_ID)
+    expect(config?.artifactSet).toBe('robinhood-prod')
+    expect(config?.hypoVaultAddress).toBe(vault)
+    expect(config?.deltaHedge?.timedRehedge).toBeUndefined()
+    expect(getVaultPoolInfos(vault, ROBINHOOD_CHAIN_ID)).toEqual([
+      {
+        pool: deployment.panoptic.pool.panopticPool,
+        token0: '0x117cc2133c37B721F49dE2A7a74833232B3B4C0C',
+        token1: '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168',
+        maxPriceDeviation: 100,
+        positionScanFromBlock: 62_901_925n,
+      },
+    ])
   })
 })

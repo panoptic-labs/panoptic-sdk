@@ -8,6 +8,7 @@ import {
 } from './usdcPlpVaultMainnetProdConfig'
 import { UsdcPlpVaultSepoliaDevConfig } from './usdcPlpVaultSepoliaDevConfig'
 import { UsdcPlpVaultSepoliaProdConfig } from './usdcPlpVaultSepoliaProdConfig'
+import { UsdgPlpVaultRobinhoodProdConfig } from './usdgPlpVaultRobinhoodProdConfig'
 import { WethPlpVaultBaseProdConfig } from './wethPlpVaultBaseProdConfig'
 import {
   WethPlpVaultMainnetLegacyConfig,
@@ -27,6 +28,7 @@ const ALL_HYPO_VAULT_CONFIGS: HypoVaultManagerConfig[] = [
   UsdcPlpVaultMainnetProdConfig,
   WethPlpVaultMainnetLegacyConfig,
   UsdcPlpVaultMainnetLegacyConfig,
+  UsdgPlpVaultRobinhoodProdConfig,
 ]
 
 type GetHypoVaultConfigOptions = {

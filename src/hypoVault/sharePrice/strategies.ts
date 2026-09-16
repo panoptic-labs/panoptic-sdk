@@ -4,12 +4,14 @@ import {
   BASE_CHAIN_ID,
   MAINNET_CHAIN_ID,
   requireChainDeployment,
+  ROBINHOOD_CHAIN_ID,
   SEPOLIA_CHAIN_ID,
 } from '../chainDeployments'
 import { BaseUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/BaseUSDCPLPVaultPoolInfos'
 import { BaseWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/BaseWETHPLPVaultPoolInfos'
 import { MainnetUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/MainnetUSDCPLPVaultPoolInfos'
 import { MainnetWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
+import { RobinhoodUSDGPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/RobinhoodUSDGPLPVaultPoolInfos'
 import { SepoliaUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 import { SepoliaWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaWETHPLPVaultPoolInfos'
 import { getHypoVaultConfigForVault } from '../hypoVaultManagerConfigs/vaultToConfig'
@@ -194,6 +196,8 @@ const strategyOverridesByVaultKey: Record<string, VaultApyStrategy> = {
   [buildVaultStrategyKey(BASE_CHAIN_ID, BaseUSDCPLPVaultPoolInfos.vaultAddress)]:
     createPlpManagerInputStrategy(),
   [buildVaultStrategyKey(BASE_CHAIN_ID, BaseWETHPLPVaultPoolInfos.vaultAddress)]:
+    createPlpManagerInputStrategy(),
+  [buildVaultStrategyKey(ROBINHOOD_CHAIN_ID, RobinhoodUSDGPLPVaultPoolInfos.vaultAddress)]:
     createPlpManagerInputStrategy(),
   [buildVaultStrategyKey(SEPOLIA_CHAIN_ID, SepoliaUSDCPLPVaultPoolInfos.vaultAddress)]:
     createPlpManagerInputStrategy(SEPOLIA_PLP_POOL_MIN_BLOCK),

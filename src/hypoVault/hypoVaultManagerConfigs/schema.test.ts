@@ -4,6 +4,7 @@ import {
   BASE_CHAIN_ID,
   MAINNET_CHAIN_ID,
   requireChainDeployment,
+  ROBINHOOD_CHAIN_ID,
   SEPOLIA_CHAIN_ID,
 } from '../chainDeployments'
 import { MainnetLegacyUSDCPLPStrategistLeaves } from '../hypoVaultManagerArtifacts/MainnetLegacyUSDCPLPStrategistLeaves'
@@ -19,12 +20,17 @@ import {
   MainnetWETHPLPVaultPoolInfos,
 } from '../hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
 import {
+  ROBINHOOD_USDG_PLP_COMPILED_POOL_POLICY,
+  RobinhoodUSDGPLPStrategistLeaves,
+} from '../hypoVaultManagerArtifacts/RobinhoodUSDGPLPStrategistLeaves'
+import {
   HypoVaultManagerConfigSchema,
   UsdcPlpVaultBaseProdConfig,
   UsdcPlpVaultMainnetLegacyConfig,
   UsdcPlpVaultMainnetProdConfig,
   UsdcPlpVaultSepoliaDevConfig,
   UsdcPlpVaultSepoliaProdConfig,
+  UsdgPlpVaultRobinhoodProdConfig,
   WethPlpVaultBaseProdConfig,
   WethPlpVaultMainnetLegacyConfig,
   WethPlpVaultMainnetProdConfig,
@@ -51,6 +57,7 @@ const ALL_HYPOVAULT_CONFIGS = [
   ...BASE_MANUAL_TX_CONFIGS,
   ...MAINNET_MANUAL_TX_CONFIGS,
   ...SEPOLIA_MANUAL_TX_CONFIGS,
+  UsdgPlpVaultRobinhoodProdConfig,
 ]
 
 describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
@@ -74,6 +81,7 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
       deltaThresholdBps: 0n,
     })
     expect(baseWeth.deltaHedge?.timedRehedge).toBeUndefined()
+    expect(UsdgPlpVaultRobinhoodProdConfig.deltaHedge?.timedRehedge).toBeUndefined()
     for (const config of [
       UsdcPlpVaultMainnetLegacyConfig,
       WethPlpVaultMainnetProdConfig,
@@ -82,6 +90,51 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     ]) {
       expect(config.deltaHedge?.timedRehedge).toBeUndefined()
     }
+  })
+
+  it('freezes the Robinhood USDG option-selling parameters and policy', () => {
+    const deployment = requireChainDeployment(ROBINHOOD_CHAIN_ID)
+    const parsed = HypoVaultManagerConfigSchema.parse(UsdgPlpVaultRobinhoodProdConfig)
+    const signatures = ROBINHOOD_USDG_PLP_COMPILED_POOL_POLICY.strategistLeafDefinitions.map(
+      ({ functionSignature }) => functionSignature,
+    )
+    const targets = ROBINHOOD_USDG_PLP_COMPILED_POOL_POLICY.strategistLeafDefinitions.map(
+      ({ target }) => target.toLowerCase(),
+    )
+
+    expect(parsed).toMatchObject({
+      artifactSet: 'robinhood-prod',
+      chainId: ROBINHOOD_CHAIN_ID,
+      manageCycleIntervalMs: 600_000,
+      maxBuyingPowerUsageBps: 6600,
+      poolDeploymentBlock: 62_901_925,
+      vaultAssetIndex: 1n,
+      vaultCapInUnderlying: 100_000_000_000n,
+      vaultCapInShares: 100_000_000_000_000_000n,
+      deltaHedge: {
+        deltaThresholdBps: 200n,
+        maxHedgeSlots: 3,
+      },
+      reporting: {
+        assetSymbol: 'USDG',
+        vaultLabel: 'USDG PLP',
+      },
+    })
+    expect(parsed.manualTxDefaults?.collateralAllocations).toEqual([
+      {
+        trackerAddress: deployment.panoptic.pool.collateralTracker1,
+        allocationBps: 10_000,
+      },
+    ])
+    expect(signatures).toHaveLength(13)
+    expect(signatures.some((signature) => signature.includes('wrap'))).toBe(false)
+    expect(signatures).toContain('deposit(uint256,address)')
+    expect(signatures).toContain('withdraw(uint256,address,address)')
+    expect(targets).toContain(deployment.panoptic.pool.collateralTracker0.toLowerCase())
+    expect(targets).toContain(deployment.panoptic.pool.collateralTracker1.toLowerCase())
+    expect(RobinhoodUSDGPLPStrategistLeaves.metadata.ManageRoot).toBe(
+      '0x5ef821042a85fea05901e4612e8a8d60efd2468ca08f0810d5691e23ea98967f',
+    )
   })
 
   it('rejects timed jitter that can make the effective interval non-positive', () => {
