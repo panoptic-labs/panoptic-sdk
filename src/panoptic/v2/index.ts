@@ -1168,6 +1168,8 @@ export type {
 // consumers (bots) importing it need wagmi installed. Re-export the handful of
 // non-React symbols bots need here so they can stay on '@panoptic-eng/sdk/v2'.
 
+export type { BetaResult } from '../../analytics/beta'
+export { logReturns, realizedBeta } from '../../analytics/beta'
 export type {
   IndicatorCandle,
   IndicatorPoint,
