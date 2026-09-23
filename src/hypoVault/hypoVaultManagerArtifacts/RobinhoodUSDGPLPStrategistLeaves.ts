@@ -109,7 +109,7 @@ const trackerLeaves = [
 ] as const satisfies readonly StrategistLeafDefinition[]
 
 const dispatchLeaf = {
-  description: 'Dispatch mint/burn options on SPY/USDG PanopticPool',
+  description: 'Dispatch mint/burn options on PanopticPool',
   target: pool,
   functionSignature: dispatchSignature,
   addressArguments: [],

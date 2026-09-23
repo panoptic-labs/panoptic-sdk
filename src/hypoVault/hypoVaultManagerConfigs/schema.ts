@@ -60,6 +60,7 @@ export const HypoVaultManagerConfigSchema = z.object({
     .optional(),
   deltaHedge: z
     .object({
+      targetDeltaBps: z.bigint().nonnegative().max(10_000n).optional(),
       deltaThresholdBps: z.bigint().positive().optional(),
       maxHedgeSlots: z.number().int().positive().optional(),
       timedRehedge: timedRehedgeSchema.optional(),

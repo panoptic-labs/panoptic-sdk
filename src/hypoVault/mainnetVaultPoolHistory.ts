@@ -1,6 +1,6 @@
 import { type Address, type Hex, encodeAbiParameters, getAddress, keccak256 } from 'viem'
 
-import { MAINNET_CHAIN_ID, requireChainDeployment } from './chainDeployments'
+import { MAINNET_CHAIN_ID, requireChainDeployment, ROBINHOOD_CHAIN_ID } from './chainDeployments'
 import {
   MainnetUSDCPLPPreviousVaultPoolInfos,
   MainnetUSDCPLPV3AuthorizedVaultPoolInfos,
@@ -11,12 +11,16 @@ import {
   MainnetWETHPLPV3AuthorizedVaultPoolInfos,
   MainnetWETHPLPVaultPoolInfos,
 } from './hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
+import { RobinhoodUSDGPLPVaultPoolInfos } from './hypoVaultManagerArtifacts/RobinhoodUSDGPLPVaultPoolInfos'
 import type { PoolInfo } from './utils/buildManagerInput'
 
 const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
 const MAINNET_POOL_RETIREMENT_BLOCK = 25_898_997n
 const MAINNET_POOL_RETIREMENT_TRANSACTION =
   '0xfca6a6dd0f081649dd6f50496175a58e6a119d574b594390beab23618b05ba2c' as const
+const ROBINHOOD_USDG_VAULT_DEPLOYMENT_BLOCK = 63_972_776n
+const ROBINHOOD_USDG_VAULT_DEPLOYMENT_TRANSACTION =
+  '0x738c8a6d30a45f9b71d2d6260aa1c04aff558489631b3a9c6ccd5f49e0f57df4' as const
 
 const POOL_INFO_ARRAY_ABI = {
   type: 'tuple[]',
@@ -193,6 +197,26 @@ const MAINNET_VAULT_HISTORIES: readonly VaultHistory[] = [
   },
 ] as const
 
+const ROBINHOOD_VAULT_HISTORIES: readonly VaultHistory[] = [
+  {
+    vaultAddress: RobinhoodUSDGPLPVaultPoolInfos.vaultAddress,
+    poolConfigurations: [
+      poolConfiguration(
+        ROBINHOOD_USDG_VAULT_DEPLOYMENT_BLOCK,
+        ROBINHOOD_USDG_VAULT_DEPLOYMENT_TRANSACTION,
+        RobinhoodUSDGPLPVaultPoolInfos.poolInfos,
+      ),
+    ],
+    managerRootTransitions: [
+      {
+        activationBlockNumber: ROBINHOOD_USDG_VAULT_DEPLOYMENT_BLOCK,
+        transactionHash: ROBINHOOD_USDG_VAULT_DEPLOYMENT_TRANSACTION,
+        manageRoot: '0x5ef821042a85fea05901e4612e8a8d60efd2468ca08f0810d5691e23ea98967f',
+      },
+    ],
+  },
+] as const
+
 function copyPoolConfiguration(
   configuration: MainnetVaultPoolConfiguration,
 ): MainnetVaultPoolConfiguration {
@@ -217,9 +241,15 @@ function copyHistory(history: VaultHistory): VaultHistory {
 }
 
 function findHistory(chainId: number, vaultAddress: Address): VaultHistory | null {
-  if (chainId !== MAINNET_CHAIN_ID) return null
+  const histories =
+    chainId === MAINNET_CHAIN_ID
+      ? MAINNET_VAULT_HISTORIES
+      : chainId === ROBINHOOD_CHAIN_ID
+        ? ROBINHOOD_VAULT_HISTORIES
+        : null
+  if (histories === null) return null
   const normalizedVault = vaultAddress.toLowerCase()
-  const history = MAINNET_VAULT_HISTORIES.find(
+  const history = histories.find(
     (candidate) => candidate.vaultAddress.toLowerCase() === normalizedVault,
   )
   return history === undefined ? null : copyHistory(history)

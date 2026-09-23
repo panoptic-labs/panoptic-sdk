@@ -16,8 +16,8 @@ export const UsdgPlpVaultRobinhoodProdConfig: HypoVaultManagerConfig = {
   artifactSet: 'robinhood-prod',
   vaultAssetIndex: 1n,
   manageCycleIntervalMs: 600_000,
-  vaultCapInUnderlying: 100_000_000_000n,
-  vaultCapInShares: 100_000_000_000_000_000n,
+  vaultCapInUnderlying: 100_000_000n,
+  vaultCapInShares: 100_000_000_000_000n,
   allowUnlimitedDepositRequestIfCapNotReached: true,
   maxBuyingPowerUsageBps: 6600,
   poolDeploymentBlock: Number(ROBINHOOD_SPY_USDG_POOL_DEPLOYMENT_BLOCK),
@@ -44,6 +44,7 @@ export const UsdgPlpVaultRobinhoodProdConfig: HypoVaultManagerConfig = {
     ],
   },
   deltaHedge: {
+    targetDeltaBps: 6700n,
     deltaThresholdBps: 200n,
     maxHedgeSlots: 3,
   },
@@ -52,6 +53,6 @@ export const UsdgPlpVaultRobinhoodProdConfig: HypoVaultManagerConfig = {
   },
   reporting: {
     assetSymbol: 'USDG',
-    vaultLabel: 'USDG PLP',
+    vaultLabel: '0DTE +67∆ Vault',
   },
 }

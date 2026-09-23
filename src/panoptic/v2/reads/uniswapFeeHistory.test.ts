@@ -21,6 +21,7 @@ describe('getUniswapFeeHistory', () => {
   const feeGrowth = 10n * (1n << 128n)
   const blockData = {
     currentTick: 150,
+    sqrtPriceX96: 1n << 96n,
     feeGrowthGlobal0: feeGrowth,
     feeGrowthGlobal1: feeGrowth,
     tickData: new Map([
@@ -112,6 +113,8 @@ describe('getUniswapFeeHistory', () => {
     expect(result.snapshots[0].fees.token1).toBe(0n)
     expect(result.snapshots[0].blockNumber).toBe(MOCK_BLOCK.number)
     expect(result.snapshots[0].blockTimestamp).toBe(MOCK_BLOCK.timestamp)
+    expect(result.snapshots[0].currentTick).toBe(150)
+    expect(result.snapshots[0].sqrtPriceX96).toBe(0n)
 
     // Second block: delta = 100000
     expect(result.snapshots[1].fees.token0).toBe(100000n)

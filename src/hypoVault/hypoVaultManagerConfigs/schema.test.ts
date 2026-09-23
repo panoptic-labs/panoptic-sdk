@@ -109,15 +109,16 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
       maxBuyingPowerUsageBps: 6600,
       poolDeploymentBlock: 62_901_925,
       vaultAssetIndex: 1n,
-      vaultCapInUnderlying: 100_000_000_000n,
-      vaultCapInShares: 100_000_000_000_000_000n,
+      vaultCapInUnderlying: 100_000_000n,
+      vaultCapInShares: 100_000_000_000_000n,
       deltaHedge: {
+        targetDeltaBps: 6700n,
         deltaThresholdBps: 200n,
         maxHedgeSlots: 3,
       },
       reporting: {
         assetSymbol: 'USDG',
-        vaultLabel: 'USDG PLP',
+        vaultLabel: '0DTE +67∆ Vault',
       },
     })
     expect(parsed.manualTxDefaults?.collateralAllocations).toEqual([
@@ -135,6 +136,24 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     expect(RobinhoodUSDGPLPStrategistLeaves.metadata.ManageRoot).toBe(
       '0x5ef821042a85fea05901e4612e8a8d60efd2468ca08f0810d5691e23ea98967f',
     )
+  })
+
+  it('keeps every non-Robinhood target omitted and bounds explicit targets to 100%', () => {
+    for (const config of ALL_HYPOVAULT_CONFIGS.filter(
+      (config) => config !== UsdgPlpVaultRobinhoodProdConfig,
+    )) {
+      expect(config.deltaHedge?.targetDeltaBps).toBeUndefined()
+    }
+
+    expect(() =>
+      HypoVaultManagerConfigSchema.parse({
+        ...UsdgPlpVaultRobinhoodProdConfig,
+        deltaHedge: {
+          ...UsdgPlpVaultRobinhoodProdConfig.deltaHedge,
+          targetDeltaBps: 10_001n,
+        },
+      }),
+    ).toThrow()
   })
 
   it('rejects timed jitter that can make the effective interval non-positive', () => {

@@ -8,6 +8,7 @@ import {
   getLpFundingDeposit,
   getLpPositionFunding,
   getMaxLpPositionSize,
+  getUnhedgedLpRanges,
 } from './lpDeposit'
 import { getAmountsForLiquidity } from './lpGreeks'
 
@@ -58,6 +59,21 @@ const fundingParams = (tokenId: bigint, tick = 0n, quoteTokenIndex: 0 | 1 = 1) =
 })
 
 describe('LP position funding', () => {
+  it('creates one LP range per eligible short leg', () => {
+    let tokenId = addLegToTokenId(1n, leg(0n, 0n))
+    tokenId = addLegToTokenId(tokenId, leg(1n, 1n))
+    tokenId = addLegToTokenId(tokenId, { ...leg(0n, 2n), isLong: 1n })
+    tokenId = addLegToTokenId(tokenId, { ...leg(1n, 3n), width: 0n })
+
+    const ranges = getUnhedgedLpRanges({ tokenId, positionSize: 10n ** 18n, tickSpacing: 60n })
+    expect(ranges).toHaveLength(2)
+    expect(ranges.every((range) => range.liquidity > 0n)).toBe(true)
+    expect(ranges.map((range) => [range.tickLower, range.tickUpper])).toEqual([
+      [-600, 600],
+      [-600, 600],
+    ])
+  })
+
   it('caps MAX by a higher protocol requirement without reducing full LP funding', () => {
     const params = fundingParams(addLegToTokenId(1n, leg(0n)))
     const max = getMaxLpPositionSize({

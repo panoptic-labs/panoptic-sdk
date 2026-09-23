@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { MAINNET_CHAIN_ID, requireChainDeployment } from './chainDeployments'
+import { MAINNET_CHAIN_ID, requireChainDeployment, ROBINHOOD_CHAIN_ID } from './chainDeployments'
 import {
   getMainnetVaultManagerRootAtBlock,
   getMainnetVaultManagerRootHistory,
@@ -11,6 +11,12 @@ import {
 const deployment = requireChainDeployment(MAINNET_CHAIN_ID)
 const wethVault = deployment.hypovault.vaults.wethPlpVault
 const usdcVault = deployment.hypovault.vaults.usdcPlpVault
+const robinhoodDeployment = requireChainDeployment(ROBINHOOD_CHAIN_ID)
+const robinhoodUsdgVault = robinhoodDeployment.hypovault.vaults.usdgPlpVault
+
+if (robinhoodUsdgVault === undefined) {
+  throw new Error('Missing Robinhood USDG PLP vault')
+}
 
 describe('mainnet vault pool history', () => {
   it('records every accountant configuration observed since vault inception', () => {
@@ -215,7 +221,54 @@ describe('mainnet vault pool history', () => {
     ).toBe(originalMaxPriceDeviation)
   })
 
-  it('ignores non-mainnet chains and unknown vaults', () => {
+  it('records the Robinhood USDG vault atomic authorization deployment', () => {
+    const poolHistory = getMainnetVaultPoolConfigurationHistory({
+      chainId: ROBINHOOD_CHAIN_ID,
+      vaultAddress: robinhoodUsdgVault,
+    })
+    const rootHistory = getMainnetVaultManagerRootHistory({
+      chainId: ROBINHOOD_CHAIN_ID,
+      vaultAddress: robinhoodUsdgVault,
+    })
+
+    expect(poolHistory).toHaveLength(1)
+    expect(poolHistory?.[0]).toMatchObject({
+      activationBlockNumber: 63_972_776n,
+      transactionHash: '0x738c8a6d30a45f9b71d2d6260aa1c04aff558489631b3a9c6ccd5f49e0f57df4',
+    })
+    expect(poolHistory?.[0]?.poolInfos).toEqual([
+      {
+        pool: '0x00000000989bcb6f24af4a1Ab2A6d6a31c98A58E',
+        token0: '0x117cc2133c37B721F49dE2A7a74833232B3B4C0C',
+        token1: '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168',
+        maxPriceDeviation: 100,
+        positionScanFromBlock: 62_901_925n,
+      },
+    ])
+    expect(rootHistory).toEqual([
+      {
+        activationBlockNumber: 63_972_776n,
+        transactionHash: '0x738c8a6d30a45f9b71d2d6260aa1c04aff558489631b3a9c6ccd5f49e0f57df4',
+        manageRoot: '0x5ef821042a85fea05901e4612e8a8d60efd2468ca08f0810d5691e23ea98967f',
+      },
+    ])
+    expect(
+      getMainnetVaultPoolConfigurationAtBlock({
+        chainId: ROBINHOOD_CHAIN_ID,
+        vaultAddress: robinhoodUsdgVault,
+        blockNumber: 63_972_775n,
+      }),
+    ).toBeNull()
+    expect(
+      getMainnetVaultPoolConfigurationAtBlock({
+        chainId: ROBINHOOD_CHAIN_ID,
+        vaultAddress: robinhoodUsdgVault,
+        blockNumber: 63_972_776n,
+      })?.activationBlockNumber,
+    ).toBe(63_972_776n)
+  })
+
+  it('ignores unsupported chains and unknown vaults', () => {
     expect(
       getMainnetVaultPoolConfigurationHistory({ chainId: 8453, vaultAddress: wethVault }),
     ).toBeNull()

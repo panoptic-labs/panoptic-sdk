@@ -1,3 +1,5 @@
+export { getAaveHoldings } from './lending/aave'
+export { getMorphoHoldings } from './lending/morpho'
 // ABIs
 export { CollateralTrackerAbi } from './abis/CollateralTracker'
 export { CollateralTrackerV1_1Abi } from './abis/CollateralTrackerV1_1'

@@ -1195,4 +1195,23 @@ export {
   isSupportedChain,
   requireChainDeployment,
 } from '../../hypoVault/chainDeployments'
+export {
+  marketPnlInQuote,
+  marketRiskFromValues,
+  marketScenario,
+  netLiquidationValueInQuote,
+} from './greeks/marketPnl'
+export {
+  collateralCurveTicks,
+  getCollateralCurve,
+  getCollateralCurveInputs,
+} from './reads/collateralCurve'
 export { type HedgeLimitEstimate, getHedgeLimits } from './reads/hedgeLimits'
+export {
+  type PositionValueCurve,
+  type PositionValueInput,
+  getPositionValueCurve,
+  positionValueKey,
+  positionValueTicks,
+  preparePositionValueCurve,
+} from './reads/positionValueCurve'

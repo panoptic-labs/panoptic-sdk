@@ -27,6 +27,10 @@ export interface UniswapFeeSnapshot {
   blockNumber: bigint
   /** Timestamp of the resolved block in Unix seconds. */
   blockTimestamp: bigint
+  /** Pool tick used for principal valuation at this block. */
+  currentTick: number
+  /** Exact pool sqrt price (Q96) used for principal valuation at this block. */
+  sqrtPriceX96: bigint
   /** Uniswap fee delta from the first block in the series */
   fees: { token0: bigint; token1: bigint }
 }
@@ -106,6 +110,8 @@ export async function getUniswapFeeHistory(
     return {
       blockNumber: blockMetadata[i].blockNumber,
       blockTimestamp: blockMetadata[i].blockTimestamp,
+      currentTick: bd.currentTick,
+      sqrtPriceX96: bd.sqrtPriceX96,
       fees: {
         token0: total0 - initialFees0,
         token1: total1 - (initialFees1 as bigint),
@@ -121,6 +127,7 @@ export async function getUniswapFeeHistory(
 /** Raw Uniswap data fetched for a single block. */
 export interface UniswapBlockData {
   currentTick: number
+  sqrtPriceX96: bigint
   feeGrowthGlobal0: bigint
   feeGrowthGlobal1: bigint
   /** Map from tick number → { feeGrowthOutside0, feeGrowthOutside1 } */
@@ -270,7 +277,13 @@ async function fetchV3BlockSnapshot(
     })
   }
 
-  return { currentTick: slot0Result[1], feeGrowthGlobal0, feeGrowthGlobal1, tickData }
+  return {
+    currentTick: slot0Result[1],
+    sqrtPriceX96: slot0Result[0],
+    feeGrowthGlobal0,
+    feeGrowthGlobal1,
+    tickData,
+  }
 }
 
 async function fetchV4BlockSnapshot(
@@ -317,6 +330,7 @@ async function fetchV4BlockSnapshot(
 
   return {
     currentTick: slot0Result[1],
+    sqrtPriceX96: slot0Result[0],
     feeGrowthGlobal0: feeGrowthResult[0],
     feeGrowthGlobal1: feeGrowthResult[1],
     tickData,

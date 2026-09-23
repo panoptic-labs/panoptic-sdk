@@ -49,6 +49,30 @@ export interface LpPositionFundingParams {
   quoteTokenIndex: 0 | 1
 }
 
+export function getUnhedgedLpRanges({
+  tokenId,
+  positionSize,
+  tickSpacing,
+}: Pick<LpPositionFundingParams, 'tokenId' | 'positionSize' | 'tickSpacing'>): LpFeeRange[] {
+  if (positionSize < 0n || tickSpacing <= 0n) throw new Error('Invalid LP range input')
+  return decodeAllLegs(tokenId).flatMap((leg) => {
+    if (leg.isLong || leg.width === 0n) return []
+    const width = leg.width * tickSpacing
+    const tickLower = leg.strike - width / 2n
+    const tickUpper = leg.strike + (width + 1n) / 2n
+    const lower = tickToSqrtPriceX96(tickLower)
+    const upper = tickToSqrtPriceX96(tickUpper)
+    const amount = positionSize * leg.optionRatio
+    const liquidity =
+      leg.asset === 0n
+        ? (amount * ((lower * upper) / Q96)) / (upper - lower)
+        : (amount * Q96) / (upper - lower)
+    return liquidity <= 0n
+      ? []
+      : [{ tickLower: Number(tickLower), tickUpper: Number(tickUpper), liquidity }]
+  })
+}
+
 /** Full deployed liquidity value; never a leveraged protocol margin estimate. */
 export function getLpPositionFunding(params: LpPositionFundingParams) {
   const {
@@ -64,19 +88,7 @@ export function getLpPositionFunding(params: LpPositionFundingParams) {
   const legs = decodeAllLegs(tokenId)
   if (legs.length === 0 || legs.some((leg) => leg.isLong || leg.width === 0n))
     throw new Error('AMM Liquidity requires short liquidity legs without loans or credits')
-  const ranges = legs.map((leg) => {
-    const width = leg.width * tickSpacing
-    const tickLower = leg.strike - width / 2n
-    const tickUpper = leg.strike + (width + 1n) / 2n
-    const lower = tickToSqrtPriceX96(tickLower)
-    const upper = tickToSqrtPriceX96(tickUpper)
-    const amount = positionSize * leg.optionRatio
-    const liquidity =
-      leg.asset === 0n
-        ? (amount * ((lower * upper) / Q96)) / (upper - lower)
-        : (amount * Q96) / (upper - lower)
-    return { tickLower: Number(tickLower), tickUpper: Number(tickUpper), liquidity }
-  })
+  const ranges = getUnhedgedLpRanges({ tokenId, positionSize, tickSpacing })
   const breakdown = getLpDepositBreakdown(ranges, sqrtPriceX96)
   const priceSquared = valuationSqrtPriceX96 * valuationSqrtPriceX96
   const value = ({ amount0, amount1 }: { amount0: bigint; amount1: bigint }) =>
