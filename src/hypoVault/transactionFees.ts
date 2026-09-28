@@ -2,6 +2,8 @@ import type { Chain, Client, Transport } from 'viem'
 import { hexToBigInt } from 'viem'
 import { estimateFeesPerGas, getBlock, getFeeHistory } from 'viem/actions'
 
+import { ROBINHOOD_CHAIN_ID } from './chainDeployments'
+
 export const MIN_VAULT_PRIORITY_FEE_PER_GAS = 100_000_000n // 0.1 gwei
 export const MAX_VAULT_PRIORITY_FEE_PER_GAS = 3_000_000_000n // 3 gwei
 export const MAX_STALE_DELTA_HEDGE_PRIORITY_FEE_PER_GAS = 8_000_000_000n // 8 gwei
@@ -27,6 +29,7 @@ export type VaultTransactionFeeQuote = {
   maxFeePerGas: bigint
   maxPriorityFeePerGas: bigint
   minimumMaxFeePerGas: bigint
+  minimumPriorityFeePerGas?: bigint
   source: 'fee_history' | 'viem_fallback' | 'rpc_priority_fee' | 'fee_history_p25'
 }
 
@@ -35,6 +38,7 @@ export type VaultDeltaHedgeFeeQuote = VaultTransactionFeeQuote & {
 }
 
 export type VaultSignedTransactionFeeCaps = {
+  chainId?: number
   gasLimit?: bigint | null
   maxFeePerGas: bigint | null
   maxPriorityFeePerGas: bigint | null
@@ -134,6 +138,7 @@ export class VaultTransactionReplacementLimitError extends Error {
 type FeeHistorySnapshot = {
   baseFeePerGas: readonly bigint[]
   reward?: readonly (readonly bigint[])[] | undefined
+  minimumPriorityFeePerGas?: bigint
 }
 
 type FallbackFeeEstimate = {
@@ -156,8 +161,15 @@ function medianBigInt(values: readonly bigint[]): bigint | undefined {
   return lowerMiddle === undefined ? undefined : (lowerMiddle + upperMiddle) / 2n
 }
 
-function clampPriorityFee(priorityFee: bigint): bigint {
-  if (priorityFee < MIN_VAULT_PRIORITY_FEE_PER_GAS) return MIN_VAULT_PRIORITY_FEE_PER_GAS
+function getChainPriorityFeeFloor(chainId: number | undefined): bigint | undefined {
+  return chainId === ROBINHOOD_CHAIN_ID ? 0n : undefined
+}
+
+function clampPriorityFee(
+  priorityFee: bigint,
+  minimumPriorityFeePerGas = MIN_VAULT_PRIORITY_FEE_PER_GAS,
+): bigint {
+  if (priorityFee < minimumPriorityFeePerGas) return minimumPriorityFeePerGas
   if (priorityFee > MAX_VAULT_PRIORITY_FEE_PER_GAS) return MAX_VAULT_PRIORITY_FEE_PER_GAS
   return priorityFee
 }
@@ -165,9 +177,11 @@ function clampPriorityFee(priorityFee: bigint): bigint {
 function resolveFeeHistoryQuote({
   baseFeePerGas,
   reward,
+  minimumPriorityFeePerGas,
 }: {
   baseFeePerGas: readonly bigint[]
   reward?: readonly (readonly bigint[])[] | undefined
+  minimumPriorityFeePerGas?: bigint
 }): VaultTransactionFeeQuote | null {
   // feeHistory includes one additional base fee for the next block. The
   // second-to-last entry is therefore the latest mined block's base fee.
@@ -181,7 +195,8 @@ function resolveFeeHistoryQuote({
   const sampledPriorityFee = medianBigInt(p90Rewards)
   if (sampledPriorityFee === undefined) return null
 
-  const maxPriorityFeePerGas = clampPriorityFee(sampledPriorityFee)
+  const effectivePriorityFeeFloor = minimumPriorityFeePerGas ?? MIN_VAULT_PRIORITY_FEE_PER_GAS
+  const maxPriorityFeePerGas = clampPriorityFee(sampledPriorityFee, effectivePriorityFeeFloor)
   const bufferedBaseFee = ceilMultiplyFraction(
     baseFeePerGas[latestBaseFeeIndex],
     BASE_FEE_BUFFER_NUMERATOR,
@@ -191,7 +206,8 @@ function resolveFeeHistoryQuote({
   return {
     maxFeePerGas: bufferedBaseFee + maxPriorityFeePerGas,
     maxPriorityFeePerGas,
-    minimumMaxFeePerGas: bufferedBaseFee + MIN_VAULT_PRIORITY_FEE_PER_GAS,
+    minimumMaxFeePerGas: bufferedBaseFee + effectivePriorityFeeFloor,
+    ...(minimumPriorityFeePerGas === undefined ? {} : { minimumPriorityFeePerGas }),
     source: 'fee_history',
   }
 }
@@ -199,6 +215,7 @@ function resolveFeeHistoryQuote({
 function resolveDeltaHedgeFeeHistoryQuote({
   baseFeePerGas,
   reward,
+  minimumPriorityFeePerGas,
 }: FeeHistorySnapshot): VaultDeltaHedgeFeeQuote | null {
   const latestBaseFeeIndex = baseFeePerGas.length - 2
   if (latestBaseFeeIndex < 0 || reward === undefined || reward.length === 0) return null
@@ -210,7 +227,8 @@ function resolveDeltaHedgeFeeHistoryQuote({
   const rawPriorityFeePerGas = medianBigInt(p25Rewards)
   if (rawPriorityFeePerGas === undefined) return null
 
-  const maxPriorityFeePerGas = clampPriorityFee(rawPriorityFeePerGas)
+  const effectivePriorityFeeFloor = minimumPriorityFeePerGas ?? MIN_VAULT_PRIORITY_FEE_PER_GAS
+  const maxPriorityFeePerGas = clampPriorityFee(rawPriorityFeePerGas, effectivePriorityFeeFloor)
   const bufferedBaseFee = ceilMultiplyFraction(
     baseFeePerGas[latestBaseFeeIndex],
     BASE_FEE_BUFFER_NUMERATOR,
@@ -219,7 +237,8 @@ function resolveDeltaHedgeFeeHistoryQuote({
   return {
     maxFeePerGas: bufferedBaseFee + maxPriorityFeePerGas,
     maxPriorityFeePerGas,
-    minimumMaxFeePerGas: bufferedBaseFee + MIN_VAULT_PRIORITY_FEE_PER_GAS,
+    minimumMaxFeePerGas: bufferedBaseFee + effectivePriorityFeeFloor,
+    ...(minimumPriorityFeePerGas === undefined ? {} : { minimumPriorityFeePerGas }),
     rawPriorityFeePerGas,
     source: 'fee_history_p25',
   }
@@ -228,9 +247,11 @@ function resolveDeltaHedgeFeeHistoryQuote({
 function resolveRpcPriorityFeeQuote({
   baseFeePerGas,
   rawPriorityFeePerGas,
+  minimumPriorityFeePerGas,
 }: {
   baseFeePerGas: bigint
   rawPriorityFeePerGas: bigint
+  minimumPriorityFeePerGas?: bigint
 }): VaultDeltaHedgeFeeQuote {
   const bufferedBaseFee = ceilMultiplyFraction(
     baseFeePerGas,
@@ -240,7 +261,8 @@ function resolveRpcPriorityFeeQuote({
   return {
     maxFeePerGas: bufferedBaseFee + rawPriorityFeePerGas,
     maxPriorityFeePerGas: rawPriorityFeePerGas,
-    minimumMaxFeePerGas: bufferedBaseFee + rawPriorityFeePerGas,
+    minimumMaxFeePerGas: bufferedBaseFee + (minimumPriorityFeePerGas ?? rawPriorityFeePerGas),
+    ...(minimumPriorityFeePerGas === undefined ? {} : { minimumPriorityFeePerGas }),
     rawPriorityFeePerGas,
     source: 'rpc_priority_fee',
   }
@@ -309,7 +331,9 @@ export function getVaultTransactionReplacementFeeQuote({
       maximumAffordableFeePerGas: MAX_VAULT_TRANSACTION_GAS_COST / gasLimit,
     })
   }
-  const bufferedBaseFee = historicalQuote.minimumMaxFeePerGas - MIN_VAULT_PRIORITY_FEE_PER_GAS
+  const bufferedBaseFee =
+    historicalQuote.minimumMaxFeePerGas -
+    (historicalQuote.minimumPriorityFeePerGas ?? MIN_VAULT_PRIORITY_FEE_PER_GAS)
   const currentMarketMaxFee = bufferedBaseFee + requiredMaxPriorityFeePerGas
   const desiredMaxFeePerGas =
     currentMarketMaxFee > bumpedMaxFee ? currentMarketMaxFee : bumpedMaxFee
@@ -342,11 +366,17 @@ export function getVaultTransactionReplacementFeeQuote({
 function resolveFallbackQuote({
   maxFeePerGas: estimatedMaxFeePerGas,
   maxPriorityFeePerGas: estimatedPriorityFeePerGas,
+  minimumPriorityFeePerGas,
 }: {
   maxFeePerGas: bigint
   maxPriorityFeePerGas: bigint
+  minimumPriorityFeePerGas?: bigint
 }): VaultTransactionFeeQuote {
-  const maxPriorityFeePerGas = clampPriorityFee(estimatedPriorityFeePerGas)
+  const effectivePriorityFeeFloor = minimumPriorityFeePerGas ?? MIN_VAULT_PRIORITY_FEE_PER_GAS
+  const maxPriorityFeePerGas = clampPriorityFee(
+    estimatedPriorityFeePerGas,
+    effectivePriorityFeeFloor,
+  )
   const estimatedBaseFeeAllowance =
     estimatedMaxFeePerGas > estimatedPriorityFeePerGas
       ? estimatedMaxFeePerGas - estimatedPriorityFeePerGas
@@ -355,7 +385,8 @@ function resolveFallbackQuote({
   return {
     maxFeePerGas: estimatedBaseFeeAllowance + maxPriorityFeePerGas,
     maxPriorityFeePerGas,
-    minimumMaxFeePerGas: estimatedBaseFeeAllowance + MIN_VAULT_PRIORITY_FEE_PER_GAS,
+    minimumMaxFeePerGas: estimatedBaseFeeAllowance + effectivePriorityFeeFloor,
+    ...(minimumPriorityFeePerGas === undefined ? {} : { minimumPriorityFeePerGas }),
     source: 'viem_fallback',
   }
 }
@@ -379,7 +410,8 @@ export function applyVaultTransactionGasCostLimit(
 
   if (quote.maxFeePerGas <= maximumAffordableFeePerGas) return quote
 
-  const bufferedBaseFee = quote.minimumMaxFeePerGas - MIN_VAULT_PRIORITY_FEE_PER_GAS
+  const bufferedBaseFee =
+    quote.minimumMaxFeePerGas - (quote.minimumPriorityFeePerGas ?? MIN_VAULT_PRIORITY_FEE_PER_GAS)
   const affordablePriorityFee = maximumAffordableFeePerGas - bufferedBaseFee
   return {
     ...quote,
@@ -408,7 +440,11 @@ export function validateVaultSignedTransactionFeeCaps(
   feeCaps: VaultSignedTransactionFeeCaps,
   quote?: VaultTransactionFeeQuote,
 ): VaultSignedTransactionFeeValidationResult {
-  const { gasLimit, maxFeePerGas, maxPriorityFeePerGas } = feeCaps
+  const { chainId, gasLimit, maxFeePerGas, maxPriorityFeePerGas } = feeCaps
+  const minimumPriorityFeePerGas =
+    quote?.minimumPriorityFeePerGas ??
+    getChainPriorityFeeFloor(chainId) ??
+    MIN_VAULT_PRIORITY_FEE_PER_GAS
   if (maxFeePerGas === null || maxPriorityFeePerGas === null) {
     return {
       valid: false,
@@ -425,13 +461,13 @@ export function validateVaultSignedTransactionFeeCaps(
         `cannot exceed maxFeePerGas (${maxFeePerGas.toString()} wei).`,
     }
   }
-  if (maxPriorityFeePerGas < MIN_VAULT_PRIORITY_FEE_PER_GAS) {
+  if (maxPriorityFeePerGas < minimumPriorityFeePerGas) {
     return {
       valid: false,
       code: 'PriorityFeeTooLow',
       reason:
         `Signed transaction maxPriorityFeePerGas (${maxPriorityFeePerGas.toString()} wei) ` +
-        `must be at least ${MIN_VAULT_PRIORITY_FEE_PER_GAS.toString()} wei (0.1 gwei).`,
+        `must be at least ${minimumPriorityFeePerGas.toString()} wei.`,
     }
   }
   if (maxPriorityFeePerGas > MAX_VAULT_PRIORITY_FEE_PER_GAS) {
@@ -463,7 +499,7 @@ export function validateVaultSignedTransactionFeeCaps(
       reason:
         `Signed transaction maxFeePerGas (${maxFeePerGas.toString()} wei) must be at least ` +
         `${quote.minimumMaxFeePerGas.toString()} wei for the buffered next-block base fee ` +
-        'and 0.1 gwei minimum priority fee.',
+        'and configured minimum priority fee.',
     }
   }
   return { valid: true }
@@ -472,13 +508,18 @@ export function validateVaultSignedTransactionFeeCaps(
 async function resolveVaultTransactionFeeQuote({
   readFeeHistory,
   readFallbackEstimate,
+  minimumPriorityFeePerGas,
 }: {
   readFeeHistory: () => Promise<FeeHistorySnapshot>
   readFallbackEstimate: () => Promise<FallbackFeeEstimate>
+  minimumPriorityFeePerGas?: bigint
 }): Promise<VaultTransactionFeeQuote> {
   let feeHistoryError: unknown
   try {
-    const quote = resolveFeeHistoryQuote(await readFeeHistory())
+    const quote = resolveFeeHistoryQuote({
+      ...(await readFeeHistory()),
+      minimumPriorityFeePerGas,
+    })
     if (quote !== null) return quote
     feeHistoryError = new Error('eth_feeHistory returned incomplete base fee or reward data')
   } catch (error) {
@@ -486,7 +527,10 @@ async function resolveVaultTransactionFeeQuote({
   }
 
   try {
-    return resolveFallbackQuote(await readFallbackEstimate())
+    return resolveFallbackQuote({
+      ...(await readFallbackEstimate()),
+      minimumPriorityFeePerGas,
+    })
   } catch (fallbackError) {
     throw new VaultTransactionFeeEstimationError({ feeHistoryError, fallbackError })
   }
@@ -496,14 +540,15 @@ async function resolveVaultTransactionFeeQuote({
  * Resolve explicit EIP-1559 fees for operator-controlled vault transactions.
  *
  * The normal path follows the median p90 priority fee from the last 20 blocks,
- * with a 0.1 gwei floor and 3 gwei ceiling. If fee history is unavailable,
- * Viem's estimate is used while preserving those bounds and its original
- * base-fee allowance.
+ * with a 3 gwei ceiling and a 0.1 gwei floor except on chains that do not use
+ * tips for ordering. If fee history is unavailable, Viem's estimate is used
+ * while preserving those bounds and its original base-fee allowance.
  */
 export async function getVaultTransactionFeeQuote<chain extends Chain | undefined>(
   client: Client<Transport, chain>,
 ): Promise<VaultTransactionFeeQuote> {
   return resolveVaultTransactionFeeQuote({
+    minimumPriorityFeePerGas: getChainPriorityFeeFloor(client.chain?.id),
     readFeeHistory: () =>
       getFeeHistory(client, {
         blockCount: FEE_HISTORY_BLOCK_COUNT,
@@ -522,7 +567,10 @@ export async function getVaultDeltaHedgeHistoricalFeeQuote<chain extends Chain |
     blockTag: 'latest',
     rewardPercentiles: DELTA_HEDGE_FEE_HISTORY_REWARD_PERCENTILES,
   })
-  const quote = resolveDeltaHedgeFeeHistoryQuote(feeHistory)
+  const quote = resolveDeltaHedgeFeeHistoryQuote({
+    ...feeHistory,
+    minimumPriorityFeePerGas: getChainPriorityFeeFloor(client.chain?.id),
+  })
   if (quote === null) {
     throw new Error('eth_feeHistory returned incomplete p25 base fee or reward data')
   }
@@ -532,12 +580,17 @@ export async function getVaultDeltaHedgeHistoricalFeeQuote<chain extends Chain |
 async function resolveVaultDeltaHedgeInitialFeeQuote({
   readRpcQuote,
   readHistoricalQuote,
+  minimumPriorityFeePerGas,
 }: {
   readRpcQuote: () => Promise<{ baseFeePerGas: bigint; rawPriorityFeePerGas: bigint }>
   readHistoricalQuote: () => Promise<VaultDeltaHedgeFeeQuote>
+  minimumPriorityFeePerGas?: bigint
 }): Promise<VaultDeltaHedgeFeeQuote> {
   try {
-    return resolveRpcPriorityFeeQuote(await readRpcQuote())
+    return resolveRpcPriorityFeeQuote({
+      ...(await readRpcQuote()),
+      minimumPriorityFeePerGas,
+    })
   } catch {
     return readHistoricalQuote()
   }
@@ -552,6 +605,7 @@ export async function getVaultDeltaHedgeInitialFeeQuote<chain extends Chain | un
   client: Client<Transport, chain>,
 ): Promise<VaultDeltaHedgeFeeQuote> {
   return resolveVaultDeltaHedgeInitialFeeQuote({
+    minimumPriorityFeePerGas: getChainPriorityFeeFloor(client.chain?.id),
     readRpcQuote: async () => {
       const [rawPriorityFee, latestBlock] = await Promise.all([
         client.request({ method: 'eth_maxPriorityFeePerGas' }),
@@ -571,6 +625,7 @@ export async function getVaultDeltaHedgeInitialFeeQuote<chain extends Chain | un
 
 export const __transactionFeeTestUtils = {
   clampPriorityFee,
+  getChainPriorityFeeFloor,
   resolveDeltaHedgeFeeHistoryQuote,
   resolveFallbackQuote,
   resolveFeeHistoryQuote,

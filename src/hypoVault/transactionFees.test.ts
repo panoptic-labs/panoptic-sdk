@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { ROBINHOOD_CHAIN_ID } from './chainDeployments'
 import {
   __transactionFeeTestUtils,
   applyVaultTransactionGasCostLimit,
@@ -16,6 +17,7 @@ import {
 } from './transactionFees'
 
 const {
+  getChainPriorityFeeFloor,
   resolveDeltaHedgeFeeHistoryQuote,
   resolveFallbackQuote,
   resolveFeeHistoryQuote,
@@ -25,6 +27,11 @@ const {
 } = __transactionFeeTestUtils
 
 describe('vault transaction fee quote', () => {
+  it('selects a zero floor only for Robinhood', () => {
+    expect(getChainPriorityFeeFloor(ROBINHOOD_CHAIN_ID)).toBe(0n)
+    expect(getChainPriorityFeeFloor(1)).toBeUndefined()
+  })
+
   it('floors zero and one-wei p90 rewards at 0.1 gwei', () => {
     const quote = resolveFeeHistoryQuote({
       baseFeePerGas: [100n, 101n, 102n],
@@ -35,6 +42,22 @@ describe('vault transaction fee quote', () => {
       maxFeePerGas: MIN_VAULT_PRIORITY_FEE_PER_GAS + 114n,
       maxPriorityFeePerGas: MIN_VAULT_PRIORITY_FEE_PER_GAS,
       minimumMaxFeePerGas: MIN_VAULT_PRIORITY_FEE_PER_GAS + 114n,
+      source: 'fee_history',
+    })
+  })
+
+  it('allows a zero priority fee floor on Robinhood', () => {
+    const quote = resolveFeeHistoryQuote({
+      baseFeePerGas: [100n, 101n, 102n],
+      reward: [[0n], [0n]],
+      minimumPriorityFeePerGas: 0n,
+    })
+
+    expect(quote).toEqual({
+      maxFeePerGas: 114n,
+      maxPriorityFeePerGas: 0n,
+      minimumMaxFeePerGas: 114n,
+      minimumPriorityFeePerGas: 0n,
       source: 'fee_history',
     })
   })
@@ -92,6 +115,22 @@ describe('vault transaction fee quote', () => {
       maxFeePerGas: 340_000_000n,
       maxPriorityFeePerGas: MIN_VAULT_PRIORITY_FEE_PER_GAS,
       minimumMaxFeePerGas: 340_000_000n,
+      source: 'viem_fallback',
+    })
+  })
+
+  it('preserves a zero Robinhood priority fee in the fallback quote', () => {
+    expect(
+      resolveFallbackQuote({
+        maxFeePerGas: 240_000_000n,
+        maxPriorityFeePerGas: 0n,
+        minimumPriorityFeePerGas: 0n,
+      }),
+    ).toEqual({
+      maxFeePerGas: 240_000_000n,
+      maxPriorityFeePerGas: 0n,
+      minimumMaxFeePerGas: 240_000_000n,
+      minimumPriorityFeePerGas: 0n,
       source: 'viem_fallback',
     })
   })
@@ -191,6 +230,23 @@ describe('delta hedge transaction fee quotes', () => {
       maxPriorityFeePerGas: expected,
       minimumMaxFeePerGas: 1_125_000_000n + expected,
       rawPriorityFeePerGas: raw,
+      source: 'rpc_priority_fee',
+    })
+  })
+
+  it('uses the configured priority floor for the minimum max fee', () => {
+    expect(
+      resolveRpcPriorityFeeQuote({
+        baseFeePerGas: 1_000_000_000n,
+        rawPriorityFeePerGas: 1_500_000_000n,
+        minimumPriorityFeePerGas: 0n,
+      }),
+    ).toEqual({
+      maxFeePerGas: 2_625_000_000n,
+      maxPriorityFeePerGas: 1_500_000_000n,
+      minimumMaxFeePerGas: 1_125_000_000n,
+      minimumPriorityFeePerGas: 0n,
+      rawPriorityFeePerGas: 1_500_000_000n,
       source: 'rpc_priority_fee',
     })
   })
@@ -444,6 +500,31 @@ describe('signed vault transaction fee validation', () => {
         quote,
       ),
     ).toMatchObject({ valid: false, code: 'PriorityFeeTooLow' })
+  })
+
+  it('accepts a zero priority fee on Robinhood', () => {
+    expect(
+      validateVaultSignedTransactionFeeCaps({
+        chainId: ROBINHOOD_CHAIN_ID,
+        maxFeePerGas: 300_000_000n,
+        maxPriorityFeePerGas: 0n,
+      }),
+    ).toEqual({ valid: true })
+  })
+
+  it('uses the priority floor carried by the market quote', () => {
+    expect(
+      validateVaultSignedTransactionFeeCaps(
+        { maxFeePerGas: 300_000_000n, maxPriorityFeePerGas: 0n },
+        {
+          maxFeePerGas: 300_000_000n,
+          maxPriorityFeePerGas: 0n,
+          minimumMaxFeePerGas: 300_000_000n,
+          minimumPriorityFeePerGas: 0n,
+          source: 'fee_history',
+        },
+      ),
+    ).toEqual({ valid: true })
   })
 
   it('rejects priority fees above the ceiling', () => {
