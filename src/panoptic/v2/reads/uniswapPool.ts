@@ -5,7 +5,7 @@
  */
 
 import type { Address, Hex, PublicClient } from 'viem'
-import { encodeAbiParameters, keccak256, zeroAddress } from 'viem'
+import { encodeAbiParameters, hexToString, keccak256, trim, zeroAddress } from 'viem'
 
 import { panopticQueryAbi } from '../abis/panopticQuery'
 import { stateViewAbi } from '../abis/stateView'
@@ -38,6 +38,53 @@ const erc20MetaAbi = [
   },
 ] as const
 
+// Legacy tokens (MKR, SAI, ...) return `symbol`/`name` as bytes32, which the
+// string ABI cannot decode.
+const erc20Bytes32MetaAbi = [
+  {
+    type: 'function',
+    name: 'symbol',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'name',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+    stateMutability: 'view',
+  },
+] as const
+
+type TextMetaField = 'symbol' | 'name'
+
+async function readTokenText(
+  client: Pick<PublicClient, 'multicall'>,
+  blockNumber: bigint,
+  calls: { address: Address; functionName: TextMetaField }[],
+): Promise<string[]> {
+  const asString = await client.multicall({
+    allowFailure: true,
+    blockNumber,
+    contracts: calls.map((call) => ({ ...call, abi: erc20MetaAbi })),
+  })
+  if (asString.every((result) => result.status === 'success')) {
+    return asString.map((result) => result.result as string)
+  }
+  const asBytes32 = await client.multicall({
+    allowFailure: true,
+    blockNumber,
+    contracts: calls.map((call) => ({ ...call, abi: erc20Bytes32MetaAbi })),
+  })
+  return asString.map((result, index) => {
+    if (result.status === 'success') return result.result as string
+    const fallback = asBytes32[index]
+    if (fallback.status !== 'success') throw fallback.error
+    return hexToString(trim(fallback.result as Hex, { dir: 'right' }))
+  })
+}
+
 export interface UniswapV3PoolToken {
   address: Address
   symbol: string
@@ -64,7 +111,7 @@ export interface UniswapV3PoolInfo {
 }
 
 export interface GetUniswapV3PoolInfoParams {
-  client: PublicClient
+  client: Pick<PublicClient, 'getBlock' | 'multicall'>
   poolAddress: Address
 }
 
@@ -97,18 +144,22 @@ export async function getUniswapV3PoolInfo(
     ],
   })
 
-  const [t0Symbol, t0Name, t0Decimals, t1Symbol, t1Name, t1Decimals] = await client.multicall({
-    allowFailure: false,
-    blockNumber: _meta.blockNumber,
-    contracts: [
-      { address: token0Addr, abi: erc20MetaAbi, functionName: 'symbol' },
-      { address: token0Addr, abi: erc20MetaAbi, functionName: 'name' },
-      { address: token0Addr, abi: erc20MetaAbi, functionName: 'decimals' },
-      { address: token1Addr, abi: erc20MetaAbi, functionName: 'symbol' },
-      { address: token1Addr, abi: erc20MetaAbi, functionName: 'name' },
-      { address: token1Addr, abi: erc20MetaAbi, functionName: 'decimals' },
-    ],
-  })
+  const [[t0Symbol, t0Name, t1Symbol, t1Name], [t0Decimals, t1Decimals]] = await Promise.all([
+    readTokenText(client, _meta.blockNumber, [
+      { address: token0Addr, functionName: 'symbol' },
+      { address: token0Addr, functionName: 'name' },
+      { address: token1Addr, functionName: 'symbol' },
+      { address: token1Addr, functionName: 'name' },
+    ]),
+    client.multicall({
+      allowFailure: false,
+      blockNumber: _meta.blockNumber,
+      contracts: [
+        { address: token0Addr, abi: erc20MetaAbi, functionName: 'decimals' },
+        { address: token1Addr, abi: erc20MetaAbi, functionName: 'decimals' },
+      ],
+    }),
+  ])
 
   return {
     poolAddress,

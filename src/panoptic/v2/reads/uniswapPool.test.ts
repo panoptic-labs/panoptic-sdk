@@ -1,8 +1,12 @@
 import type { Address, Hex, PublicClient } from 'viem'
-import { zeroAddress } from 'viem'
+import { stringToHex, zeroAddress } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
-import { getUniswapV4PoolBasicState, getUniswapV4PoolInfo } from './uniswapPool'
+import {
+  getUniswapV3PoolInfo,
+  getUniswapV4PoolBasicState,
+  getUniswapV4PoolInfo,
+} from './uniswapPool'
 
 const STATE_VIEW = '0x1111111111111111111111111111111111111111' as Address
 const POOL_ID = `0x${'22'.repeat(32)}` as Hex
@@ -160,5 +164,69 @@ describe('Uniswap v4 pool reads', () => {
         poolKey,
       }),
     ).rejects.toBe(error)
+  })
+})
+
+describe('Uniswap v3 pool reads', () => {
+  const POOL = '0x5555555555555555555555555555555555555555' as Address
+  const poolResults = [[123n, -42, 0, 0, 0, 0, true], 3_000, 60, TOKEN0, TOKEN1, 456n]
+  const ok = (result: unknown) => ({ status: 'success', result })
+  const reverted = { status: 'failure', error: new Error('decode failed') }
+
+  it('reads string token metadata in one pass', async () => {
+    const client = createMockClient([
+      poolResults,
+      [ok('USDC'), ok('USD Coin'), ok('WETH'), ok('Wrapped Ether')],
+      [6, 18],
+    ])
+
+    const result = await getUniswapV3PoolInfo({ client, poolAddress: POOL })
+
+    expect(result.token0).toEqual({
+      address: TOKEN0,
+      symbol: 'USDC',
+      name: 'USD Coin',
+      decimals: 6,
+    })
+    expect(result.token1.symbol).toBe('WETH')
+    expect(result.currentTick).toBe(-42)
+    expect(client.multicall).toHaveBeenCalledTimes(3)
+  })
+
+  it('falls back to bytes32 metadata for legacy tokens like MKR', async () => {
+    const client = createMockClient([
+      poolResults,
+      [reverted, reverted, ok('WETH'), ok('Wrapped Ether')],
+      [18, 18],
+      [
+        ok(stringToHex('MKR', { size: 32 })),
+        ok(stringToHex('Maker', { size: 32 })),
+        reverted,
+        reverted,
+      ],
+    ])
+
+    const result = await getUniswapV3PoolInfo({ client, poolAddress: POOL })
+
+    expect(result.token0).toEqual({ address: TOKEN0, symbol: 'MKR', name: 'Maker', decimals: 18 })
+    expect(result.token1).toEqual({
+      address: TOKEN1,
+      symbol: 'WETH',
+      name: 'Wrapped Ether',
+      decimals: 18,
+    })
+  })
+
+  it('propagates a token whose metadata fits neither encoding', async () => {
+    const client = createMockClient([
+      poolResults,
+      [reverted, ok('Maker'), ok('WETH'), ok('Wrapped Ether')],
+      [18, 18],
+      [reverted, ok(stringToHex('Maker', { size: 32 })), reverted, reverted],
+    ])
+
+    await expect(getUniswapV3PoolInfo({ client, poolAddress: POOL })).rejects.toThrow(
+      'decode failed',
+    )
   })
 })
