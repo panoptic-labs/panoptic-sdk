@@ -220,6 +220,7 @@ export {
   encodeV4PoolId,
   generateOverlappingTokenIds,
   getAssetIndex,
+  getSimpleLoanTokenIndex,
   hasLoanOrCredit,
   hasLongLeg,
   isCredit,

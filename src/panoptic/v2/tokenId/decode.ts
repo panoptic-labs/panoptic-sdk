@@ -208,6 +208,22 @@ export function isLoan(tokenId: bigint): boolean {
 }
 
 /**
+ * Index of the borrowed token when a TokenId is a single-leg loan.
+ *
+ * Returns undefined for credits, multi-leg loans, and positions mixing loans
+ * with options: closing those can move both tokens for reasons other than
+ * repaying one borrowed principal.
+ *
+ * @param tokenId - The TokenId to classify
+ * @returns The borrowed token index (the leg's tokenType), or undefined
+ */
+export function getSimpleLoanTokenIndex(tokenId: bigint): 0n | 1n | undefined {
+  const legs = decodeAllLegs(tokenId)
+  if (legs.length !== 1 || !isLoanLeg(legs[0])) return undefined
+  return legs[0].tokenType === 0n ? 0n : 1n
+}
+
+/**
  * Check if a TokenId is a pure credit (all legs are credits).
  *
  * @param tokenId - The TokenId to check

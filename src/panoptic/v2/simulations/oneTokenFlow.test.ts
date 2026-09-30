@@ -353,6 +353,25 @@ describe('quoteOneTokenFlow', () => {
     expect(recoverySwapLimits?.[0]).toEqual([50n, -50n, 0n])
   })
 
+  // Covering only the shortfall leaves the rest of the non-target flow in the
+  // other token: a USDC loan closed with a swap drained most of the account's
+  // WETH while labelled "settle in USDC".
+  it('refuses a shortfall recovery that leaves a material other-token flow', async () => {
+    vi.mocked(simulateDispatch)
+      .mockResolvedValueOnce({
+        success: false,
+        error: new NotEnoughTokensError(TRACKER0, 36n, 21n),
+        _meta: META,
+      })
+      .mockResolvedValueOnce(ok({ delta0: 15n, delta1: -30n }))
+      .mockResolvedValueOnce(ok({ delta0: -21n, delta1: -42n }))
+
+    await expect(quote({ targetTokenIndex: 1n })).resolves.toMatchObject({
+      available: false,
+      reason: 'residual-not-single-token',
+    })
+  })
+
   it('gives up when the base dispatch reverts for an unrelated reason', async () => {
     vi.mocked(simulateDispatch).mockResolvedValueOnce({
       success: false,

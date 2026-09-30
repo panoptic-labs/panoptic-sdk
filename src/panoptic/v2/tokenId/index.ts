@@ -23,6 +23,7 @@ export {
   type DecodedTokenId,
   decodeTokenId,
   getAssetIndex,
+  getSimpleLoanTokenIndex,
   hasCreditLeg,
   hasLoanLeg,
   hasLoanOrCredit,

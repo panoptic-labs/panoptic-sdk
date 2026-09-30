@@ -124,6 +124,7 @@ export interface OneTokenFlowQuote {
 export type OneTokenFlowUnavailableReason =
   | 'already-single-token'
   | 'below-threshold'
+  | 'residual-not-single-token'
   | 'base-simulation-failed'
   | 'invalid-slippage'
   | 'invalid-target-token'
@@ -298,6 +299,28 @@ export async function quoteOneTokenFlow(
         reason: recovery.reason === 'swap-unavailable' ? 'swap-unavailable' : 'wrap-unavailable',
         detail: recovery.detail,
         error: recovery.error,
+      }
+    }
+    // The recovery credit covers only the shortfall. Whatever non-target flow
+    // the account could already fund stays in the other token, so the quote
+    // cannot be offered as a one-token settlement unless that remainder is dust.
+    if (minSwapRatioBps > 0n) {
+      const residualInTargetTerms = convertToTokenIndex(
+        abs(recovery.quote.netTokenOutChange),
+        otherTokenIndex,
+        targetTokenIndex,
+        pool.sqrtPriceX96,
+      )
+      const settledInTargetTerms = abs(recovery.quote.netTokenInChange) + residualInTargetTerms
+      if (residualInTargetTerms * BPS_DENOMINATOR >= minSwapRatioBps * settledInTargetTerms) {
+        return {
+          available: false,
+          reason: 'residual-not-single-token',
+          detail:
+            `covering the shortfall leaves ${recovery.quote.netTokenOutChange} of the other ` +
+            `token (${residualInTargetTerms} in target token terms) against a target flow of ` +
+            `${recovery.quote.netTokenInChange}`,
+        }
       }
     }
     return {

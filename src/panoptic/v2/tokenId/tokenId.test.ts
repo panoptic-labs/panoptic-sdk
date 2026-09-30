@@ -21,6 +21,7 @@ import {
   encodeLeg,
   encodePoolId,
   getAssetIndex,
+  getSimpleLoanTokenIndex,
   hasCreditLeg,
   hasLoanLeg,
   hasLoanOrCredit,
@@ -763,6 +764,32 @@ describe('Loan/Credit TokenIds', () => {
       expect(hasLoanLeg(loanId)).toBe(true)
       expect(hasCreditLeg(loanId)).toBe(false)
       expect(hasLoanOrCredit(loanId)).toBe(true)
+    })
+
+    it.each([0n, 1n])('classifies a single-leg token%s loan as simple', (tokenType) => {
+      const loanId = createTokenIdBuilder(MOCK_POOL_ID)
+        .addLoan({ asset: 1n - tokenType, tokenType, strike: 100n })
+        .build()
+
+      expect(getSimpleLoanTokenIndex(loanId)).toBe(tokenType)
+    })
+
+    it('does not classify credits, multi-leg loans, or loan/option mixes as simple', () => {
+      const credit = createTokenIdBuilder(MOCK_POOL_ID)
+        .addCredit({ asset: 0n, tokenType: 0n, strike: 100n })
+        .build()
+      const twoLoans = createTokenIdBuilder(MOCK_POOL_ID)
+        .addLoan({ asset: 0n, tokenType: 0n, strike: 100n })
+        .addLoan({ asset: 0n, tokenType: 0n, strike: 200n })
+        .build()
+      const loanWithOption = createTokenIdBuilder(MOCK_POOL_ID)
+        .addCall({ optionRatio: 1n, isLong: false, strike: 100n, width: 10n })
+        .addLoan({ asset: 0n, tokenType: 0n, strike: 200n })
+        .build()
+
+      expect(getSimpleLoanTokenIndex(credit)).toBeUndefined()
+      expect(getSimpleLoanTokenIndex(twoLoans)).toBeUndefined()
+      expect(getSimpleLoanTokenIndex(loanWithOption)).toBeUndefined()
     })
 
     it('should detect pure credit tokenId', () => {
