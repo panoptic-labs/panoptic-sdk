@@ -7,7 +7,14 @@ import type { Address, PublicClient } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { StreamiaLeg } from './streamiaHistory'
-import { computeUniswapFeesForBlock, getUniswapFeeHistory } from './uniswapFeeHistory'
+import {
+  type UniswapBlockData,
+  computeUniswapFeesForBlock,
+  feeGrowthInsideX128,
+  fetchUniswapFeeData,
+  getUniswapFeeHistory,
+} from './uniswapFeeHistory'
+import { feesFromFeeGrowthDelta } from './uniswapLpPosition'
 
 const UNI_POOL = '0x2222222222222222222222222222222222222222' as Address
 
@@ -149,4 +156,88 @@ describe('getUniswapFeeHistory', () => {
     expect(result.snapshots).toHaveLength(1)
     expect(result.snapshots[0].fees.token0).toBe(0n)
   })
+})
+
+describe('feeGrowthInsideX128', () => {
+  const Q128 = 1n << 128n
+  const MAX_UINT256 = 2n ** 256n - 1n
+  const snapshot = (
+    currentTick: number,
+    global: bigint,
+    lowerOutside: bigint,
+    upperOutside: bigint,
+  ): UniswapBlockData => ({
+    currentTick,
+    sqrtPriceX96: 1n << 96n,
+    feeGrowthGlobal0: global,
+    feeGrowthGlobal1: 2n * global,
+    tickData: new Map([
+      [100, { feeGrowthOutside0: lowerOutside, feeGrowthOutside1: 2n * lowerOutside }],
+      [200, { feeGrowthOutside0: upperOutside, feeGrowthOutside1: 2n * upperOutside }],
+    ]),
+  })
+
+  it('subtracts the growth below and above the range', () => {
+    // In range: below = lowerOutside, above = upperOutside.
+    expect(feeGrowthInsideX128(snapshot(150, 10n * Q128, 3n * Q128, 2n * Q128), 100, 200)).toEqual({
+      feeGrowthInside0X128: 5n * Q128,
+      feeGrowthInside1X128: 10n * Q128,
+    })
+    // Below range: below = global − lowerOutside.
+    expect(
+      feeGrowthInsideX128(snapshot(50, 10n * Q128, 3n * Q128, 2n * Q128), 100, 200)
+        ?.feeGrowthInside0X128,
+    ).toBe(1n * Q128)
+  })
+
+  it('wraps to uint256 so a delta across an underflow stays exact', () => {
+    // Outside values larger than global make the inside growth underflow.
+    const start = feeGrowthInsideX128(snapshot(150, 1n * Q128, 3n * Q128, 0n), 100, 200)
+    const end = feeGrowthInsideX128(snapshot(150, 4n * Q128, 3n * Q128, 0n), 100, 200)
+    expect(start?.feeGrowthInside0X128).toBe(MAX_UINT256 + 1n - 2n * Q128)
+    expect(
+      feesFromFeeGrowthDelta(
+        end?.feeGrowthInside0X128 ?? 0n,
+        start?.feeGrowthInside0X128 ?? 0n,
+        1_000n,
+      ),
+    ).toBe(3_000n)
+  })
+
+  it('returns null when a bound tick was not read', () => {
+    expect(feeGrowthInsideX128(snapshot(150, Q128, 0n, 0n), 100, 300)).toBeNull()
+  })
+})
+
+describe('fetchUniswapFeeData', () => {
+  const tickResult = [0n, 0n, 0n, 0n, 0n, 0n, 0, true]
+  const makeClient = () => {
+    const multicall = vi.fn(async () => [
+      [1n << 96n, 150, 0, 0, 0, 0, true],
+      0n,
+      0n,
+      tickResult,
+      tickResult,
+    ])
+    const client = {
+      chain: { contracts: { multicall3: { blockCreated: 14_353_601 } } },
+      multicall,
+    } as unknown as PublicClient
+    return { client, multicall }
+  }
+  const legs = [{ lowerTick: 100, upperTick: 200, liquidity: 1n }]
+  const poolConfig = { version: 'v3' as const, poolAddress: UNI_POOL }
+
+  it.each([
+    [12_000_000n, true],
+    [14_353_601n, false],
+    [undefined, false],
+  ])(
+    'uses deployless multicall only before Multicall3 existed (block %s)',
+    async (block, deployless) => {
+      const { client, multicall } = makeClient()
+      await fetchUniswapFeeData(client, [block], legs, poolConfig)
+      expect(multicall).toHaveBeenCalledWith(expect.objectContaining({ deployless }))
+    },
+  )
 })

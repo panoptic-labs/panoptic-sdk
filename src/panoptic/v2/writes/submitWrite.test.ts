@@ -4,9 +4,15 @@
  */
 
 import type { Address, Hash, PublicClient, WalletClient } from 'viem'
-import { encodeFunctionData, erc20Abi } from 'viem'
+import {
+  ContractFunctionRevertedError,
+  encodeErrorResult,
+  encodeFunctionData,
+  erc20Abi,
+} from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
+import { NotEnoughTokensError, panopticErrorsAbi } from '../errors'
 import type { TxBroadcaster, TxOverrides } from '../types'
 import { submitWrite } from './utils'
 
@@ -239,5 +245,74 @@ describe('submitWrite', () => {
     expect(callArgs).not.toHaveProperty('nonce')
     // gas is auto-estimated with 20% buffer when no explicit gas override
     expect(callArgs.gas).toBe(240000n) // 200000 * 120 / 100
+  })
+})
+
+describe('write error decoding', () => {
+  it.each(['estimate', 'write', 'prepare'] as const)(
+    'decodes bubbled collateral errors during %s',
+    async (phase) => {
+      const client = createMockPublicClient()
+      const walletClient = createMockWalletClient()
+      const data = encodeErrorResult({
+        abi: panopticErrorsAbi,
+        errorName: 'NotEnoughTokens',
+        args: [MOCK_TOKEN, 30_000_000n, 29_990_994n],
+      })
+      const error = new ContractFunctionRevertedError({
+        abi: panopticErrorsAbi,
+        data,
+        functionName: 'dispatch',
+      })
+      if (phase === 'estimate') vi.mocked(client.estimateContractGas).mockRejectedValueOnce(error)
+      if (phase === 'write') vi.mocked(walletClient.writeContract).mockRejectedValueOnce(error)
+      if (phase === 'prepare')
+        vi.mocked(walletClient.prepareTransactionRequest).mockRejectedValueOnce(error)
+      const request = submitWrite({
+        client,
+        walletClient,
+        account: MOCK_ACCOUNT,
+        address: MOCK_TOKEN,
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [MOCK_ACCOUNT, 1n],
+        txOverrides: phase === 'prepare' ? { broadcaster: { broadcast: vi.fn() } } : undefined,
+      })
+      await expect(request).rejects.toBeInstanceOf(NotEnoughTokensError)
+      await expect(request).rejects.toMatchObject({
+        tokenAddress: MOCK_TOKEN,
+        assetsRequested: 30_000_000n,
+        assetBalance: 29_990_994n,
+        cause: error,
+      })
+      if (phase === 'estimate') {
+        expect(client.estimateContractGas).toHaveBeenCalledWith(
+          expect.objectContaining({
+            abi: expect.arrayContaining([
+              expect.objectContaining({ type: 'error', name: 'NotEnoughTokens' }),
+            ]),
+          }),
+        )
+        expect(walletClient.writeContract).not.toHaveBeenCalled()
+      }
+    },
+  )
+
+  it('preserves wallet rejection and network errors', async () => {
+    const client = createMockPublicClient()
+    const walletClient = createMockWalletClient()
+    const error = new Error('User rejected the request')
+    vi.mocked(walletClient.writeContract).mockRejectedValueOnce(error)
+    await expect(
+      submitWrite({
+        client,
+        walletClient,
+        account: MOCK_ACCOUNT,
+        address: MOCK_TOKEN,
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [MOCK_ACCOUNT, 1n],
+      }),
+    ).rejects.toBe(error)
   })
 })

@@ -331,8 +331,11 @@ export {
 // Uniswap fee history (standalone, no Panoptic pool required)
 export {
   type GetUniswapFeeHistoryParams,
+  type UniswapBlockData,
   type UniswapFeeHistoryResult,
   type UniswapFeeSnapshot,
+  feeGrowthInsideX128,
+  fetchUniswapFeeData,
   getUniswapFeeHistory,
 } from './uniswapFeeHistory'
 

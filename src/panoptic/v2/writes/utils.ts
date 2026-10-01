@@ -7,6 +7,7 @@ import type { Abi, Address, Hash, Log, PublicClient, WalletClient } from 'viem'
 import { decodeEventLog, encodeFunctionData } from 'viem'
 
 import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
+import { PanopticError, panopticErrorsAbi, parsePanopticError } from '../errors'
 import type { PanopticEvent, TxOverrides, TxReceipt, TxResult } from '../types'
 
 /**
@@ -359,6 +360,15 @@ export interface SubmitWriteParams {
  * @returns TxResult
  */
 export async function submitWrite(params: SubmitWriteParams): Promise<TxResult> {
+  try {
+    return await submitWriteRequest({ ...params, abi: [...params.abi, ...panopticErrorsAbi] })
+  } catch (error) {
+    if (error instanceof PanopticError) throw error
+    throw parsePanopticError(error)?.error ?? error
+  }
+}
+
+async function submitWriteRequest(params: SubmitWriteParams): Promise<TxResult> {
   const { client, walletClient, account, address, abi, functionName, args, value, txOverrides } =
     params
 

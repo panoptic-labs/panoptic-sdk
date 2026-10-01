@@ -26,6 +26,7 @@ const GAS_ESTIMATE_BUFFER_NUMERATOR = 3n
 const GAS_ESTIMATE_BUFFER_DENOMINATOR = 2n
 
 export type VaultTransactionFeeQuote = {
+  currentBaseFeePerGas?: bigint
   maxFeePerGas: bigint
   maxPriorityFeePerGas: bigint
   minimumMaxFeePerGas: bigint
@@ -204,6 +205,7 @@ function resolveFeeHistoryQuote({
   )
 
   return {
+    currentBaseFeePerGas: baseFeePerGas[latestBaseFeeIndex],
     maxFeePerGas: bufferedBaseFee + maxPriorityFeePerGas,
     maxPriorityFeePerGas,
     minimumMaxFeePerGas: bufferedBaseFee + effectivePriorityFeeFloor,
@@ -492,14 +494,22 @@ export function validateVaultSignedTransactionFeeCaps(
         `must not exceed ${MAX_VAULT_TRANSACTION_GAS_COST.toString()} wei (0.015 ETH).`,
     }
   }
-  if (quote !== undefined && maxFeePerGas < quote.minimumMaxFeePerGas) {
-    return {
-      valid: false,
-      code: 'MaxFeeTooLow',
-      reason:
-        `Signed transaction maxFeePerGas (${maxFeePerGas.toString()} wei) must be at least ` +
-        `${quote.minimumMaxFeePerGas.toString()} wei for the buffered next-block base fee ` +
-        'and configured minimum priority fee.',
+  if (quote !== undefined) {
+    const feeRequirementDescription =
+      quote.currentBaseFeePerGas === undefined ? 'buffered next-block base fee' : 'current base fee'
+    const minimumBroadcastMaxFeePerGas =
+      quote.currentBaseFeePerGas === undefined
+        ? quote.minimumMaxFeePerGas
+        : quote.currentBaseFeePerGas + minimumPriorityFeePerGas
+    if (maxFeePerGas < minimumBroadcastMaxFeePerGas) {
+      return {
+        valid: false,
+        code: 'MaxFeeTooLow',
+        reason:
+          `Signed transaction maxFeePerGas (${maxFeePerGas.toString()} wei) must be at least ` +
+          `${minimumBroadcastMaxFeePerGas.toString()} wei for the ${feeRequirementDescription} ` +
+          'and configured minimum priority fee.',
+      }
     }
   }
   return { valid: true }

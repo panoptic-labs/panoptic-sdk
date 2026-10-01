@@ -13,6 +13,8 @@ import { panopticPoolV2Abi } from '../../../generated'
 import { MaxRetriesExceededError, NoLoanPositionsError } from '../errors'
 import { tickLimits } from '../formatters/tick'
 import { getPool } from '../reads/pool'
+import type { DispatchIntent } from '../simulations/creditWrap'
+import { simulateDispatch } from '../simulations/simulateDispatch'
 import { simulateOpenPosition } from '../simulations/simulateOpenPosition'
 import type { StorageAdapter } from '../storage'
 import { getPositionsKey, jsonSerializer } from '../storage'
@@ -753,6 +755,94 @@ async function getLoanPositionsForToken(
   })
 }
 
+export type PreviewRepayParams = Omit<SmartRepayParams, 'walletClient' | 'txOverrides' | 'storage'>
+
+async function buildRepayDispatch(params: PreviewRepayParams): Promise<DispatchIntent> {
+  const {
+    client,
+    account,
+    poolAddress,
+    chainId,
+    token,
+    amount,
+    slippageBps,
+    existingPositionIds,
+    builderCode = 0n,
+  } = params
+  if (amount <= 0n) throw new Error('Repayment amount must be positive')
+  const pool = await getPool({ client, poolAddress, chainId })
+  const tokenIndex = resolveTokenIndex(
+    token,
+    pool.collateralTracker0.token,
+    pool.collateralTracker1.token,
+  )
+
+  const loans = await getLoanPositionsForToken(
+    client,
+    poolAddress,
+    account,
+    existingPositionIds,
+    tokenIndex,
+  )
+  if (loans.length === 0) {
+    throw new NoLoanPositionsError(token)
+  }
+
+  const totalDebt = loans.reduce((sum, l) => sum + l.tokenAmount, 0n)
+  const loanIds = loans.map((l) => l.tokenId)
+  const remainder = totalDebt > amount ? totalDebt - amount : 0n
+
+  const { low: tickLimitLow, high: tickLimitHigh } = tickLimits(pool.currentTick, slippageBps)
+  const ascendingLimits: readonly [bigint, bigint, bigint] = [tickLimitLow, tickLimitHigh, 0n]
+
+  const nonLoanIds = existingPositionIds.filter((id) => !loanIds.includes(id))
+
+  const opsPositionIds: bigint[] = [...loanIds]
+  const opsSizes: bigint[] = loanIds.map(() => 0n)
+  const opsLimits = loanIds.map(() => ascendingLimits)
+
+  let finalPositionIdList: bigint[]
+
+  if (remainder > 0n) {
+    const { tokenId: newLoanId, adjustedSize } = buildUniqueLoan(
+      pool.poolId,
+      tokenIndex,
+      tokenIndex,
+      pool.currentTick,
+      pool.tickSpacing,
+      nonLoanIds,
+      remainder,
+    )
+    opsPositionIds.push(newLoanId)
+    opsSizes.push(adjustedSize)
+    opsLimits.push(ascendingLimits)
+    finalPositionIdList = [...nonLoanIds, newLoanId]
+  } else {
+    finalPositionIdList = nonLoanIds
+  }
+  return {
+    positionIdList: opsPositionIds,
+    finalPositionIdList,
+    positionSizes: opsSizes,
+    tickAndSpreadLimits: opsLimits,
+    usePremiaAsCollateral: false,
+    builderCode,
+  }
+}
+
+/** Preview the same full or partial repayment dispatch used by smartRepay. */
+export async function previewRepay(params: PreviewRepayParams) {
+  const dispatch = await buildRepayDispatch(params)
+  const simulation = await simulateDispatch({
+    client: params.client,
+    account: params.account,
+    poolAddress: params.poolAddress,
+    existingPositionIdList: params.existingPositionIds,
+    ...dispatch,
+  })
+  return { dispatch, simulation }
+}
+
 /**
  * Smart repay: burns all loan positions for a token and optionally re-opens a smaller one.
  *
@@ -766,75 +856,10 @@ async function getLoanPositionsForToken(
  * @returns TxResult
  */
 export async function smartRepay(params: SmartRepayParams): Promise<TxResult> {
-  const {
-    client,
-    walletClient,
-    account,
-    poolAddress,
-    chainId,
-    token,
-    amount,
-    slippageBps,
-    existingPositionIds,
-    builderCode = 0n,
-    txOverrides,
-  } = params
+  const { client, walletClient, account, poolAddress, txOverrides } = params
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const pool = await getPool({ client, poolAddress, chainId })
-    const tokenIndex = resolveTokenIndex(
-      token,
-      pool.collateralTracker0.token,
-      pool.collateralTracker1.token,
-    )
-
-    const loans = await getLoanPositionsForToken(
-      client,
-      poolAddress,
-      account,
-      existingPositionIds,
-      tokenIndex,
-    )
-    if (loans.length === 0) {
-      throw new NoLoanPositionsError(token)
-    }
-
-    const totalDebt = loans.reduce((sum, l) => sum + l.tokenAmount, 0n)
-    const loanIds = loans.map((l) => l.tokenId)
-    const remainder = totalDebt > amount ? totalDebt - amount : 0n
-
-    const { low: tickLimitLow, high: tickLimitHigh } = tickLimits(pool.currentTick, slippageBps)
-    const ascendingLimits: readonly [number, number, number] = [
-      Number(tickLimitLow),
-      Number(tickLimitHigh),
-      0,
-    ]
-
-    const nonLoanIds = existingPositionIds.filter((id) => !loanIds.includes(id))
-
-    const opsPositionIds: bigint[] = [...loanIds]
-    const opsSizes: bigint[] = loanIds.map(() => 0n)
-    const opsLimits = loanIds.map(() => ascendingLimits)
-
-    let finalPositionIdList: bigint[]
-
-    if (remainder > 0n) {
-      const { tokenId: newLoanId, adjustedSize } = buildUniqueLoan(
-        pool.poolId,
-        tokenIndex,
-        tokenIndex,
-        pool.currentTick,
-        pool.tickSpacing,
-        nonLoanIds,
-        remainder,
-      )
-      opsPositionIds.push(newLoanId)
-      opsSizes.push(adjustedSize)
-      opsLimits.push(ascendingLimits)
-      finalPositionIdList = [...nonLoanIds, newLoanId]
-    } else {
-      finalPositionIdList = nonLoanIds
-    }
+    const intent = await buildRepayDispatch(params)
 
     try {
       return await submitWrite({
@@ -844,7 +869,14 @@ export async function smartRepay(params: SmartRepayParams): Promise<TxResult> {
         address: poolAddress,
         abi: panopticPoolV2Abi,
         functionName: 'dispatch',
-        args: [opsPositionIds, finalPositionIdList, opsSizes, opsLimits, false, builderCode],
+        args: [
+          intent.positionIdList,
+          intent.finalPositionIdList,
+          intent.positionSizes,
+          intent.tickAndSpreadLimits.map((limits) => limits.map(Number)),
+          intent.usePremiaAsCollateral,
+          intent.builderCode,
+        ],
         txOverrides,
       })
     } catch (error) {

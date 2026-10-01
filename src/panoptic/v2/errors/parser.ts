@@ -358,6 +358,12 @@ function extractErrorData(error: unknown): `0x${string}` | null {
       if (foundData) return false
       const node = e as Record<string, unknown>
 
+      // viem preserves undecoded revert arguments in `raw`, not `data`.
+      if (typeof node.raw === 'string' && node.raw.startsWith('0x') && node.raw.length > 10) {
+        foundData = node.raw as `0x${string}`
+        return true
+      }
+
       // Check .data as hex string (full revert bytes on RPC errors)
       if (node.data && typeof node.data === 'string' && node.data.startsWith('0x')) {
         foundData = node.data as `0x${string}`
@@ -397,6 +403,13 @@ function extractErrorData(error: unknown): `0x${string}` | null {
   let current: Record<string, unknown> | null = error as Record<string, unknown>
   const maxDepth = 10
   for (let i = 0; i < maxDepth && current; i++) {
+    if (
+      typeof current.raw === 'string' &&
+      current.raw.startsWith('0x') &&
+      current.raw.length > 10
+    ) {
+      return current.raw as `0x${string}`
+    }
     if (current.data && typeof current.data === 'string' && current.data.startsWith('0x')) {
       return current.data as `0x${string}`
     }
@@ -424,7 +437,7 @@ function extractErrorData(error: unknown): `0x${string}` | null {
   // Strategy 3: Extract from error message (last resort — may only have 4-byte selector)
   const obj = error as Record<string, unknown>
   if (obj.message && typeof obj.message === 'string') {
-    const signatureMatch = obj.message.match(/signature:\s*(0x[a-fA-F0-9]{8,})/i)
+    const signatureMatch = obj.message.match(/signature:?\s*["']?(0x[a-fA-F0-9]{8,})/i)
     if (signatureMatch) {
       return signatureMatch[1] as `0x${string}`
     }

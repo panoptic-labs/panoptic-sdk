@@ -260,7 +260,14 @@ export function useCollateralData(poolAddress: Address, tokenIndex: 0 | 1, optio
 
 export function usePoolLiquidities(
   poolAddress: Address,
-  params: { queryAddress: Address; startTick: bigint; nTicks: bigint },
+  params: {
+    queryAddress: Address
+    startTick: bigint
+    nTicks: bigint
+    /** Extra windows per side, stitched on; needs `tickSpacing`. */
+    windowsPerSide?: number
+    tickSpacing?: number
+  },
   options?: QueryOptions,
 ) {
   const { publicClient, chainId, clientScope } = usePanopticContext()
@@ -271,6 +278,8 @@ export function usePoolLiquidities(
       params.queryAddress,
       params.startTick,
       params.nTicks,
+      params.windowsPerSide ?? 0,
+      params.tickSpacing,
     ],
     queryFn: () =>
       getPoolLiquidities({
@@ -279,6 +288,8 @@ export function usePoolLiquidities(
         queryAddress: params.queryAddress,
         startTick: params.startTick,
         nTicks: params.nTicks,
+        windowsPerSide: params.windowsPerSide,
+        tickSpacing: params.tickSpacing,
       }),
     enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
@@ -1956,7 +1967,15 @@ export function useUniswapV3PoolInfo(poolAddress: Address | undefined, options?:
 export function useUniswapV3PoolLiquidities(
   poolAddress: Address | undefined,
   queryAddress: Address | undefined,
-  args: { startTick: number; nTicks: bigint } | undefined,
+  args:
+    | {
+        startTick: number
+        nTicks: bigint
+        /** Extra windows per side, stitched on; needs `tickSpacing`. */
+        windowsPerSide?: number
+        tickSpacing?: number
+      }
+    | undefined,
   options?: QueryOptions,
 ) {
   const { publicClient, chainId, clientScope } = usePanopticContext()
@@ -1970,19 +1989,23 @@ export function useUniswapV3PoolLiquidities(
       queryAddress,
       args?.startTick,
       args?.nTicks,
+      args?.windowsPerSide ?? 0,
+      args?.tickSpacing,
       getClientCacheScopeKey(publicClient, clientScope),
     ],
     queryFn: () => {
       if (!poolAddress || !queryAddress || queryAddress === zeroAddress || !args) {
         throw new PanopticValidationError('useUniswapV3PoolLiquidities: missing required args')
       }
-      const { startTick, nTicks } = args
+      const { startTick, nTicks, windowsPerSide, tickSpacing } = args
       return getUniswapV3PoolLiquidities({
         client: publicClient,
         poolAddress,
         queryAddress,
         startTick,
         nTicks,
+        windowsPerSide,
+        tickSpacing,
       })
     },
     enabled:
@@ -2131,7 +2154,15 @@ export function useUniswapV4PoolLiquidities(
   queryAddress: Address | undefined,
   poolManager: Address | undefined,
   poolId: `0x${string}` | undefined,
-  args: { tickSpacing: number; startTick: number; nTicks: bigint } | undefined,
+  args:
+    | {
+        tickSpacing: number
+        startTick: number
+        nTicks: bigint
+        /** Extra windows per side, stitched on. */
+        windowsPerSide?: number
+      }
+    | undefined,
   options?: QueryOptions,
 ) {
   const { publicClient, chainId, clientScope } = usePanopticContext()
@@ -2147,13 +2178,14 @@ export function useUniswapV4PoolLiquidities(
       args?.tickSpacing,
       args?.startTick,
       args?.nTicks,
+      args?.windowsPerSide ?? 0,
       getClientCacheScopeKey(publicClient, clientScope),
     ],
     queryFn: () => {
       if (!queryAddress || !poolManager || !poolId || !args) {
         throw new PanopticValidationError('useUniswapV4PoolLiquidities: missing required args')
       }
-      const { tickSpacing, startTick, nTicks } = args
+      const { tickSpacing, startTick, nTicks, windowsPerSide } = args
       return getUniswapV4PoolLiquidities({
         client: publicClient,
         queryAddress,
@@ -2162,6 +2194,7 @@ export function useUniswapV4PoolLiquidities(
         tickSpacing,
         startTick,
         nTicks,
+        windowsPerSide,
       })
     },
     enabled: (options?.enabled ?? true) && !!queryAddress && !!poolManager && !!poolId && !!args,

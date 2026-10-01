@@ -206,7 +206,48 @@ export function computeUniswapFeesForBlock(
   return { total0, total1 }
 }
 
+const MAX_UINT256 = 2n ** 256n - 1n
+
+/**
+ * Fee growth per unit of liquidity inside `[lowerTick, upperTick)` at one block,
+ * wrapped to uint256 as the pool computes it. Diff two snapshots with
+ * `feesFromFeeGrowthDelta` to get the fees a constant liquidity earned between them.
+ */
+export function feeGrowthInsideX128(
+  blockData: UniswapBlockData,
+  lowerTick: number,
+  upperTick: number,
+): { feeGrowthInside0X128: bigint; feeGrowthInside1X128: bigint } | null {
+  const lower = blockData.tickData.get(lowerTick)
+  const upper = blockData.tickData.get(upperTick)
+  if (!lower || !upper) return null
+  const { currentTick } = blockData
+  const inside = (global: bigint, lowerOutside: bigint, upperOutside: bigint) => {
+    const below = currentTick >= lowerTick ? lowerOutside : global - lowerOutside
+    const above = currentTick < upperTick ? upperOutside : global - upperOutside
+    return (global - below - above) & MAX_UINT256
+  }
+  return {
+    feeGrowthInside0X128: inside(
+      blockData.feeGrowthGlobal0,
+      lower.feeGrowthOutside0,
+      upper.feeGrowthOutside0,
+    ),
+    feeGrowthInside1X128: inside(
+      blockData.feeGrowthGlobal1,
+      lower.feeGrowthOutside1,
+      upper.feeGrowthOutside1,
+    ),
+  }
+}
+
 // ── Block snapshot fetchers ──────────────────────────────────────────
+
+/** Blocks before the chain's Multicall3 deployment need viem's deployless multicall. */
+function predatesMulticall3(client: PublicClient, blockNumber: bigint | undefined): boolean {
+  const deployedAt = client.chain?.contracts?.multicall3?.blockCreated
+  return blockNumber != null && deployedAt != null && blockNumber < BigInt(deployedAt)
+}
 
 async function fetchUniswapBlockSnapshot(
   client: PublicClient,
@@ -245,7 +286,12 @@ async function fetchV3BlockSnapshot(
     })),
   ]
 
-  const results = await client.multicall({ contracts, blockNumber, allowFailure: false })
+  const results = await client.multicall({
+    contracts,
+    blockNumber,
+    allowFailure: false,
+    deployless: predatesMulticall3(client, blockNumber),
+  })
 
   const slot0Result = results[0] as readonly [
     bigint,
@@ -314,7 +360,12 @@ async function fetchV4BlockSnapshot(
     })),
   ]
 
-  const results = await client.multicall({ contracts, blockNumber, allowFailure: false })
+  const results = await client.multicall({
+    contracts,
+    blockNumber,
+    allowFailure: false,
+    deployless: predatesMulticall3(client, blockNumber),
+  })
 
   const slot0Result = results[0] as readonly [bigint, number, number, number]
   const feeGrowthResult = results[1] as readonly [bigint, bigint]

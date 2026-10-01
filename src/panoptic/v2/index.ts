@@ -551,10 +551,11 @@ export { getStreamiaHistory } from './reads'
 // Uniswap Fee History (standalone, no Panoptic pool required)
 export type {
   GetUniswapFeeHistoryParams,
+  UniswapBlockData,
   UniswapFeeHistoryResult,
   UniswapFeeSnapshot,
 } from './reads'
-export { getUniswapFeeHistory } from './reads'
+export { feeGrowthInsideX128, fetchUniswapFeeData, getUniswapFeeHistory } from './reads'
 
 // Price History (historical tick + sqrtPriceX96)
 export type { GetPriceHistoryParams, PriceHistoryResult, PriceSnapshot } from './reads'
@@ -723,6 +724,7 @@ export type {
   PositionStorageParams,
   PreviewBorrowParams,
   PreviewBorrowResult,
+  PreviewRepayParams,
   PreviewWrapParams,
   ProtectedSettlePlan,
   RedeemParams,
@@ -802,6 +804,7 @@ export {
   pokeOracle,
   pokeOracleAndWait,
   previewBorrow,
+  previewRepay,
   previewUnwrap,
   previewWrap,
   // Broadcaster

@@ -136,6 +136,7 @@ export {
   type WithdrawalEpochStateSnapshot,
   calculateClaimableAssetsFromQueuedWithdrawals,
 } from './hypoVault/executeWithdrawal/utils'
+export { useErc20Balance } from './hypoVault/hooks/use-erc20-balance'
 export { BaseUSDCPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/BaseUSDCPLPStrategistLeaves'
 export { BaseUSDCPLPVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts/BaseUSDCPLPVaultPoolInfos'
 export { BaseWETHPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/BaseWETHPLPStrategistLeaves'

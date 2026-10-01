@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   getUniswapV3PoolInfo,
+  getUniswapV3PoolLiquidities,
   getUniswapV4PoolBasicState,
   getUniswapV4PoolInfo,
 } from './uniswapPool'
@@ -227,6 +228,40 @@ describe('Uniswap v3 pool reads', () => {
 
     await expect(getUniswapV3PoolInfo({ client, poolAddress: POOL })).rejects.toThrow(
       'decode failed',
+    )
+  })
+})
+
+describe('Uniswap v3 liquidity window bounds', () => {
+  it.each([
+    { startTick: 887_000, tickSpacing: 60, nTicks: 100n, expected: 4n },
+    { startTick: -887_000, tickSpacing: 60, nTicks: 100n, expected: 4n },
+    { startTick: 0, tickSpacing: 60, nTicks: 100n, expected: 100n },
+    { startTick: 887_270, tickSpacing: undefined, nTicks: 100n, expected: 2n },
+    { startTick: -887_270, tickSpacing: undefined, nTicks: 100n, expected: 2n },
+  ])('clamps the main window for $startTick with spacing $tickSpacing', async (params) => {
+    const readContract = vi.fn().mockResolvedValue([[], []])
+    const client = {
+      getBlock: vi.fn().mockResolvedValue(MOCK_BLOCK),
+      readContract,
+    } as unknown as PublicClient
+
+    await getUniswapV3PoolLiquidities({
+      client,
+      poolAddress: TOKEN0,
+      queryAddress: STATE_VIEW,
+      startTick: params.startTick,
+      tickSpacing: params.tickSpacing,
+      nTicks: params.nTicks,
+    })
+
+    expect(readContract).toHaveBeenCalledTimes(1)
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: 'getTickNetsV3',
+        args: [TOKEN0, params.startTick, params.expected],
+        blockNumber: MOCK_BLOCK.number,
+      }),
     )
   })
 })

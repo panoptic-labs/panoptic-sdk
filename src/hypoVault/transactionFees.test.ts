@@ -39,6 +39,7 @@ describe('vault transaction fee quote', () => {
     })
 
     expect(quote).toEqual({
+      currentBaseFeePerGas: 101n,
       maxFeePerGas: MIN_VAULT_PRIORITY_FEE_PER_GAS + 114n,
       maxPriorityFeePerGas: MIN_VAULT_PRIORITY_FEE_PER_GAS,
       minimumMaxFeePerGas: MIN_VAULT_PRIORITY_FEE_PER_GAS + 114n,
@@ -54,6 +55,7 @@ describe('vault transaction fee quote', () => {
     })
 
     expect(quote).toEqual({
+      currentBaseFeePerGas: 101n,
       maxFeePerGas: 114n,
       maxPriorityFeePerGas: 0n,
       minimumMaxFeePerGas: 114n,
@@ -69,6 +71,7 @@ describe('vault transaction fee quote', () => {
     })
 
     expect(quote).toEqual({
+      currentBaseFeePerGas: 200_000_000n,
       maxFeePerGas: 460_000_000n,
       maxPriorityFeePerGas: 235_000_000n,
       minimumMaxFeePerGas: 325_000_000n,
@@ -510,6 +513,46 @@ describe('signed vault transaction fee validation', () => {
         maxPriorityFeePerGas: 0n,
       }),
     ).toEqual({ valid: true })
+  })
+
+  it('accepts a signed cap that still covers the current Robinhood base fee', () => {
+    expect(
+      validateVaultSignedTransactionFeeCaps(
+        {
+          chainId: ROBINHOOD_CHAIN_ID,
+          maxFeePerGas: 25_902_000n,
+          maxPriorityFeePerGas: 0n,
+        },
+        {
+          currentBaseFeePerGas: 23_226_000n,
+          maxFeePerGas: 26_129_250n,
+          maxPriorityFeePerGas: 0n,
+          minimumMaxFeePerGas: 26_129_250n,
+          minimumPriorityFeePerGas: 0n,
+          source: 'fee_history',
+        },
+      ),
+    ).toEqual({ valid: true })
+  })
+
+  it('rejects a signed cap below the current Robinhood base fee', () => {
+    expect(
+      validateVaultSignedTransactionFeeCaps(
+        {
+          chainId: ROBINHOOD_CHAIN_ID,
+          maxFeePerGas: 23_225_999n,
+          maxPriorityFeePerGas: 0n,
+        },
+        {
+          currentBaseFeePerGas: 23_226_000n,
+          maxFeePerGas: 26_129_250n,
+          maxPriorityFeePerGas: 0n,
+          minimumMaxFeePerGas: 26_129_250n,
+          minimumPriorityFeePerGas: 0n,
+          source: 'fee_history',
+        },
+      ),
+    ).toMatchObject({ valid: false, code: 'MaxFeeTooLow' })
   })
 
   it('uses the priority floor carried by the market quote', () => {

@@ -13,6 +13,7 @@ import { uniswapV3PoolAbi } from '../abis/uniswapV3Pool'
 import { getBlockMeta } from '../clients/blockMeta'
 import { PanopticValidationError } from '../errors'
 import type { BlockMeta } from '../types'
+import { readTickNetWindows } from './tickNetWindows'
 
 const erc20MetaAbi = [
   {
@@ -201,6 +202,10 @@ export interface GetUniswapV3PoolLiquiditiesParams {
   startTick: number
   /** Number of ticks on each side of startTick to scan */
   nTicks: bigint
+  /** Extra `nTicks`-wide windows to read on each side, stitched on (default 0). */
+  windowsPerSide?: number
+  /** The pool's tick spacing; required when `windowsPerSide` > 0. */
+  tickSpacing?: number
 }
 
 /** Absolute Uniswap V3/V4 tick bounds. */
@@ -234,28 +239,40 @@ function clampNTicks(startTick: number, tickSpacing: number, nTicks: bigint): bi
 export async function getUniswapV3PoolLiquidities(
   params: GetUniswapV3PoolLiquiditiesParams,
 ): Promise<UniswapV3Liquidities> {
-  const { client, poolAddress, queryAddress, startTick, nTicks } = params
+  const { client, poolAddress, queryAddress, startTick, nTicks, windowsPerSide = 0 } = params
+  if (windowsPerSide > 0 && params.tickSpacing === undefined) {
+    throw new PanopticValidationError(
+      'getUniswapV3PoolLiquidities: tickSpacing is required with windowsPerSide',
+    )
+  }
 
-  // We don't know tickSpacing here; PanopticQuery reads it from the pool.
-  // For safety, clamp against the worst case (tickSpacing = 1).
-  const safeN = clampNTicks(startTick, 1, nTicks)
+  const safeN = clampNTicks(startTick, params.tickSpacing ?? 1, nTicks)
 
-  // Pin the read to a specific block so the returned ticks/liquidityNets
-  // are consistent with the _meta we hand back.
+  // Pin every read to one block so the returned ticks/liquidityNets are
+  // consistent with the _meta we hand back.
   const _meta = await getBlockMeta({ client })
-  const [ticks, liquidityNets] = await client.readContract({
-    address: queryAddress,
-    abi: panopticQueryAbi,
-    functionName: 'getTickNetsV3',
-    args: [poolAddress, startTick, safeN],
-    blockNumber: _meta.blockNumber,
+  const { ticks, liquidityNets } = await readTickNetWindows({
+    startTick,
+    mainNTicks: safeN,
+    nTicks,
+    tickSpacing: params.tickSpacing ?? 1,
+    windowsPerSide,
+    read: (centerTick, windowTicks) =>
+      client
+        .readContract({
+          address: queryAddress,
+          abi: panopticQueryAbi,
+          functionName: 'getTickNetsV3',
+          args: [poolAddress, centerTick, windowTicks],
+          blockNumber: _meta.blockNumber,
+        })
+        .then(([windowTickData, windowNets]) => ({
+          ticks: windowTickData,
+          liquidityNets: windowNets,
+        })),
   })
 
-  return {
-    ticks: [...ticks],
-    liquidityNets: [...liquidityNets],
-    _meta,
-  }
+  return { ticks, liquidityNets, _meta }
 }
 
 // ============================================================================
@@ -579,6 +596,8 @@ export interface GetUniswapV4PoolLiquiditiesParams {
   tickSpacing: number
   startTick: number
   nTicks: bigint
+  /** Extra `nTicks`-wide windows to read on each side, stitched on (default 0). */
+  windowsPerSide?: number
 }
 
 /**
@@ -592,19 +611,28 @@ export async function getUniswapV4PoolLiquidities(
 
   const safeN = clampNTicks(startTick, tickSpacing, nTicks)
 
-  // Pin to a specific block so the returned ticks/liquidityNets match _meta.
+  // Pin every read to one block so the returned ticks/liquidityNets match _meta.
   const _meta = await getBlockMeta({ client })
-  const [ticks, liquidityNets] = await client.readContract({
-    address: queryAddress,
-    abi: panopticQueryAbi,
-    functionName: 'getTickNetsV4',
-    args: [poolManager, poolId, tickSpacing, startTick, safeN],
-    blockNumber: _meta.blockNumber,
+  const { ticks, liquidityNets } = await readTickNetWindows({
+    startTick,
+    mainNTicks: safeN,
+    nTicks,
+    tickSpacing,
+    windowsPerSide: params.windowsPerSide ?? 0,
+    read: (centerTick, windowTicks) =>
+      client
+        .readContract({
+          address: queryAddress,
+          abi: panopticQueryAbi,
+          functionName: 'getTickNetsV4',
+          args: [poolManager, poolId, tickSpacing, centerTick, windowTicks],
+          blockNumber: _meta.blockNumber,
+        })
+        .then(([windowTickData, windowNets]) => ({
+          ticks: windowTickData,
+          liquidityNets: windowNets,
+        })),
   })
 
-  return {
-    ticks: [...ticks],
-    liquidityNets: [...liquidityNets],
-    _meta,
-  }
+  return { ticks, liquidityNets, _meta }
 }
