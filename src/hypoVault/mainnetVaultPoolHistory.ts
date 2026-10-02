@@ -11,14 +11,14 @@ import {
   MainnetWETHPLPV3AuthorizedVaultPoolInfos,
   MainnetWETHPLPVaultPoolInfos,
 } from './hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
-import { RobinhoodUSDGPLPVaultPoolInfos } from './hypoVaultManagerArtifacts/RobinhoodUSDGPLPVaultPoolInfos'
+import { RobinhoodUSDGPLP30bpsVaultPoolInfos } from './hypoVaultManagerArtifacts/RobinhoodUSDGPLPVaultPoolInfos'
 import type { PoolInfo } from './utils/buildManagerInput'
 
 const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
 const MAINNET_POOL_RETIREMENT_BLOCK = 25_898_997n
 const MAINNET_POOL_RETIREMENT_TRANSACTION =
   '0xfca6a6dd0f081649dd6f50496175a58e6a119d574b594390beab23618b05ba2c' as const
-const ROBINHOOD_USDG_VAULT_DEPLOYMENT_BLOCK = 63_972_776n
+export const ROBINHOOD_USDG_VAULT_DEPLOYMENT_BLOCK = 63_972_776n
 const ROBINHOOD_USDG_VAULT_DEPLOYMENT_TRANSACTION =
   '0x738c8a6d30a45f9b71d2d6260aa1c04aff558489631b3a9c6ccd5f49e0f57df4' as const
 
@@ -32,23 +32,26 @@ const POOL_INFO_ARRAY_ABI = {
   ],
 } as const
 
-export type MainnetVaultPoolConfiguration = {
+export type VaultPoolConfiguration = {
   readonly activationBlockNumber: bigint
   readonly transactionHash: Hex
   readonly poolInfos: readonly PoolInfo[]
   readonly poolHash: Hex
 }
 
-export type MainnetVaultManagerRootTransition = {
+export type VaultManagerRootTransition = {
   readonly activationBlockNumber: bigint
   readonly transactionHash: Hex
   readonly manageRoot: Hex
 }
 
+export type MainnetVaultPoolConfiguration = VaultPoolConfiguration
+export type MainnetVaultManagerRootTransition = VaultManagerRootTransition
+
 type VaultHistory = {
   readonly vaultAddress: Address
-  readonly poolConfigurations: readonly MainnetVaultPoolConfiguration[]
-  readonly managerRootTransitions: readonly MainnetVaultManagerRootTransition[]
+  readonly poolConfigurations: readonly VaultPoolConfiguration[]
+  readonly managerRootTransitions: readonly VaultManagerRootTransition[]
 }
 
 function hashPoolInfos(poolInfos: readonly PoolInfo[]): Hex {
@@ -199,12 +202,12 @@ const MAINNET_VAULT_HISTORIES: readonly VaultHistory[] = [
 
 const ROBINHOOD_VAULT_HISTORIES: readonly VaultHistory[] = [
   {
-    vaultAddress: RobinhoodUSDGPLPVaultPoolInfos.vaultAddress,
+    vaultAddress: RobinhoodUSDGPLP30bpsVaultPoolInfos.vaultAddress,
     poolConfigurations: [
       poolConfiguration(
         ROBINHOOD_USDG_VAULT_DEPLOYMENT_BLOCK,
         ROBINHOOD_USDG_VAULT_DEPLOYMENT_TRANSACTION,
-        RobinhoodUSDGPLPVaultPoolInfos.poolInfos,
+        RobinhoodUSDGPLP30bpsVaultPoolInfos.poolInfos,
       ),
     ],
     managerRootTransitions: [
@@ -217,9 +220,7 @@ const ROBINHOOD_VAULT_HISTORIES: readonly VaultHistory[] = [
   },
 ] as const
 
-function copyPoolConfiguration(
-  configuration: MainnetVaultPoolConfiguration,
-): MainnetVaultPoolConfiguration {
+function copyPoolConfiguration(configuration: VaultPoolConfiguration): VaultPoolConfiguration {
   return {
     ...configuration,
     poolInfos: configuration.poolInfos.map((poolInfo) => ({ ...poolInfo })),
@@ -227,8 +228,8 @@ function copyPoolConfiguration(
 }
 
 function copyManagerRootTransition(
-  transition: MainnetVaultManagerRootTransition,
-): MainnetVaultManagerRootTransition {
+  transition: VaultManagerRootTransition,
+): VaultManagerRootTransition {
   return { ...transition }
 }
 
@@ -266,7 +267,7 @@ function latestAtBlock<T extends { readonly activationBlockNumber: bigint }>(
   return null
 }
 
-export function getMainnetVaultPoolConfigurationAtBlock({
+export function getVaultPoolConfigurationAtBlock({
   chainId,
   vaultAddress,
   blockNumber,
@@ -274,12 +275,12 @@ export function getMainnetVaultPoolConfigurationAtBlock({
   chainId: number
   vaultAddress: Address
   blockNumber: bigint
-}): MainnetVaultPoolConfiguration | null {
+}): VaultPoolConfiguration | null {
   const history = findHistory(chainId, vaultAddress)
   return history === null ? null : latestAtBlock(history.poolConfigurations, blockNumber)
 }
 
-export function getMainnetVaultManagerRootAtBlock({
+export function getVaultManagerRootAtBlock({
   chainId,
   vaultAddress,
   blockNumber,
@@ -287,27 +288,32 @@ export function getMainnetVaultManagerRootAtBlock({
   chainId: number
   vaultAddress: Address
   blockNumber: bigint
-}): MainnetVaultManagerRootTransition | null {
+}): VaultManagerRootTransition | null {
   const history = findHistory(chainId, vaultAddress)
   return history === null ? null : latestAtBlock(history.managerRootTransitions, blockNumber)
 }
 
-export function getMainnetVaultPoolConfigurationHistory({
+export function getVaultPoolConfigurationHistory({
   chainId,
   vaultAddress,
 }: {
   chainId: number
   vaultAddress: Address
-}): readonly MainnetVaultPoolConfiguration[] | null {
+}): readonly VaultPoolConfiguration[] | null {
   return findHistory(chainId, vaultAddress)?.poolConfigurations ?? null
 }
 
-export function getMainnetVaultManagerRootHistory({
+export function getVaultManagerRootHistory({
   chainId,
   vaultAddress,
 }: {
   chainId: number
   vaultAddress: Address
-}): readonly MainnetVaultManagerRootTransition[] | null {
+}): readonly VaultManagerRootTransition[] | null {
   return findHistory(chainId, vaultAddress)?.managerRootTransitions ?? null
 }
+
+export const getMainnetVaultPoolConfigurationAtBlock = getVaultPoolConfigurationAtBlock
+export const getMainnetVaultManagerRootAtBlock = getVaultManagerRootAtBlock
+export const getMainnetVaultPoolConfigurationHistory = getVaultPoolConfigurationHistory
+export const getMainnetVaultManagerRootHistory = getVaultManagerRootHistory

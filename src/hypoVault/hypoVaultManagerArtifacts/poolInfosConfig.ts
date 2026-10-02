@@ -1,17 +1,14 @@
 import {
   BASE_CHAIN_ID,
   getEthUsdcMarket,
-  getSpyUsdgMarket,
   MAINNET_CHAIN_ID,
   requireChainDeployment,
-  ROBINHOOD_CHAIN_ID,
   SEPOLIA_CHAIN_ID,
 } from '../chainDeployments'
 
 const SEPOLIA_DEPLOYMENT = requireChainDeployment(SEPOLIA_CHAIN_ID)
 const BASE_DEPLOYMENT = requireChainDeployment(BASE_CHAIN_ID)
 const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
-const ROBINHOOD_DEPLOYMENT = requireChainDeployment(ROBINHOOD_CHAIN_ID)
 
 export const MAX_PRICE_DEVIATION = 100 as const
 export const WSPCXX_USDC_MAX_PRICE_DEVIATION = 10000 as const
@@ -72,15 +69,29 @@ export const MAINNET_WSPCXX_USDC_POOL_INFO = {
   positionScanFromBlock: 25_302_077n,
 } as const
 
-export const ROBINHOOD_SPY_USDG_POOL_DEPLOYMENT_BLOCK = 62_901_925n
+export const ROBINHOOD_SPY_USDG_30BPS_POOL_DEPLOYMENT_BLOCK = 62_901_925n
 
-export const ROBINHOOD_SPY_USDG_POOL_INFO = {
+export const ROBINHOOD_SPY_USDG_30BPS_POOL_INFO = {
   maxPriceDeviation: MAX_PRICE_DEVIATION,
-  pool: ROBINHOOD_DEPLOYMENT.panoptic.pool.panopticPool,
-  token0: getSpyUsdgMarket(ROBINHOOD_DEPLOYMENT).currency0,
-  token1: getSpyUsdgMarket(ROBINHOOD_DEPLOYMENT).currency1,
-  positionScanFromBlock: ROBINHOOD_SPY_USDG_POOL_DEPLOYMENT_BLOCK,
+  pool: '0x00000000989bcb6f24af4a1Ab2A6d6a31c98A58E',
+  token0: '0x117cc2133c37B721F49dE2A7a74833232B3B4C0C',
+  token1: '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168',
+  positionScanFromBlock: ROBINHOOD_SPY_USDG_30BPS_POOL_DEPLOYMENT_BLOCK,
 } as const
+
+export const ROBINHOOD_SPY_USDG_5BPS_POOL_DEPLOYMENT_BLOCK = 72_457_529n
+
+export const ROBINHOOD_SPY_USDG_5BPS_POOL_INFO = {
+  maxPriceDeviation: MAX_PRICE_DEVIATION,
+  pool: '0x000000000c21b38c54AcA7c7145Df01ff09d69Bb',
+  token0: ROBINHOOD_SPY_USDG_30BPS_POOL_INFO.token0,
+  token1: ROBINHOOD_SPY_USDG_30BPS_POOL_INFO.token1,
+  positionScanFromBlock: ROBINHOOD_SPY_USDG_5BPS_POOL_DEPLOYMENT_BLOCK,
+} as const
+
+export const ROBINHOOD_SPY_USDG_POOL_DEPLOYMENT_BLOCK =
+  ROBINHOOD_SPY_USDG_5BPS_POOL_DEPLOYMENT_BLOCK
+export const ROBINHOOD_SPY_USDG_POOL_INFO = ROBINHOOD_SPY_USDG_5BPS_POOL_INFO
 
 /** Accountant order used by the v3-authorization release. */
 export const MAINNET_DEFAULT_POOL_INFOS = [

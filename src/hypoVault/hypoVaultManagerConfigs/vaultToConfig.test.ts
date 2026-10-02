@@ -89,7 +89,7 @@ describe('getHypoVaultConfigForVault', () => {
         token0: '0x117cc2133c37B721F49dE2A7a74833232B3B4C0C',
         token1: '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168',
         maxPriceDeviation: 100,
-        positionScanFromBlock: 62_901_925n,
+        positionScanFromBlock: 72_457_529n,
       },
     ])
   })

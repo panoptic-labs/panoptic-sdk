@@ -16,8 +16,11 @@ import {
 const readContractMock = vi.fn()
 const getOpenPositionIdsMock = vi.fn()
 const resolveAuthorizationMock = vi.fn()
+const resolveRobinhoodAuthorizationMock = vi.fn()
 const getAuthorizationGenerationsMock = vi.fn()
+const getRobinhoodAuthorizationGenerationsMock = vi.fn()
 const getHistoricalPoolConfigurationMock = vi.fn()
+const getHistoricalPoolConfigurationsMock = vi.fn()
 
 vi.mock('viem/actions', () => ({
   readContract: (...args: unknown[]) => readContractMock(...args),
@@ -35,8 +38,18 @@ vi.mock('../mainnetV3Authorization', () => ({
 }))
 
 vi.mock('../mainnetVaultPoolHistory', () => ({
-  getMainnetVaultPoolConfigurationAtBlock: (...args: unknown[]) =>
+  ROBINHOOD_USDG_VAULT_DEPLOYMENT_BLOCK: 200n,
+  getVaultPoolConfigurationAtBlock: (...args: unknown[]) =>
     getHistoricalPoolConfigurationMock(...args),
+  getVaultPoolConfigurationHistory: (...args: unknown[]) =>
+    getHistoricalPoolConfigurationsMock(...args),
+}))
+
+vi.mock('../robinhoodSpyUsdgAuthorization', () => ({
+  getRobinhoodSpyUsdgAuthorizationGenerations: (...args: unknown[]) =>
+    getRobinhoodAuthorizationGenerationsMock(...args),
+  resolveRobinhoodSpyUsdgAuthorizationArtifacts: (...args: unknown[]) =>
+    resolveRobinhoodAuthorizationMock(...args),
 }))
 
 /**
@@ -97,6 +110,8 @@ describe('vault pool generation selection', () => {
 
   it('keeps candidates for pools from every recognized generation', () => {
     getAuthorizationGenerationsMock.mockReset()
+    getHistoricalPoolConfigurationsMock.mockReset()
+    getHistoricalPoolConfigurationsMock.mockReturnValue(null)
     getAuthorizationGenerationsMock.mockReturnValue({
       previous: { poolInfos: [poolA] },
       next: { poolInfos: [poolA, poolB] },
@@ -104,6 +119,33 @@ describe('vault pool generation selection', () => {
     })
 
     expect(getVaultCandidatePoolInfos(vaultAddress, 1)).toEqual([poolA, poolB])
+  })
+
+  it('uses historical pool metadata before the Robinhood vault deployment block', async () => {
+    resolveRobinhoodAuthorizationMock.mockReset()
+    getHistoricalPoolConfigurationMock.mockReset()
+    getHistoricalPoolConfigurationMock.mockReturnValue({ poolInfos: [poolA] })
+
+    await expect(
+      resolveVaultPoolInfosAtBlock({
+        viemClient: {} as never,
+        chainId: 4663,
+        vaultAddress,
+        blockNumber: 199n,
+      }),
+    ).resolves.toEqual([poolA])
+    expect(resolveRobinhoodAuthorizationMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps historical candidates on chains without mainnet authorization generations', () => {
+    getAuthorizationGenerationsMock.mockReset()
+    getRobinhoodAuthorizationGenerationsMock.mockReset()
+    getHistoricalPoolConfigurationsMock.mockReset()
+    getAuthorizationGenerationsMock.mockReturnValue(null)
+    getRobinhoodAuthorizationGenerationsMock.mockReturnValue([])
+    getHistoricalPoolConfigurationsMock.mockReturnValue([{ poolInfos: [poolA] }])
+
+    expect(getVaultCandidatePoolInfos(vaultAddress, 4663)).toContainEqual(poolA)
   })
 })
 

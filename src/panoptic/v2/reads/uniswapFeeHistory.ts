@@ -131,7 +131,10 @@ export interface UniswapBlockData {
   feeGrowthGlobal0: bigint
   feeGrowthGlobal1: bigint
   /** Map from tick number → { feeGrowthOutside0, feeGrowthOutside1 } */
-  tickData: Map<number, { feeGrowthOutside0: bigint; feeGrowthOutside1: bigint }>
+  tickData: Map<
+    number,
+    { feeGrowthOutside0: bigint; feeGrowthOutside1: bigint; liquidityGross?: bigint }
+  >
 }
 
 /**
@@ -305,7 +308,7 @@ async function fetchV3BlockSnapshot(
   const feeGrowthGlobal0 = results[1] as bigint
   const feeGrowthGlobal1 = results[2] as bigint
 
-  const tickData = new Map<number, { feeGrowthOutside0: bigint; feeGrowthOutside1: bigint }>()
+  const tickData: UniswapBlockData['tickData'] = new Map()
   for (let i = 0; i < uniqueTicks.length; i++) {
     const tickResult = results[3 + i] as readonly [
       bigint,
@@ -318,6 +321,7 @@ async function fetchV3BlockSnapshot(
       boolean,
     ]
     tickData.set(uniqueTicks[i], {
+      liquidityGross: tickResult[0],
       feeGrowthOutside0: tickResult[2],
       feeGrowthOutside1: tickResult[3],
     })
@@ -370,10 +374,11 @@ async function fetchV4BlockSnapshot(
   const slot0Result = results[0] as readonly [bigint, number, number, number]
   const feeGrowthResult = results[1] as readonly [bigint, bigint]
 
-  const tickData = new Map<number, { feeGrowthOutside0: bigint; feeGrowthOutside1: bigint }>()
+  const tickData: UniswapBlockData['tickData'] = new Map()
   for (let i = 0; i < uniqueTicks.length; i++) {
     const tickResult = results[2 + i] as readonly [bigint, bigint, bigint, bigint]
     tickData.set(uniqueTicks[i], {
+      liquidityGross: tickResult[0],
       feeGrowthOutside0: tickResult[2],
       feeGrowthOutside1: tickResult[3],
     })

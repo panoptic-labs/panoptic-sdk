@@ -1206,6 +1206,13 @@ export {
   netLiquidationValueInQuote,
 } from './greeks/marketPnl'
 export {
+  type PositionVolatilityObservation,
+  type VolatilityComparisonReason,
+  calculatePositionVolatilityMetrics,
+  preparePositionGamma,
+  valuePositionAccrual,
+} from './greeks/positionVolatility'
+export {
   collateralCurveTicks,
   getCollateralCurve,
   getCollateralCurveInputs,
@@ -1219,3 +1226,4 @@ export {
   positionValueTicks,
   preparePositionValueCurve,
 } from './reads/positionValueCurve'
+export { getPositionVolatilityHistory } from './reads/positionVolatilityHistory'

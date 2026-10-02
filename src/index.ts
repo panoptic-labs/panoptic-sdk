@@ -108,6 +108,10 @@ export {
   ROBINHOOD_PANOPTIC_POOL_ADDRESSES,
   ROBINHOOD_PANOPTIC_V2_ADDRESSES,
   ROBINHOOD_RISK_ENGINES,
+  ROBINHOOD_SPY_USDG_5BPS_MARKET,
+  ROBINHOOD_SPY_USDG_5BPS_PANOPTIC_POOL_ADDRESSES,
+  ROBINHOOD_SPY_USDG_30BPS_MARKET,
+  ROBINHOOD_SPY_USDG_30BPS_PANOPTIC_POOL_ADDRESSES,
   ROBINHOOD_SPY_USDG_MARKET,
   SEPOLIA_CHAIN_ID,
   SEPOLIA_DEPLOYMENT,
@@ -170,11 +174,29 @@ export {
   MainnetWETHPLPVaultPoolInfos,
 } from './hypoVault/hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
 export {
+  ROBINHOOD_SPY_USDG_5BPS_POOL_DEPLOYMENT_BLOCK,
+  ROBINHOOD_SPY_USDG_5BPS_POOL_INFO,
+  ROBINHOOD_SPY_USDG_30BPS_POOL_DEPLOYMENT_BLOCK,
+  ROBINHOOD_SPY_USDG_30BPS_POOL_INFO,
+  ROBINHOOD_SPY_USDG_POOL_DEPLOYMENT_BLOCK,
+  ROBINHOOD_SPY_USDG_POOL_INFO,
+} from './hypoVault/hypoVaultManagerArtifacts/poolInfosConfig'
+export {
+  ROBINHOOD_USDG_PLP_5BPS_COMPILED_POOL_POLICY,
+  ROBINHOOD_USDG_PLP_5BPS_POOL_POLICY,
+  ROBINHOOD_USDG_PLP_30BPS_COMPILED_POOL_POLICY,
+  ROBINHOOD_USDG_PLP_30BPS_POOL_POLICY,
   ROBINHOOD_USDG_PLP_COMPILED_POOL_POLICY,
   ROBINHOOD_USDG_PLP_POOL_POLICY,
+  RobinhoodUSDGPLP5bpsStrategistLeaves,
+  RobinhoodUSDGPLP30bpsStrategistLeaves,
   RobinhoodUSDGPLPStrategistLeaves,
 } from './hypoVault/hypoVaultManagerArtifacts/RobinhoodUSDGPLPStrategistLeaves'
-export { RobinhoodUSDGPLPVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts/RobinhoodUSDGPLPVaultPoolInfos'
+export {
+  RobinhoodUSDGPLP5bpsVaultPoolInfos,
+  RobinhoodUSDGPLP30bpsVaultPoolInfos,
+  RobinhoodUSDGPLPVaultPoolInfos,
+} from './hypoVault/hypoVaultManagerArtifacts/RobinhoodUSDGPLPVaultPoolInfos'
 export { SepoliaUSDCPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/SepoliaUSDCPLPStrategistLeaves'
 export { SepoliaUSDCPLPVaultPoolInfos } from './hypoVault/hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 export { SepoliaWETHPLPStrategistLeaves } from './hypoVault/hypoVaultManagerArtifacts/SepoliaWETHPLPStrategistLeaves'
@@ -208,10 +230,17 @@ export {
 export {
   type MainnetVaultManagerRootTransition,
   type MainnetVaultPoolConfiguration,
+  type VaultManagerRootTransition,
+  type VaultPoolConfiguration,
   getMainnetVaultManagerRootAtBlock,
   getMainnetVaultManagerRootHistory,
   getMainnetVaultPoolConfigurationAtBlock,
   getMainnetVaultPoolConfigurationHistory,
+  getVaultManagerRootAtBlock,
+  getVaultManagerRootHistory,
+  getVaultPoolConfigurationAtBlock,
+  getVaultPoolConfigurationHistory,
+  ROBINHOOD_USDG_VAULT_DEPLOYMENT_BLOCK,
 } from './hypoVault/mainnetVaultPoolHistory'
 export { useRequestDeposit } from './hypoVault/requestDeposit/hooks/use-request-deposit'
 export {
@@ -246,6 +275,17 @@ export {
   calculateSharesFromAssets,
   getMinQueuedDepositEpoch,
 } from './hypoVault/requestWithdrawal/utils'
+export {
+  type RobinhoodSpyUsdgAuthorizationArtifacts,
+  type RobinhoodSpyUsdgAuthorizationVersion,
+  getRobinhoodSpyUsdgAuthorizationGenerations,
+  hashRobinhoodSpyUsdgPoolInfos,
+  resolveRobinhoodSpyUsdgAuthorizationArtifacts,
+  resolveRobinhoodSpyUsdgAuthorizationState,
+  ROBINHOOD_USDG_5BPS_POOL_HASH,
+  ROBINHOOD_USDG_30BPS_MANAGE_ROOT,
+  ROBINHOOD_USDG_30BPS_POOL_HASH,
+} from './hypoVault/robinhoodSpyUsdgAuthorization'
 export {
   getVaultApyErrorMessage,
   isExpectedHistoricalReadMiss,

@@ -20,7 +20,10 @@ import {
   MainnetWETHPLPLegacyVaultPoolInfos,
   MainnetWETHPLPVaultPoolInfos,
 } from '../hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
-import { RobinhoodUSDGPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/RobinhoodUSDGPLPVaultPoolInfos'
+import {
+  RobinhoodUSDGPLP5bpsVaultPoolInfos,
+  RobinhoodUSDGPLP30bpsVaultPoolInfos,
+} from '../hypoVaultManagerArtifacts/RobinhoodUSDGPLPVaultPoolInfos'
 import { SepoliaUSDCPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaUSDCPLPVaultPoolInfos'
 import { SepoliaWETHPLPVaultPoolInfos } from '../hypoVaultManagerArtifacts/SepoliaWETHPLPVaultPoolInfos'
 import {
@@ -28,7 +31,15 @@ import {
   MAINNET_V3_AUTHORIZATION_BLOCK,
   resolveMainnetV3AuthorizationArtifacts,
 } from '../mainnetV3Authorization'
-import { getMainnetVaultPoolConfigurationAtBlock } from '../mainnetVaultPoolHistory'
+import {
+  getVaultPoolConfigurationAtBlock,
+  getVaultPoolConfigurationHistory,
+  ROBINHOOD_USDG_VAULT_DEPLOYMENT_BLOCK,
+} from '../mainnetVaultPoolHistory'
+import {
+  getRobinhoodSpyUsdgAuthorizationGenerations,
+  resolveRobinhoodSpyUsdgAuthorizationArtifacts,
+} from '../robinhoodSpyUsdgAuthorization'
 import type { PoolInfo } from './buildManagerInput'
 import { buildManagerInputAtBlock } from './buildManagerInputAtBlock'
 
@@ -51,7 +62,7 @@ const VAULT_POOL_INFOS_BY_CHAIN: Record<number, readonly VaultPoolInfoArtifact[]
   ],
   [SEPOLIA_CHAIN_ID]: [SepoliaUSDCPLPVaultPoolInfos, SepoliaWETHPLPVaultPoolInfos],
   [BASE_CHAIN_ID]: [BaseUSDCPLPVaultPoolInfos, BaseWETHPLPVaultPoolInfos],
-  [ROBINHOOD_CHAIN_ID]: [RobinhoodUSDGPLPVaultPoolInfos],
+  [ROBINHOOD_CHAIN_ID]: [RobinhoodUSDGPLP5bpsVaultPoolInfos, RobinhoodUSDGPLP30bpsVaultPoolInfos],
 }
 
 const GET_POOL_ACCOUNT_BALANCE_CANDIDATES = `
@@ -455,14 +466,20 @@ export function getVaultCandidatePoolInfos(
   chainId: number,
 ): readonly PoolInfo[] {
   const generations = getMainnetV3AuthorizationGenerations({ chainId, vaultAddress })
-  const candidates =
-    generations === null
+  const robinhoodGenerations =
+    chainId === ROBINHOOD_CHAIN_ID ? getRobinhoodSpyUsdgAuthorizationGenerations() : []
+  const history = getVaultPoolConfigurationHistory({ chainId, vaultAddress }) ?? []
+  const candidates = [
+    ...history.flatMap(({ poolInfos }) => poolInfos),
+    ...(generations === null
       ? getVaultPoolInfos(vaultAddress, chainId)
       : [
           ...generations.previous.poolInfos,
           ...generations.next.poolInfos,
           ...generations.current.poolInfos,
-        ]
+        ]),
+    ...robinhoodGenerations.flatMap((generation) => generation.poolInfos),
+  ]
   const byPoolAddress = new Map<string, PoolInfo>()
   for (const candidate of candidates) {
     const key = candidate.pool.toLowerCase()
@@ -485,6 +502,15 @@ export async function resolveVaultPoolInfosAtBlock({
   vaultAddress: Address
   blockNumber: bigint
 }): Promise<readonly PoolInfo[]> {
+  if (chainId === ROBINHOOD_CHAIN_ID && blockNumber >= ROBINHOOD_USDG_VAULT_DEPLOYMENT_BLOCK) {
+    const authorization = await resolveRobinhoodSpyUsdgAuthorizationArtifacts({
+      viemClient,
+      chainId,
+      vault: vaultAddress,
+      blockNumber,
+    })
+    if (authorization !== null) return authorization.poolInfos
+  }
   if (chainId === MAINNET_CHAIN_ID && blockNumber >= MAINNET_V3_AUTHORIZATION_BLOCK) {
     const authorization = await resolveMainnetV3AuthorizationArtifacts({
       viemClient,
@@ -498,7 +524,7 @@ export async function resolveVaultPoolInfosAtBlock({
   }
 
   return (
-    getMainnetVaultPoolConfigurationAtBlock({
+    getVaultPoolConfigurationAtBlock({
       chainId,
       vaultAddress,
       blockNumber,

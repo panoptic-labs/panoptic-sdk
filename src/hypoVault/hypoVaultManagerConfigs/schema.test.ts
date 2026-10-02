@@ -21,6 +21,7 @@ import {
 } from '../hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
 import {
   ROBINHOOD_USDG_PLP_COMPILED_POOL_POLICY,
+  RobinhoodUSDGPLP5bpsStrategistLeaves,
   RobinhoodUSDGPLPStrategistLeaves,
 } from '../hypoVaultManagerArtifacts/RobinhoodUSDGPLPStrategistLeaves'
 import {
@@ -107,7 +108,7 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
       chainId: ROBINHOOD_CHAIN_ID,
       manageCycleIntervalMs: 600_000,
       maxBuyingPowerUsageBps: 6600,
-      poolDeploymentBlock: 62_901_925,
+      poolDeploymentBlock: 72_457_529,
       vaultAssetIndex: 1n,
       vaultCapInUnderlying: 100_000_000n,
       vaultCapInShares: 100_000_000_000_000n,
@@ -134,7 +135,7 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     expect(targets).toContain(deployment.panoptic.pool.collateralTracker0.toLowerCase())
     expect(targets).toContain(deployment.panoptic.pool.collateralTracker1.toLowerCase())
     expect(RobinhoodUSDGPLPStrategistLeaves.metadata.ManageRoot).toBe(
-      '0x5ef821042a85fea05901e4612e8a8d60efd2468ca08f0810d5691e23ea98967f',
+      RobinhoodUSDGPLP5bpsStrategistLeaves.metadata.ManageRoot,
     )
   })
 
