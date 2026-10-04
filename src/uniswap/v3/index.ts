@@ -4,4 +4,5 @@
  */
 
 export { type UniswapV3Addresses, getUniswapV3Addresses, UNISWAP_V3_ADDRESSES } from './addresses'
+export * from './poolBalances'
 export * from './router'

@@ -3,7 +3,6 @@
  */
 import { renderHook, waitFor } from '@testing-library/react'
 import React, { type ReactNode } from 'react'
-import invariant from 'tiny-invariant'
 import {
   createTestClient,
   createWalletClient,
@@ -23,7 +22,7 @@ import { Erc20Abi } from '../../../abis/erc20ABI'
 import { HypoVaultAbi } from '../../../abis/HypoVault'
 import { HypoVaultManagerWithMerkleVerificationAbi } from '../../../abis/HypoVaultManagerWithMerkleVerification'
 import { buildManagerInput } from '../../../hypoVault/utils/buildManagerInput'
-import { getAlchemyRpcUrl } from '../../../rpc'
+import { resolveRpcEndpoints, rpcForkArgs } from '../../../rpc'
 import { killAnvilProcess, ReactTestWrapper, spawnAnvil } from '../../../test'
 import { SepoliaWETHPLPVaultPoolInfos } from '../../hypoVaultManagerArtifacts/SepoliaWETHPLPVaultPoolInfos'
 import type { QueuedWithdrawalSnapshot, WithdrawalEpochStateSnapshot } from '../utils'
@@ -64,12 +63,11 @@ const buildTestWagmiConfig = ({
 }
 
 describe('useExecuteWithdrawal', () => {
-  let alchemyApiKey: string
+  let forkArgs: ReturnType<typeof rpcForkArgs>
   let anvilMnemonic: string
 
   beforeAll(() => {
-    invariant(process.env.ALCHEMY_API_KEY !== undefined, 'Must have ALCHEMY_API_KEY set')
-    alchemyApiKey = process.env.ALCHEMY_API_KEY
+    forkArgs = rpcForkArgs(resolveRpcEndpoints(sepolia.id, process.env))
   })
 
   beforeEach(async () => {
@@ -79,7 +77,7 @@ describe('useExecuteWithdrawal', () => {
     anvilMnemonic = generateMnemonic(english)
 
     await spawnAnvil({
-      forkUrl: getAlchemyRpcUrl(sepolia.id, alchemyApiKey),
+      ...forkArgs,
       mnemonic: anvilMnemonic,
       chainId: sepolia.id,
       noCors: true,
@@ -96,9 +94,8 @@ describe('useExecuteWithdrawal', () => {
       mode: 'anvil',
     })
 
-    await resetClient.reset({
-      jsonRpcUrl: getAlchemyRpcUrl(sepolia.id, alchemyApiKey),
-    })
+    // Without jsonRpcUrl anvil re-forks from its original URL and headers.
+    await resetClient.reset()
   })
 
   test('computes claimable assets without executing when desiredAssets is zero', async () => {

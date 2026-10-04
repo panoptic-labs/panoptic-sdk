@@ -50,6 +50,8 @@ export interface LpGreeksInput {
   tickUpper: bigint
   /** Pool's current tick. */
   currentTick: bigint
+  /** Exact pool price, when available; takes precedence over currentTick. */
+  sqrtPriceX96?: bigint
   /** Which token is the asset: `0` (token0) or `1` (token1). */
   assetIndex: 0 | 1
 }
@@ -96,7 +98,8 @@ export function getAmountsForLiquidity(
 export function getLpGreeks(input: LpGreeksInput): LpGreeks {
   const { liquidity, tickLower, tickUpper, currentTick, assetIndex } = input
 
-  const sqrtP = tickToSqrtPriceX96(currentTick)
+  const sqrtP = input.sqrtPriceX96 ?? tickToSqrtPriceX96(currentTick)
+  if (sqrtP <= 0n) throw new RangeError('Invalid sqrt price')
   const sqrtA = tickToSqrtPriceX96(tickLower)
   const sqrtB = tickToSqrtPriceX96(tickUpper)
 

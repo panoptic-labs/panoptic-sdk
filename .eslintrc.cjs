@@ -10,5 +10,10 @@ module.exports = {
         '@typescript-eslint/no-non-null-assertion': 'off',
       },
     },
+    {
+      // The provider registry is the one place vendor RPC URLs may live.
+      files: ['src/rpc/providers.ts'],
+      rules: { 'no-restricted-syntax': 'off' },
+    },
   ],
 }

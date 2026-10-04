@@ -422,7 +422,7 @@ export { encodeWithdrawFunctionData } from './panoptic/v1/CollateralTracker/with
 export { encodeApproveFunctionData } from './token/erc20/approve'
 
 // RPC
-export { getAlchemyRpcUrl, getAlchemyWsRpcUrl } from './rpc'
+export { getAlchemyRpcUrl, getAlchemyWsRpcUrl } from './rpc/providers'
 
 // GraphQL
 export type * from './graphql/hypoVault-sdk.generated'

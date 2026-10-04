@@ -191,7 +191,13 @@ export function valuePositionAccrual({
   quoteIsToken0,
   quoteDecimals,
 }: {
-  snapshots: readonly { token0: bigint; token1: bigint; tick: bigint }[]
+  snapshots: readonly {
+    token0: bigint
+    token1: bigint
+    tick: bigint
+    /** Exact conversion price, when available; takes precedence over tick. */
+    sqrtPriceX96?: bigint
+  }[]
   quoteIsToken0: boolean
   quoteDecimals: number
 }) {
@@ -201,7 +207,12 @@ export function valuePositionAccrual({
   for (const snapshot of snapshots) {
     const amount0 = new Precision((snapshot.token0 - previous0).toString())
     const amount1 = new Precision((snapshot.token1 - previous1).toString())
-    const price = new Precision('1.0001').pow(snapshot.tick.toString())
+    if (snapshot.sqrtPriceX96 !== undefined && snapshot.sqrtPriceX96 <= 0n)
+      throw new RangeError('Invalid sqrt price')
+    const price =
+      snapshot.sqrtPriceX96 === undefined
+        ? new Precision('1.0001').pow(snapshot.tick.toString())
+        : new Precision(snapshot.sqrtPriceX96.toString()).div(Q96.toString()).pow(2)
     total = total.plus(
       quoteIsToken0 ? amount0.plus(amount1.div(price)) : amount1.plus(amount0.mul(price)),
     )

@@ -73,16 +73,6 @@ export const spawnAnvil = (args?: AnvilArgs) => {
         // Use newly generated mnemonic to avoid drainers deployed on mainnet and delegated to by default anvil accounts (https://getfoundry.sh/anvil/overview/#eip-7702-and-default-accounts)
         ...args,
       }),
-      // [
-      //   `--fork-url`,
-      //   `https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
-      //   `--chain-id`,
-      //   `31337`,
-      //   `-vvvvv`,
-      //   `--no-cors`,
-      //   `--fork-block-number`,
-      //   `23146780`,
-      // ]
     )
 
     subprocess.stdout.on('data', (data) => {
@@ -246,7 +236,7 @@ type AnvilArgs = {
    *
    * Requires `forkUrl` to be set.
    */
-  forkHeader?: Record<string, string> | undefined
+  forkHeader?: string | undefined
   /**
    * Initial retry backoff on encountering errors.
    */

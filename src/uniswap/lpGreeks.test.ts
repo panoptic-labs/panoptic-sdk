@@ -54,6 +54,39 @@ describe('getLpGreeks', () => {
     currentTick: 0n,
   } as const
 
+  it.each([0, 1] as const)(
+    'uses exact prices for value, delta, and gamma (asset=%s)',
+    (assetIndex) => {
+      const q96 = 1n << 96n
+      const sqrtPriceX96 = q96 + q96 / 50000n
+      const input = { ...base, assetIndex, sqrtPriceX96 }
+      const exact = getLpGreeks(input)
+      const rounded = getLpGreeks({ ...base, assetIndex })
+      const { amount0, amount1 } = getAmountsForLiquidity(
+        sqrtPriceX96,
+        tickToSqrtPriceX96(base.tickLower),
+        tickToSqrtPriceX96(base.tickUpper),
+        base.liquidity,
+      )
+      expect(exact.delta).toBe(assetIndex === 0 ? amount0 : amount1)
+      expect(exact.value).toBe(
+        assetIndex === 0
+          ? amount1 + (amount0 * sqrtPriceX96 ** 2n) / Q192
+          : amount0 + (amount1 * Q192) / sqrtPriceX96 ** 2n,
+      )
+      expect(exact.gamma).toBe(
+        assetIndex === 0
+          ? -(base.liquidity * sqrtPriceX96) / (2n * q96)
+          : -(base.liquidity * q96) / (2n * sqrtPriceX96),
+      )
+      expect(exact.value).not.toBe(rounded.value)
+      expect(exact.delta).not.toBe(rounded.delta)
+      expect(exact.gamma).not.toBe(rounded.gamma)
+      expect(getLpGreeks({ ...input, tickLower: 0n }).gamma).toBeLessThan(0n)
+      expect(() => getLpGreeks({ ...input, sqrtPriceX96: 0n })).toThrow('sqrt price')
+    },
+  )
+
   it('delta equals the asset-token amount held', () => {
     const sqrtP = tickToSqrtPriceX96(base.currentTick)
     const amounts = getAmountsForLiquidity(

@@ -33,6 +33,7 @@ const ENTRIES = {
   'uniswap/index': './src/uniswap/index.ts',
   'cow/index': './src/cow/index.ts',
   'zodiac/index': './src/zodiac/index.ts',
+  'rpc/index': './src/rpc/index.ts',
   'vault-transaction-fees': './src/vault-transaction-fees.ts',
 }
 
