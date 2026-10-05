@@ -445,8 +445,8 @@ export class UnsafePremiumSettlementError extends PanopticError {
     const [token0, token1] = remainingForfeit
     super(
       failedBuyerCount > 0
-        ? `Premium settlement blocked: ${failedBuyerCount} buyer settlement${failedBuyerCount === 1 ? '' : 's'} would fail`
-        : `Premium settlement blocked: uncollectable premium remains (${token0}, ${token1})`,
+        ? `Streamia settlement blocked: ${failedBuyerCount} buyer settlement${failedBuyerCount === 1 ? '' : 's'} would fail`
+        : `Streamia settlement blocked: uncollectable streamia remains (${token0}, ${token1})`,
       cause,
     )
   }

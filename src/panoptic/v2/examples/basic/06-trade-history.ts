@@ -98,7 +98,7 @@ function displayClosedPosition(position: ClosedPosition, index: number): void {
     `       PnL: token0=${formatAmount(position.realizedPnL0)}, token1=${formatAmount(position.realizedPnL1)}`,
   )
   console.log(
-    `       Premia: token0=${formatAmount(position.premiaCollected0)}, token1=${formatAmount(position.premiaCollected1)}`,
+    `       Streamia: token0=${formatAmount(position.premiaCollected0)}, token1=${formatAmount(position.premiaCollected1)}`,
   )
 }
 

@@ -52,7 +52,7 @@ export interface SimulateOpenPositionParams {
    * When false (default), tickLimits are passed in ascending order (low, high).
    */
   swapAtMint?: boolean
-  /** Whether to use premia as collateral */
+  /** Whether to use streamia as collateral */
   usePremiaAsCollateral?: boolean
   /** Builder code */
   builderCode?: bigint

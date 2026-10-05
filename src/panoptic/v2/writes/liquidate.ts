@@ -29,7 +29,7 @@ export interface LiquidateParams {
   positionIdListTo: bigint[]
   /** Final position ID list for the liquidatee after liquidation */
   positionIdListToFinal: bigint[]
-  /** Packed value for using premia as collateral */
+  /** Packed value for using streamia as collateral */
   usePremiaAsCollateral?: bigint
   /** Native currency supplied to cover a negative token0 liquidation bonus */
   value?: bigint

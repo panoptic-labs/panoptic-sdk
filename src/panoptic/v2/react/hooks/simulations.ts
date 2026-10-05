@@ -167,9 +167,9 @@ export function useSimulateForceExercise(
 }
 
 /**
- * Simulate settling several buyers' owed premium at one block, partitioning
+ * Simulate settling several buyers' owed streamia at one block, partitioning
  * them into settleable vs unsettleable and summing the caller's unlocked
- * premium. Refetches on every call (staleTime 0) so the partition reflects
+ * streamia. Refetches on every call (staleTime 0) so the partition reflects
  * current chain state.
  */
 export function useSimulateSettlePremiumBatch(

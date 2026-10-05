@@ -140,7 +140,7 @@ export async function getPositionVolatilityHistory({
       if (
         liquidations.some((event) => event.args.liquidatee.toLowerCase() === account.toLowerCase())
       ) {
-        throw new Error('Liquidation premium requires haircut reconciliation')
+        throw new Error('Liquidation streamia requires haircut reconciliation')
       }
       for (const packed of close.args.premiaByLeg) {
         const amounts = unpack(packed)
@@ -187,7 +187,7 @@ export async function getPositionVolatilityHistory({
     }
     const openingAccrual = premium[0]
     if (!openingAccrual || openingAccrual.timestamp !== start.blockTimestamp) {
-      throw new Error('Opening premium snapshot missing')
+      throw new Error('Opening streamia snapshot missing')
     }
     // Both price exposure and accounting begin at the opening block's end state.
     premium = premium.map((snapshot) => ({
@@ -197,7 +197,7 @@ export async function getPositionVolatilityHistory({
     }))
   } catch (error) {
     premium = null
-    premiumError = error instanceof Error ? error.message : 'Premium history unavailable'
+    premiumError = error instanceof Error ? error.message : 'Streamia history unavailable'
   }
 
   if (includeBaseFees) {

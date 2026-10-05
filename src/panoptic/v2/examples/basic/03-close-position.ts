@@ -101,8 +101,8 @@ async function main() {
 
     console.log(`   Position Size: ${position.positionSize}`)
     console.log(`   Tick at Mint: ${position.tickAtMint}`)
-    console.log(`   Premia Owed 0: ${position.premiaOwed0}`)
-    console.log(`   Premia Owed 1: ${position.premiaOwed1}`)
+    console.log(`   Streamia Owed 0: ${position.premiaOwed0}`)
+    console.log(`   Streamia Owed 1: ${position.premiaOwed1}`)
     console.log(`   Block: ${position._meta.blockNumber}`)
   } catch (error) {
     if (error instanceof PositionNotOwnedError) {
@@ -145,8 +145,8 @@ async function main() {
   console.log(`   Gas estimate: ${simulation.gasEstimate}`)
   console.log(`   Amount0 received: ${simulation.data.amount0Received}`)
   console.log(`   Amount1 received: ${simulation.data.amount1Received}`)
-  console.log(`   Premia collected0: ${simulation.data.premiaCollected0}`)
-  console.log(`   Premia collected1: ${simulation.data.premiaCollected1}`)
+  console.log(`   Streamia collected0: ${simulation.data.premiaCollected0}`)
+  console.log(`   Streamia collected1: ${simulation.data.premiaCollected1}`)
   console.log()
 
   // Step 5: Confirm execution

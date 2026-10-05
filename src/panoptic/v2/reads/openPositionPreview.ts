@@ -46,7 +46,7 @@ export interface GetOpenPositionPreviewParams {
   spreadLimit?: bigint
   /** Whether to swap at mint */
   swapAtMint?: boolean
-  /** Whether to use premia as collateral */
+  /** Whether to use streamia as collateral */
   usePremiaAsCollateral?: boolean
   /** Chain ID (for greeks calculation) */
   chainId?: bigint

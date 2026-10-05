@@ -1,7 +1,7 @@
 /**
- * Historical streamia (streaming premia) reads for the Panoptic v2 SDK.
+ * Historical streamia reads for the Panoptic v2 SDK.
  *
- * Fetches Panoptic premia and optionally Uniswap fee accrual across a series
+ * Fetches Panoptic streamia and optionally Uniswap fee accrual across a series
  * of historical block numbers for a single position. Composes
  * getUniswapFeeHistory internally for the Uniswap fee component.
  *
@@ -24,7 +24,7 @@ export type { StreamiaLeg } from '../types/streamia'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
-/** A signed settled-premia event used to reconstruct cumulative premia. */
+/** A signed settled-streamia event used to reconstruct cumulative streamia. */
 export interface SettledEvent {
   /** Block at which settlement occurred */
   blockNumber: bigint
@@ -52,7 +52,7 @@ export interface GetStreamiaHistoryParams {
   poolConfig: PoolVersionConfig
   /** Whether to include Uniswap fee data (default: true) */
   includeUniswapFees?: boolean
-  /** Signed settled-premia events to include in cumulative premia (optional) */
+  /** Signed settled-streamia events to include in cumulative streamia (optional) */
   settledEvents?: SettledEvent[]
   /** Pre-fetched block metadata (skips an extra eth_getBlockByNumber if provided) */
   _meta?: BlockMeta
@@ -62,9 +62,9 @@ export interface GetStreamiaHistoryParams {
 export interface StreamiaSnapshot {
   /** Block number (undefined if queried as latest) */
   blockNumber: bigint | undefined
-  /** Currently unsettled Panoptic premia (short - long) */
+  /** Currently unsettled Panoptic streamia (short - long) */
   panopticPremia: { token0: bigint; token1: bigint }
-  /** Lifetime Panoptic premia, including signed settled amounts */
+  /** Lifetime Panoptic streamia, including signed settled amounts */
   cumulativePanopticPremia: { token0: bigint; token1: bigint }
   /** Uniswap fee delta from the first block in the series */
   uniswapFees: { token0: bigint; token1: bigint }
@@ -87,7 +87,7 @@ const MASK_128 = (1n << 128n) - 1n
  * Get historical streamia data for a position across multiple blocks.
  *
  * @param params - The parameters
- * @returns Snapshots of Panoptic premia and Uniswap fee deltas at each block
+ * @returns Snapshots of Panoptic streamia and Uniswap fee deltas at each block
  */
 export async function getStreamiaHistory(
   params: GetStreamiaHistoryParams,

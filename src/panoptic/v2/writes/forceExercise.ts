@@ -31,7 +31,7 @@ export interface ForceExerciseParams {
   positionIdListTo: bigint[]
   /** Final position ID list for the user after exercise */
   positionIdListToFinal: bigint[]
-  /** Packed value for using premia as collateral */
+  /** Packed value for using streamia as collateral */
   usePremiaAsCollateral?: bigint
   /** Gas and transaction overrides */
   txOverrides?: TxOverrides

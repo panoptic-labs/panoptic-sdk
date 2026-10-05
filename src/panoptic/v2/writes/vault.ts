@@ -148,7 +148,7 @@ export async function withdrawAndWait(params: WithdrawParams): Promise<TxReceipt
 export interface WithdrawWithPositionsParams extends WithdrawParams {
   /** Position ID list for collateral validation */
   positionIdList: bigint[]
-  /** Whether to use premia as collateral */
+  /** Whether to use streamia as collateral */
   usePremiaAsCollateral: boolean
 }
 

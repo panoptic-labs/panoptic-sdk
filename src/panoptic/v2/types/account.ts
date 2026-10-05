@@ -107,7 +107,7 @@ export interface NetLiquidationValue {
   value1: bigint
   /** Tick used for calculation */
   atTick: bigint
-  /** Whether pending premium was included */
+  /** Whether pending streamia was included */
   includedPendingPremium: boolean
   /** Block metadata */
   _meta: BlockMeta

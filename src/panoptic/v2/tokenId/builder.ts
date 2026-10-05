@@ -75,7 +75,7 @@ export interface TokenIdBuilder {
    * Add a loan leg (borrow liquidity). Uses width=0 with isLong=false.
    *
    * A loan borrows liquidity from the pool at a specific strike price.
-   * The borrower receives the token and owes interest (streaming premium).
+   * The borrower receives the token and owes interest (streamia).
    *
    * @param config - Loan configuration (tokenType, strike, optionRatio)
    * @returns The builder for chaining
@@ -86,7 +86,7 @@ export interface TokenIdBuilder {
    * Add a credit leg (lend liquidity). Uses width=0 with isLong=true.
    *
    * A credit lends liquidity to the pool at a specific strike price.
-   * The lender deposits the token and earns interest (streaming premium).
+   * The lender deposits the token and earns interest (streamia).
    *
    * @param config - Credit configuration (tokenType, strike, optionRatio)
    * @returns The builder for chaining

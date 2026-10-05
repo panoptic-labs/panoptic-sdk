@@ -1,5 +1,5 @@
 /**
- * Premium settlement functions for the Panoptic v2 SDK.
+ * Streamia settlement functions for the Panoptic v2 SDK.
  * @module v2/writes/settle
  */
 
@@ -22,7 +22,7 @@ type DispatchPositionSizes = ContractFunctionArgs<
 >[2]
 
 /**
- * Parameters for settling accumulated premia.
+ * Parameters for settling accumulated streamia.
  */
 export interface SettleParams {
   /** Public client */
@@ -59,7 +59,7 @@ export interface SettleParams {
    * changes on-chain between the fallback read and inclusion of this tx (e.g.
    * a size reduction from another dispatch in the intervening blocks), the
    * stale positionSize will no longer match `storedSize` and dispatch will
-   * BURN the position instead of settling premium. Callers that already hold
+   * BURN the position instead of settling streamia. Callers that already hold
    * the stored sizes (e.g. from a same-block snapshot) SHOULD pass them
    * explicitly to eliminate that window.
    */
@@ -74,7 +74,7 @@ export interface SettleParams {
   skipPreflight?: boolean
   /** Allow irreducible forfeiture on positions with no available protection. */
   allowForfeit?: boolean
-  /** Whether to use premia as collateral */
+  /** Whether to use streamia as collateral */
   usePremiaAsCollateral?: boolean
   /** Builder code */
   builderCode?: bigint
@@ -83,9 +83,9 @@ export interface SettleParams {
 }
 
 /**
- * Settle accumulated premia on existing positions.
+ * Settle accumulated streamia on existing positions.
  *
- * This function triggers premium collection without changing position size.
+ * This function triggers streamia collection without changing position size.
  * It calls dispatch with unchanged position lists.
  *
  * @param params - Settlement parameters
@@ -193,7 +193,7 @@ export async function settleAccumulatedPremia(params: SettleParams): Promise<TxR
 }
 
 /**
- * Settle premia and wait for confirmation.
+ * Settle streamia and wait for confirmation.
  */
 export async function settleAccumulatedPremiaAndWait(params: SettleParams): Promise<TxReceipt> {
   const result = await settleAccumulatedPremia(params)

@@ -1,6 +1,6 @@
 /**
- * Premia read functions for the Panoptic v2 SDK.
- * @module v2/reads/premia
+ * Streamia read functions for the Panoptic v2 SDK.
+ * @module v2/reads/streamia
  */
 
 import type { Address, PublicClient } from 'viem'
@@ -12,18 +12,18 @@ import { decodePosition, decodeTickSpacing } from '../utils/option-encoding-v2'
 import { decodeLeftRightUnsigned } from '../writes/utils'
 
 /**
- * Premia data for an account.
+ * Streamia data for an account.
  */
 export interface AccountPremia {
-  /** Total short premium owed to the account for token 0 */
+  /** Total short streamia owed to the account for token 0 */
   shortPremium0: bigint
-  /** Total short premium owed to the account for token 1 */
+  /** Total short streamia owed to the account for token 1 */
   shortPremium1: bigint
-  /** Total long premium owed by the account for token 0 */
+  /** Total long streamia owed by the account for token 0 */
   longPremium0: bigint
-  /** Total long premium owed by the account for token 1 */
+  /** Total long streamia owed by the account for token 1 */
   longPremium1: bigint
-  /** Whether pending (unsettled) premium was included */
+  /** Whether pending (unsettled) streamia was included */
   includePendingPremium: boolean
   /** Block metadata */
   _meta: BlockMeta
@@ -41,7 +41,7 @@ export interface GetAccountPremiaParams {
   account: Address
   /** TokenIds held by the account */
   tokenIds: bigint[]
-  /** Whether to include pending (unsettled) premium (default: true) */
+  /** Whether to include pending (unsettled) streamia (default: true) */
   includePendingPremium?: boolean
   /** Optional block number for historical queries */
   blockNumber?: bigint
@@ -50,18 +50,18 @@ export interface GetAccountPremiaParams {
 }
 
 /**
- * Get premia totals for an account.
+ * Get streamia totals for an account.
  *
- * Returns the total short and long premium across all positions.
- * Short premium is owed TO the account (earned from selling options).
- * Long premium is owed BY the account (paid for buying options).
+ * Returns the total short and long streamia across all positions.
+ * Short streamia is owed TO the account (earned from selling options).
+ * Long streamia is owed BY the account (paid for buying options).
  *
  * @param params - The parameters
- * @returns Premia totals with block metadata
+ * @returns Streamia totals with block metadata
  *
  * @example
  * ```typescript
- * const premia = await getAccountPremia({
+ * const streamia = await getAccountPremia({
  *   client,
  *   poolAddress,
  *   account,
@@ -69,8 +69,8 @@ export interface GetAccountPremiaParams {
  *   includePendingPremium: true,
  * })
  *
- * console.log('Short premium earned:', premia.shortPremium0, premia.shortPremium1)
- * console.log('Long premium owed:', premia.longPremium0, premia.longPremium1)
+ * console.log('Short streamia earned:', streamia.shortPremium0, streamia.shortPremium1)
+ * console.log('Long streamia owed:', streamia.longPremium0, streamia.longPremium1)
  * ```
  */
 export async function getAccountPremia(params: GetAccountPremiaParams): Promise<AccountPremia> {
@@ -125,7 +125,7 @@ export async function getAccountPremia(params: GetAccountPremiaParams): Promise<
 }
 
 /**
- * Position with premia data.
+ * Position with streamia data.
  */
 export interface PositionWithPremia extends Position {
   // Position already has all fields from the base Position interface
@@ -137,15 +137,15 @@ export interface PositionWithPremia extends Position {
 export interface PositionsWithPremiaResult {
   /** Positions with full data */
   positions: PositionWithPremia[]
-  /** Total short premium owed to the account for token 0 */
+  /** Total short streamia owed to the account for token 0 */
   shortPremium0: bigint
-  /** Total short premium owed to the account for token 1 */
+  /** Total short streamia owed to the account for token 1 */
   shortPremium1: bigint
-  /** Total long premium owed by the account for token 0 */
+  /** Total long streamia owed by the account for token 0 */
   longPremium0: bigint
-  /** Total long premium owed by the account for token 1 */
+  /** Total long streamia owed by the account for token 1 */
   longPremium1: bigint
-  /** Whether pending (unsettled) premium was included */
+  /** Whether pending (unsettled) streamia was included */
   includePendingPremium: boolean
   /** Block metadata */
   _meta: BlockMeta
@@ -163,7 +163,7 @@ export interface GetPositionsWithPremiaParams {
   account: Address
   /** TokenIds held by the account */
   tokenIds: bigint[]
-  /** Whether to include pending (unsettled) premium (default: true) */
+  /** Whether to include pending (unsettled) streamia (default: true) */
   includePendingPremium?: boolean
   /** Optional block number for historical queries */
   blockNumber?: bigint
@@ -172,13 +172,13 @@ export interface GetPositionsWithPremiaParams {
 }
 
 /**
- * Get positions with per-position premia data.
+ * Get positions with per-position streamia data.
  *
  * Uses multicall to batch individual getFullPositionsData calls
- * for each position, giving us per-position premia in a single RPC request.
+ * for each position, giving us per-position streamia in a single RPC request.
  *
  * @param params - The parameters
- * @returns Positions with premia and totals with block metadata
+ * @returns Positions with streamia and totals with block metadata
  *
  * @example
  * ```typescript
@@ -191,9 +191,9 @@ export interface GetPositionsWithPremiaParams {
  *
  * for (const position of result.positions) {
  *   console.log('Position:', position.tokenId)
- *   console.log('Premia:', position.premiaOwed0, position.premiaOwed1)
+ *   console.log('Streamia:', position.premiaOwed0, position.premiaOwed1)
  * }
- * console.log('Total short premium:', result.shortPremium0, result.shortPremium1)
+ * console.log('Total short streamia:', result.shortPremium0, result.shortPremium1)
  * ```
  */
 export async function getPositionsWithPremia(
@@ -360,20 +360,20 @@ export async function getPositionsWithPremia(
 }
 
 /**
- * Forfeitable (unsettled) short premium on a position.
+ * Forfeitable (unsettled) short streamia on a position.
  */
 export interface ForfeitablePremium {
-  /** Short premium owed to the account, including unsettled pending premium (token 0) */
+  /** Short streamia owed to the account, including unsettled pending streamia (token 0) */
   owed0: bigint
-  /** Short premium owed to the account, including unsettled pending premium (token 1) */
+  /** Short streamia owed to the account, including unsettled pending streamia (token 1) */
   owed1: bigint
-  /** Short premium currently available to collect (token 0) */
+  /** Short streamia currently available to collect (token 0) */
   available0: bigint
-  /** Short premium currently available to collect (token 1) */
+  /** Short streamia currently available to collect (token 1) */
   available1: bigint
-  /** Premium that would be forfeited if the position were closed now (owed - available, token 0) */
+  /** Streamia that would be forfeited if the position were closed now (owed - available, token 0) */
   forfeit0: bigint
-  /** Premium that would be forfeited if the position were closed now (owed - available, token 1) */
+  /** Streamia that would be forfeited if the position were closed now (owed - available, token 1) */
   forfeit1: bigint
   /** Block metadata */
   _meta: BlockMeta
@@ -396,17 +396,17 @@ export interface GetForfeitablePremiumParams {
 }
 
 /**
- * Get the unsettled short premium an account would forfeit by closing now.
+ * Get the unsettled short streamia an account would forfeit by closing now.
  *
  * Calls `getFullPositionsData` twice in one multicall — once with
  * `includePendingPremium = true` (everything owed to the short legs) and once
  * with `false` (only what is available to collect). The difference is the
- * premium still owed by buyers that has not been settled; closing before it
+ * streamia still owed by buyers that has not been settled; closing before it
  * settles forfeits it. Settling buyers first (see `settlePremiumFrom`) moves
- * that premium into the available bucket.
+ * that streamia into the available bucket.
  *
  * @param params - The parameters
- * @returns Owed, available, and forfeitable premium with block metadata
+ * @returns Owed, available, and forfeitable streamia with block metadata
  */
 export async function getForfeitablePremium(
   params: GetForfeitablePremiumParams,

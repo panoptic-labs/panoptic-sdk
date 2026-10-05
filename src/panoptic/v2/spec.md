@@ -166,7 +166,7 @@ Panoptic v2 introduces significant architectural changes from v1:
 - `PanopticQuery` - **Note: Not yet implemented in contracts directory. This is a planned upgradable proxy contract for RPC-intensive computations.**
 
 **Key Contract Functions for Computed Values**:
-- `PanopticPool.getFullPositionsData()` - Returns premia owed + position balances (see `contracts/PanopticPool.sol:434`)
+- `PanopticPool.getFullPositionsData()` - Returns streamia owed + position balances (see `contracts/PanopticPool.sol:434`)
 - `PanopticPool.dispatch()` - Execute position operations (mint/burn) (see `contracts/PanopticPool.sol:577`)
 - `RiskEngine.getMargin()` - Returns maintenance requirement + available balance per token (see `contracts/RiskEngine.sol:1057`)
 - `CollateralTracker.deposit()` / `withdraw()` - ERC4626 vault operations (see `contracts/CollateralTracker.sol:569`, `contracts/CollateralTracker.sol:720`)
@@ -629,7 +629,7 @@ const position = await getPosition(config, {
 // Calls PanopticPool.positionData() for balance, getFullPositionsData() for premia
 ```
 
-**Note**: `syncPositions()` only tracks tokenIds locally. Position data (size, premia, ticks at mint) is always fetched fresh from the contract via `getFullPositionsData()` which returns `PositionBalance` data for each position.
+**Note**: `syncPositions()` only tracks tokenIds locally. Position data (size, streamia, ticks at mint) is always fetched fresh from the contract via `getFullPositionsData()` which returns `PositionBalance` data for each position.
 
 ### Sync Behavior
 
@@ -837,7 +837,7 @@ const pnl = await getRealizedPnL({ storage, chainId, poolAddress, account })
 
 **How it works:**
 1. `syncPositions()` detects `OptionBurnt` event
-2. Before removing tokenId from active positions, capture premia data from the event
+2. Before removing tokenId from active positions, capture streamia data from the event
 3. Move to `history` storage key with `ClosedPosition` data
 4. `getTradeHistory()` reads from storage (no RPC)
 
@@ -849,7 +849,7 @@ const pnl = await getRealizedPnL({ storage, chainId, poolAddress, account })
 
 ### What Is a Chunk Spread
 
-A "chunk" is a unique combination of `(tokenType, tickLower, tickUpper)` representing a liquidity position range. The **spread** is the premium multiplier applied to option sellers:
+A "chunk" is a unique combination of `(tokenType, tickLower, tickUpper)` representing a liquidity position range. The **spread** is the streamia multiplier applied to option sellers:
 
 ```
 spread = 1 + (1/VEGOID) * removedLiquidity / netLiquidity
@@ -997,7 +997,7 @@ Static/constant data that never changes for a given chain:
 
 Dynamic on-chain state - always fetched fresh:
 
-- Position dynamic data (`positionSize`, premia, health)
+- Position dynamic data (`positionSize`, streamia, health)
 - Pool state (`currentTick`, `sqrtPriceX96`, `isSafeMode`)
 - Oracle state (`spotTick`, `medianTick`, `latestTick`, `twapTick`, `spotEMA`, `fastEMA`, `slowEMA`, `eonsEMA`, `oracleTimestamp`, `oracleEpoch`, `referenceTick`, `oraclePack`)
 - Account balances and collateral
@@ -1233,7 +1233,7 @@ These legs have no strike range and cannot be exercised. The `validateIsExercisa
 - Sends tokens to the pool; these tokens earn NO interest while credited
 - Closing a credit returns the tokens, which then resume earning vault interest
 - Credits have margin requirements
-- Use cases: See "ITM Abstraction" and "Premium Pre-payment" patterns below
+- Use cases: See "ITM Abstraction" and "Streamia Pre-payment" patterns below
 
 **Key differences from options:**
 - No exercise risk (cannot be force-exercised)
@@ -1467,7 +1467,7 @@ const tokenId = createTokenIdBuilder(pool.poolId)
 // Result: ITM amount is abstracted away, PnL starts at ~0
 ```
 
-**Use Case 2: Premium Pre-payment (Long Call with Credit)**
+**Use Case 2: Streamia Pre-payment (Long Call with Credit)**
 
 Long options in Panoptic don't pay premium upfront—instead, premium accrues over time ("streamia"). A credit can pre-pay expected premium for a more TradFi-like experience:
 
@@ -2113,14 +2113,14 @@ The SDK fetches account collateral by composing contract calls (batched via mult
 3. **`RiskEngine.getMargin(positionBalances, atTick, user, tokenIds, shortPremia, longPremia, ct0, ct1)`**
    - Returns `tokenData0`, `tokenData1`, `globalUtilizations`
    - `tokenData.leftSlot()` = maintenance requirement
-   - `tokenData.rightSlot()` = available balance (including settled premia)
+   - `tokenData.rightSlot()` = available balance (including settled streamia)
 4. **`CollateralTracker.balanceOf(user)`** for shares
 
 ---
 
-## Account Premia
+## Account Streamia
 
-Premia tracking for collecting earned/owed fees across positions.
+Streamia tracking for collecting earned/owed fees across positions.
 
 ```typescript
 interface AccountPremia {
@@ -2153,7 +2153,7 @@ interface PositionsWithPremiaResult {
 }
 ```
 
-### How Account Premia is Computed
+### How Account Streamia is Computed
 
 `getAccountPremia()` and `getPositionsWithPremia()` use `PanopticPool.getFullPositionsData()`:
 
@@ -2174,7 +2174,7 @@ for (const pos of result.positions) {
 }
 ```
 
-**Note**: Short premium is earned by the account (selling options), long premium is owed by the account (buying options). The `Position.premiaOwed0/1` fields are the net (short - long).
+**Note**: Short streamia is earned by the account (selling options), long streamia is owed by the account (buying options). The `Position.premiaOwed0/1` fields are the net (short - long).
 
 ---
 
@@ -2266,7 +2266,7 @@ The SDK constructs a single multicall to PanopticQuery that batches:
 2. Pool utilizations
 3. CollateralTracker state (totalAssets, totalSupply, user shares)
 4. Account collateral via RiskEngine
-5. All position balances and premia
+5. All position balances and streamia
 6. Greeks for all positions
 7. Net liquidation value
 8. Liquidation prices
@@ -2434,7 +2434,7 @@ The PanopticQuery contract provides specialized read functions for portfolio ana
 
 ### getPortfolioValue
 
-Calculate portfolio NAV (Net Asset Value) without premia. Useful for PnL tracking separate from liquidation value.
+Calculate portfolio NAV (Net Asset Value) without streamia. Useful for PnL tracking separate from liquidation value.
 
 ```typescript
 interface PortfolioValue {
@@ -2748,9 +2748,9 @@ const result = await rollPosition({
 })
 ```
 
-### Settle Accumulated Premia
+### Settle Accumulated Streamia
 
-Settles accumulated premia for all positions in `positionIdList`. Internally calls `dispatch()` with the current position size for each position (which triggers settlement without changing position sizes).
+Settles accumulated streamia for all positions in `positionIdList`. Internally calls `dispatch()` with the current position size for each position (which triggers settlement without changing position sizes).
 
 ```typescript
 const { hash } = await settleAccumulatedPremia({
@@ -3033,7 +3033,7 @@ The `positionSize` field determines the operation type:
 |--------------|-----------|-------------|
 | `> 0` (new position) | **Mint** | Open new position with specified size |
 | `> currentSize` | **Mint (add)** | Add to existing position |
-| `== currentSize` | **Settle premia** | Settle accumulated premia, no size change |
+| `== currentSize` | **Settle streamia** | Settle accumulated streamia, no size change |
 | `!= currentSize` (any other value) | **Burn (close 100%)** | Close entire position |
 
 **Important**: There is no partial close. Any `positionSize` that doesn't match the current minted size results in closing 100% of the position.
@@ -4750,7 +4750,7 @@ Features explicitly deferred for potential v0.2+:
 | Native ETH | **Contract-side** - deposit handles it |
 | Roll position | **Implemented** - rollPosition() convenience wrapper + dispatch() for advanced |
 | Custom strategies | **Deferred** - buildCustomStrategy() post-MVP |
-| Settle premia | **Single tokenId only** |
+| Settle streamia | **Single tokenId only** |
 | Liquidation sim | **Dropped** - just isLiquidatable() + liquidate() |
 | Cache | **Global module cache** |
 | Branded types | **Kept** - type safety |

@@ -13,7 +13,7 @@ import { ExecutionOptions, Operator, ParameterType } from '../constants'
  * hand-encoded tree in zodiac-modules/test/LiquidatorRolesFork.t.sol, which is
  * the golden spec for this builder):
  *  - THIS TREE pins the static fields: pool ∈ allowlist, account ∉ {safe,
- *    helper}, swap targets ∈ {router, 0}, premia flags = 0, and — via
+ *    helper}, swap targets ∈ {router, 0}, streamia flags = 0, and — via
  *    ExecutionOptions.None — zero outer msg.value (attached value is excluded
  *    from the helper's minDelta floors, so it must never flow through the
  *    role; native shortfalls are funded via nativeFundingAmount instead).

@@ -13,7 +13,7 @@ export function netLiquidationValueInQuote(
     : new Decimal(value0.toString()).plus(new Decimal(value1.toString()).div(price))
 }
 
-/** Apply the accrued-premium offset and optional asset collateral to a relative NLV curve. */
+/** Apply the accrued-streamia offset and optional asset collateral to a relative NLV curve. */
 export function marketPnlInQuote({
   relativeValue,
   premium,

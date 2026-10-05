@@ -1,4 +1,4 @@
-/** Fee-protected premium settlement simulation. @module v2/simulations/simulateSettle */
+/** Fee-protected streamia settlement simulation. @module v2/simulations/simulateSettle */
 
 import type { Address, Hex, PublicClient } from 'viem'
 import { decodeFunctionResult, encodeFunctionData } from 'viem'
@@ -38,7 +38,7 @@ export interface SimulateSettleParams {
   usePremiaAsCollateral?: boolean
   builderCode?: bigint
   /**
-   * Allow settlement when premium remains but no buyer settlement or chunk
+   * Allow settlement when streamia remains but no buyer settlement or chunk
    * poke can collect it (for example, width-zero legs). Avoidable forfeiture
    * still fails closed. Default false.
    */

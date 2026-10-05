@@ -40,7 +40,7 @@ export interface AccountTrade {
   poolUtilization0?: bigint
   /** Pool utilization for token 1 at mint (only for mints) */
   poolUtilization1?: bigint
-  /** Premia settled per leg on burn (only for burns) */
+  /** Streamia settled per leg on burn (only for burns) */
   premiaByLeg?: readonly [bigint, bigint, bigint, bigint]
 }
 

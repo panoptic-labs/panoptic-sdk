@@ -46,11 +46,11 @@ export interface SimulateDispatchParams {
   positionSizes: bigint[]
   /** Tick and spread limits for each operation */
   tickAndSpreadLimits: TickAndSpreadLimits[]
-  /** Whether to use premia as collateral */
+  /** Whether to use streamia as collateral */
   usePremiaAsCollateral?: boolean
   /** Builder code */
   builderCode?: bigint
-  /** Capture aggregate settled premia from atomic pre/post position snapshots. */
+  /** Capture aggregate settled streamia from atomic pre/post position snapshots. */
   measurePremia?: boolean
   /** Optional block number for simulation */
   blockNumber?: bigint

@@ -30,7 +30,7 @@ export interface DispatchParams {
   positionSizes: bigint[]
   /** Tick and spread limits for each operation */
   tickAndSpreadLimits: TickAndSpreadLimits[]
-  /** Whether to use premia as collateral */
+  /** Whether to use streamia as collateral */
   usePremiaAsCollateral?: boolean
   /** Builder code */
   builderCode?: bigint

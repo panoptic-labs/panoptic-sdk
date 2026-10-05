@@ -986,7 +986,7 @@ Critical invariants to maintain:
   - [x] `rollPosition()`, `rollPositionAndWait()` - Roll positions atomically
   - [x] `forceExercise()`, `forceExerciseAndWait()` - Force exercise ITM positions
   - [x] `liquidate()`, `liquidateAndWait()` - Liquidate undercollateralized accounts
-  - [x] `settleAccumulatedPremia()`, `settleAccumulatedPremiaAndWait()` - Settle premia
+  - [x] `settleAccumulatedPremia()`, `settleAccumulatedPremiaAndWait()` - Settle streamia
   - [x] `pokeOracle()`, `pokeOracleAndWait()` - Update oracle
   - [x] `dispatch()`, `dispatchAndWait()` - Raw multi-operation
 - [x] Transaction lifecycle: `TxResult` with `wait()` returning `TxReceipt`
@@ -1237,7 +1237,7 @@ Added support for the PanopticQuery helper contract across account/position anal
 - [x] `abis/panopticQuery.ts` - PanopticQuery ABI with `as const` for proper viem type inference
 - [x] `abis/types.d.ts` - Documentation of abitype int24→number mapping issue and workaround
 - [x] `reads/queryUtils.ts` - New utility functions using PanopticQuery:
-  - `getPortfolioValue()` - Portfolio value (NAV) without premia
+  - `getPortfolioValue()` - Portfolio value (NAV) without streamia
   - `checkCollateralAcrossTicks()` - Collateral analysis for 301 tick data points (UI charting)
   - `optimizeTokenIdRiskPartners()` - Optimize risk partner assignments for minimum collateral
 
@@ -1751,7 +1751,7 @@ Critical invariants maintained:
 - [x] Position aggregates: `calculatePositionValue`, `calculatePositionDelta`, `calculatePositionGamma`, `calculatePositionGreeks`
 - [x] `isDefinedRisk()` - Detect defined risk positions (spread with both long and short legs of same tokenType)
 - [x] `isCall()` - Detect call vs put based on tokenType and asset
-- [x] Premia tracking: `getAccountPremia`, `getPositionsWithPremia` (per-position via multicall)
+- [x] Streamia tracking: `getAccountPremia`, `getPositionsWithPremia` (per-position via multicall)
 - [x] Position data updates: `positionData()` now returns 7 values (added `swapAtMint`)
 - [x] Bot assertions: `assertFresh`, `assertHealthy`, `assertTradeable`, `assertCanMint/Burn/Liquidate/ForceExercise`
 - [x] `isRetryableRpcError()`, `isNonceError()`, `isGasError()` - RPC error classification
@@ -1761,7 +1761,7 @@ Critical invariants maintained:
 - `greeks/greeks.test.ts` - Comprehensive tests
 - `bot/index.ts` - Bot utilities (280 lines, 37 tests)
 - `bot/bot.test.ts` - Comprehensive tests
-- `reads/premia.ts` - Premia tracking functions
+- `reads/premia.ts` - Streamia tracking functions
 - `reads/position.ts` - Updated for 7-value positionData
 - `types/position.ts` - Added swapAtMint field
 - `writes/utils.ts` - Added decodeLeftRightUnsigned

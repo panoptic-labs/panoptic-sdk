@@ -2,7 +2,7 @@
  * Open a credit (width==0, isLong==1) position for the reverse gamma scalping bot.
  *
  * A credit lends liquidity to the pool at the current tick. The lender deposits
- * the token and earns streaming premium (interest) from borrowers.
+ * the token and earns streamia (interest) from borrowers.
  *
  * Usage:
  *   TOKEN_TYPE=0 \

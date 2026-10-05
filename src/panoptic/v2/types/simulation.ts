@@ -87,9 +87,9 @@ export interface ClosePositionSimulation {
   amount0Received: bigint
   /** Token 1 amount received */
   amount1Received: bigint
-  /** Premia collected for token 0 (null: requires pre-close premia snapshot) */
+  /** Streamia collected for token 0 (null: requires pre-close streamia snapshot) */
   premiaCollected0: bigint | null
-  /** Premia collected for token 1 (null: requires pre-close premia snapshot) */
+  /** Streamia collected for token 1 (null: requires pre-close streamia snapshot) */
   premiaCollected1: bigint | null
   /** Post-trade collateral for token 0 */
   postCollateral0: bigint
@@ -116,16 +116,16 @@ export interface ForceExerciseSimulation {
 }
 
 /**
- * Settle-premium-on-another-account simulation result data.
+ * Settle-streamia-on-another-account simulation result data.
  */
 export interface SettlePremiumFromSimulation {
-  /** Short premium the settle makes available to the caller (token 0) */
+  /** Short streamia the settle makes available to the caller (token 0) */
   premium0: bigint
-  /** Short premium the settle makes available to the caller (token 1) */
+  /** Short streamia the settle makes available to the caller (token 1) */
   premium1: bigint
-  /** Total premium the buyer pays into the chunk (token 0) */
+  /** Total streamia the buyer pays into the chunk (token 0) */
   settled0: bigint
-  /** Total premium the buyer pays into the chunk (token 1) */
+  /** Total streamia the buyer pays into the chunk (token 1) */
   settled1: bigint
   /** Whether the settlement would succeed */
   canSettle: boolean
@@ -152,20 +152,20 @@ export interface LiquidateSimulation {
 }
 
 /**
- * Settle premia simulation result data.
+ * Settle streamia simulation result data.
  */
 export interface SettleSimulation {
-  /** Signed premia flow for token 0 — positive = collected, negative = paid. */
+  /** Signed streamia flow for token 0 — positive = collected, negative = paid. */
   premiaReceived0: bigint
-  /** Signed premia flow for token 1 — positive = collected, negative = paid. */
+  /** Signed streamia flow for token 1 — positive = collected, negative = paid. */
   premiaReceived1: bigint
   /** Post-settle collateral for token 0 */
   postCollateral0: bigint
   /** Post-settle collateral for token 1 */
   postCollateral1: bigint
-  /** Premium made collectable by buyer settlement and chunk pokes. */
+  /** Streamia made collectable by buyer settlement and chunk pokes. */
   premiumProtected: [bigint, bigint]
-  /** Premium still unavailable after protection and forfeited by settlement. */
+  /** Streamia still unavailable after protection and forfeited by settlement. */
   remainingForfeit: [bigint, bigint]
   /** Whether the settlement includes a temporary chunk-liquidity poke. */
   usesPoke: boolean
@@ -211,9 +211,9 @@ export interface DispatchSimulation {
   netAmount0: bigint
   /** Token 1 net change */
   netAmount1: bigint
-  /** Premia settled for token 0 (null when atomic pre/post position reads are unavailable). */
+  /** Streamia settled for token 0 (null when atomic pre/post position reads are unavailable). */
   premiaReceived0: bigint | null
-  /** Premia settled for token 1 (null when atomic pre/post position reads are unavailable). */
+  /** Streamia settled for token 1 (null when atomic pre/post position reads are unavailable). */
   premiaReceived1: bigint | null
   /** Positions created */
   positionsCreated: bigint[]

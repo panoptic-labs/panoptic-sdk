@@ -96,7 +96,7 @@ export interface PoolFormatterConfig {
  * // Now use without passing decimals each time
  * const priceStr = fmt.tickToPriceScaled(position.currentTick, 4n)
  * const amount0Str = fmt.formatAmount0(collateral.assets, 4n)
- * const amount1Str = fmt.formatAmount1(premia.token1, 2n)
+ * const amount1Str = fmt.formatAmount1(streamia.token1, 2n)
  *
  * // Parse user input
  * const rawAmount0 = fmt.parseAmount0("1.5")

@@ -52,7 +52,7 @@ export interface TokenShortfallRecoveryQuote {
   /**
    * Exact amount of `tokenOut` the temporary credit sources. Covers the whole
    * dispatch, not just the first charge that reverted — a batch charges
-   * commission/premia per operation, so the total needed is usually larger
+   * commission/streamia per operation, so the total needed is usually larger
    * than the `assetsRequested - assetBalance` of the first failure.
    */
   amountOut: bigint

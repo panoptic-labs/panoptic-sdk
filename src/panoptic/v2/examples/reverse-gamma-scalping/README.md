@@ -4,9 +4,9 @@ Sells ATM straddles on Panoptic and delta-hedges with loans to profit when reali
 
 ## Strategy overview
 
-1. **Open a short straddle** — sell an ATM call + ATM put at the current tick, collecting premium (premia) from buyers.
+1. **Open a short straddle** — sell an ATM call + ATM put at the current tick, collecting streamia (streaming premium) from buyers.
 2. **Delta-hedge continuously** — when the portfolio delta drifts beyond a threshold, open a loan leg with `swapAtMint` to push delta back toward zero.
-3. **Profit condition** — if realized vol stays below the implied vol priced into the straddle, the collected premia exceeds hedging costs.
+3. **Profit condition** — if realized vol stays below the implied vol priced into the straddle, the collected streamia exceeds hedging costs.
 
 ## Files
 

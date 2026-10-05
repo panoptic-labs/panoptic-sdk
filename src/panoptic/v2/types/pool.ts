@@ -54,8 +54,8 @@ export interface RiskEngine {
   /** Commission rate (in bps), charged on notional at mint */
   commissionRate: bigint
   /**
-   * Premium fee rate (in bps), charged on realized premium at burn. The burn
-   * commission is the lesser of this applied to the realized premium and
+   * Streamia fee rate (in bps), charged on realized streamia at burn. The burn
+   * commission is the lesser of this applied to the realized streamia and
    * 10x `commissionRate` applied to the notional — see CollateralTracker.settleBurn.
    */
   premiumFeeRate: bigint

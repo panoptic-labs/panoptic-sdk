@@ -10,7 +10,7 @@ const abi = parseAbi([
   'function computeNetLiquidationValue(uint256[] positionIdList, uint256 shortPremium, uint256 longPremium, uint256[] positionBalanceArray, int24[] atTicks) pure returns (int256[] value0, int256[] value1)',
 ])
 
-/** Stable identity for a position-dependent curve; premiums and spot are separate inputs. */
+/** Stable identity for a position-dependent curve; streamia and spot are separate inputs. */
 export function positionValueKey(positions: readonly PositionValueInput[]): string {
   return [...positions]
     .sort((a, b) => (a.tokenId < b.tokenId ? -1 : a.tokenId > b.tokenId ? 1 : 0))

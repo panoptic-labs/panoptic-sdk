@@ -1,9 +1,9 @@
 /**
- * Batch settle-premium simulation for the Panoptic v2 SDK.
+ * Batch settle-streamia simulation for the Panoptic v2 SDK.
  *
  * Simulates settling each buyer independently (same block), partitioning them
  * into settleable buyers (to include in a settle sequence) and unsettleable
- * ones (insolvent / missing tokens — their owed premium is forfeited if the
+ * ones (insolvent / missing tokens — their owed streamia is forfeited if the
  * seller closes), plus a full-sequence simulation measuring the caller's
  * total token flow.
  * @module v2/simulations/simulateSettlePremiumBatch
@@ -41,9 +41,9 @@ export interface SettlePremiumBatchResult {
   settleable: SettleSequenceTarget[]
   /** Number of targets that cannot be settled */
   unsettleableCount: number
-  /** Total premium the caller receives from the settleable targets (token 0) */
+  /** Total streamia the caller receives from the settleable targets (token 0) */
   premium0: bigint
-  /** Total premium the caller receives from the settleable targets (token 1) */
+  /** Total streamia the caller receives from the settleable targets (token 1) */
   premium1: bigint
   /** Block metadata */
   _meta: BlockMeta
@@ -68,14 +68,14 @@ export interface SimulateSettlePremiumBatchParams {
 }
 
 /**
- * Simulate settling each target buyer's owed long premium, all at one block.
+ * Simulate settling each target buyer's owed long streamia, all at one block.
  *
  * Individual failures (insolvent buyer, stale list, …) are soft: the target
  * lands in the unsettleable partition instead of failing the batch. Only
  * unexpected errors reject.
  *
  * @param params - Simulation parameters
- * @returns Partitioned targets with per-target premium and totals
+ * @returns Partitioned targets with per-target streamia and totals
  */
 export async function simulateSettlePremiumBatch(
   params: SimulateSettlePremiumBatchParams,

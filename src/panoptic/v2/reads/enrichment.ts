@@ -2,7 +2,7 @@
  * Position enrichment data for UI display.
  *
  * Batches all contract reads needed to enrich subgraph position data with
- * on-chain premia, portfolio values, and collateral requirements.
+ * on-chain streamia, portfolio values, and collateral requirements.
  *
  * @module v2/reads/enrichment
  */
@@ -52,9 +52,9 @@ export interface PositionInput {
   tickAtBurn?: number
   /** Block number of the burn tx (closed positions only) */
   burnBlockNumber?: bigint
-  /** Premium in token0 from subgraph (closed positions only) */
+  /** Streamia in token0 from subgraph (closed positions only) */
   burnPremium0?: bigint
-  /** Premium in token1 from subgraph (closed positions only) */
+  /** Streamia in token1 from subgraph (closed positions only) */
   burnPremium1?: bigint
 }
 
@@ -65,9 +65,9 @@ export interface PositionInput {
  * The UI maps these to asset/quote based on isAssetToken0.
  */
 export interface PositionEnrichmentResult {
-  /** Net premia owed: shortPremium - longPremium for token0 (open); burnPremium0 for closed */
+  /** Net streamia owed: shortPremium - longPremium for token0 (open); burnPremium0 for closed */
   premiaOwed0: bigint
-  /** Net premia owed: shortPremium - longPremium for token1 (open); burnPremium1 for closed */
+  /** Net streamia owed: shortPremium - longPremium for token1 (open); burnPremium1 for closed */
   premiaOwed1: bigint
   /** Portfolio value in token0 at current tick (open) or burn tick (closed) */
   portfolioValue0: bigint
@@ -115,17 +115,17 @@ export interface GetPositionEnrichmentDataResult {
 }
 
 /**
- * Fetch enrichment data (premia, portfolio values, collateral requirements) for a set of positions.
+ * Fetch enrichment data (streamia, portfolio values, collateral requirements) for a set of positions.
  *
  * Batches all needed contract reads into efficient multicalls:
  * - **Open positions**: 3 calls per position in a single multicall at current block:
- *   1. `getFullPositionsData` → premia + collateral requirements
+ *   1. `getFullPositionsData` → streamia + collateral requirements
  *   2. `getPortfolioValue` at currentTick → current portfolio value
  *   3. `getPortfolioValue` at mintTick → portfolio value at mint
  * - **Closed positions**: 2 calls per position at `burnBlockNumber - 1`:
  *   1. `getPortfolioValue` at burnTick → portfolio value at close
  *   2. `getPortfolioValue` at mintTick → portfolio value at mint
- *   (premia come from subgraph `burnPremium0/1`)
+ *   (streamia come from subgraph `burnPremium0/1`)
  *
  * ## Same-Block Guarantee
  * Open position data is fetched at a single block number.

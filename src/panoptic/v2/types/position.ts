@@ -59,9 +59,9 @@ export interface Position {
   blockNumberAtMint: bigint
   /** Whether a swap occurred at mint */
   swapAtMint: boolean
-  /** Accumulated premia owed for token 0 */
+  /** Accumulated streamia owed for token 0 */
   premiaOwed0: bigint
-  /** Accumulated premia owed for token 1 */
+  /** Accumulated streamia owed for token 1 */
   premiaOwed1: bigint
   /** Whether this is an optimistic pending position */
   pending?: boolean
@@ -127,9 +127,9 @@ export interface ClosedPosition {
   realizedPnL0: bigint
   /** Realized PnL for token 1 */
   realizedPnL1: bigint
-  /** Total premia collected for token 0 */
+  /** Total streamia collected for token 0 */
   premiaCollected0: bigint
-  /** Total premia collected for token 1 */
+  /** Total streamia collected for token 1 */
   premiaCollected1: bigint
   /** Closure reason */
   closureReason: 'closed' | 'liquidated' | 'force_exercised'

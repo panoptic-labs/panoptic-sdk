@@ -7,7 +7,7 @@ const Precision = Decimal.clone({ precision: 80 })
 const Q96 = 1n << 96n
 const YEAR_SECONDS = new Precision(31_536_000)
 
-/** The premium-free position curve, expressed in one quote token's human units. */
+/** The streamia-free position curve, expressed in one quote token's human units. */
 export function preparePositionGamma({
   tokenId,
   positionSize,

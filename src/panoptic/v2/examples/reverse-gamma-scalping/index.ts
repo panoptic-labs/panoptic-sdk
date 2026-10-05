@@ -8,7 +8,7 @@
  * 1. Assumes a short straddle is already open (opened via a separate script)
  * 2. Delta-hedge using loans+swapAtMint to keep net delta near zero
  * 3. Re-hedge periodically as the underlying moves
- * 4. Profit/loss = premium collected minus total hedging costs
+ * 4. Profit/loss = streamia collected minus total hedging costs
  *
  * Usage:
  *   pnpm --filter @panoptic-eng/sdk exec tsx src/panoptic/v2/examples/reverse-gamma-scalping/index.ts

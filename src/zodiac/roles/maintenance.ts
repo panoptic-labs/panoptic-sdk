@@ -6,7 +6,7 @@ import { ExecutionOptions, Operator, ParameterType } from '../constants'
 import { roleKey } from './dispatchCustomRole'
 
 /**
- * Maintenance role: full `dispatchFrom` access — settle premium on, force-
+ * Maintenance role: full `dispatchFrom` access — settle streamia on, force-
  * exercise, and liquidate third-party accounts using the Safe's capital.
  * No adapter needed; the pool itself hash-validates the position lists.
  *

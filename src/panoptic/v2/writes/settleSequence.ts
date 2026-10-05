@@ -1,7 +1,7 @@
 /**
  * Settle-sequence write for the Panoptic v2 SDK.
  *
- * Settles the long premium owed by one or more buyers (dispatchFrom settle
+ * Settles the long streamia owed by one or more buyers (dispatchFrom settle
  * mode per buyer), optionally followed by closing the caller's own position,
  * all in a single `PanopticPool.multicall` transaction.
  * @module v2/writes/settleSequence
@@ -20,14 +20,14 @@ import { orderListForSettle } from './settlePremiumFrom'
 import { submitWrite } from './utils'
 
 /**
- * One buyer whose long premium is settled by the sequence.
+ * One buyer whose long streamia is settled by the sequence.
  */
 export interface SettleSequenceTarget {
-  /** Account whose long premium is being settled */
+  /** Account whose long streamia is being settled */
   user: Address
   /** The target user's full held position ID list */
   positionIdList: bigint[]
-  /** The position to settle premium on (reordered to the end of the list) */
+  /** The position to settle streamia on (reordered to the end of the list) */
   tokenId: bigint
 }
 
@@ -47,7 +47,7 @@ export interface SettleSequenceClose {
   spreadLimit?: bigint
   /** Whether to swap at mint/burn (descending tick limits). Default false */
   swapAtMint?: boolean
-  /** Whether to use premia as collateral for the close. Default false */
+  /** Whether to use streamia as collateral for the close. Default false */
   usePremiaAsCollateral?: boolean
   /** Builder code (default 0) */
   builderCode?: bigint
@@ -68,7 +68,7 @@ export interface SettleSequenceCallsParams {
    * or a batch dispatch). Mutually exclusive with `close`.
    */
   dispatch?: DispatchIntent
-  /** Packed value for using premia as collateral in the settles */
+  /** Packed value for using streamia as collateral in the settles */
   usePremiaAsCollateral?: bigint
 }
 
@@ -169,7 +169,7 @@ export interface ExecuteSettleSequenceParams extends SettleSequenceCallsParams {
 }
 
 /**
- * Execute a settle sequence: settle each target buyer's owed long premium,
+ * Execute a settle sequence: settle each target buyer's owed long streamia,
  * then optionally close the caller's own position, in one multicall.
  *
  * @param params - Settle sequence parameters

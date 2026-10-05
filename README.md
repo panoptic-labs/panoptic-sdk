@@ -124,7 +124,7 @@ await openPositionAndWait({
 | **Events** | WebSocket watcher, resilient subscription with auto-reconnect, HTTP polling |
 | **Position Tracking** | Event-based sync with resumable checkpoints; file and memory storage adapters |
 | **Trade History** | Local trade history with filters, realized PnL aggregation |
-| **Price History** | Historical tick/sqrtPriceX96 data, streamia (premia) history, Uniswap fee history |
+| **Price History** | Historical tick/sqrtPriceX96 data, streamia (streaming premium) history, Uniswap fee history |
 | **Bot Utilities** | Data freshness assertions, pool health checks, safe mode guards, RPC error classifiers |
 | **Oracle** | Oracle state reads, poke with epoch rate-limit handling |
 | **Pool Deployment** | Mine vanity pool addresses, simulate and deploy new Panoptic pools |

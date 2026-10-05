@@ -218,8 +218,8 @@ export interface GetMaxPositionSizeParams {
   /** Whether to swap tokens at mint (affects collateral requirements, default: false) */
   swapAtMint?: boolean
   /**
-   * Whether the solvency simulation may count accrued premia as collateral. MUST match the
-   * mint (which uses `false`) — passing `true` credits premia the mint won't, so the search
+   * Whether the solvency simulation may count accrued streamia as collateral. MUST match the
+   * mint (which uses `false`) — passing `true` credits streamia the mint won't, so the search
    * returns a size larger than the account can actually mint. Defaults to `false`.
    */
   usePremiaAsCollateral?: boolean

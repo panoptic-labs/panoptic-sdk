@@ -14,7 +14,7 @@ import { DISPATCH_SELECTOR, roleKey } from './dispatchCustomRole'
  * (option legs trip `ChunkHasZeroLiquidity` in the SFPM; pure-loan tokenIds
  * die in the end-of-dispatch solvency pass / positions-hash validation).
  *
- * Trade-off vs an oracle-based check: the key cannot settle premium (settle
+ * Trade-off vs an oracle-based check: the key cannot settle streamia (settle
  * requires `sizes[i] == storedSize`, unknowable pre-execution). Strictly a
  * risk-reduction key: safe for a watchdog keeper or dead-man's-switch.
  */

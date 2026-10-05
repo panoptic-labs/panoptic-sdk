@@ -42,8 +42,8 @@ All functions use a flat API (no classes). Numeric values are `bigint` unless no
 | `getPosition(params)` | Single position by tokenId (size, value, collateral req) |
 | `getPositions(params)` | All positions for an account |
 | `getPositionGreeks(params)` | Greeks (delta, gamma, value) for a single position |
-| `getAccountPremia(params)` | Accumulated premia totals for an account |
-| `getPositionsWithPremia(params)` | Positions enriched with per-position premia data |
+| `getAccountPremia(params)` | Accumulated streamia totals for an account |
+| `getPositionsWithPremia(params)` | Positions enriched with per-position streamia data |
 
 ## Collateral Estimation (`reads/`)
 
@@ -57,7 +57,7 @@ All functions use a flat API (no classes). Numeric values are `bigint` unless no
 
 | Function | Description |
 |----------|-------------|
-| `getPortfolioValue(params)` | Portfolio NAV without premia |
+| `getPortfolioValue(params)` | Portfolio NAV without streamia |
 | `checkCollateralAcrossTicks(params)` | Collateral balance vs requirement across tick range |
 | `optimizeTokenIdRiskPartners(params)` | Optimize risk partner assignments in a TokenId |
 | `getDeltaHedgeParams(params)` | Calculate loan parameters to achieve a target delta |
@@ -111,7 +111,7 @@ All write functions return `Promise<TxResult>` with a `.wait()` method. Each has
 |----------|-------------|
 | `liquidate(params)` | Liquidate an undercollateralized account |
 | `forceExercise(params)` | Force exercise an ITM long position |
-| `settleAccumulatedPremia(params)` | Settle accumulated premia on positions |
+| `settleAccumulatedPremia(params)` | Settle accumulated streamia on positions |
 
 ### Low-level
 
@@ -134,7 +134,7 @@ All return `Promise<SimulationResult<T>>` — either `{ success: true, data, gas
 | `simulateWithdraw(params)` | Simulate a vault withdrawal |
 | `simulateLiquidate(params)` | Simulate a liquidation |
 | `simulateForceExercise(params)` | Simulate a force exercise |
-| `simulateSettle(params)` | Simulate premium settlement |
+| `simulateSettle(params)` | Simulate streamia settlement |
 | `simulateDispatch(params)` | Simulate a raw dispatch |
 
 ---
@@ -294,7 +294,7 @@ Key format: `panoptic-v2-sdk:v{VERSION}:chain{chainId}:pool{address}:{entity}:{i
 | Function | Description |
 |----------|-------------|
 | `getPriceHistory(params)` | Historical tick/sqrtPriceX96 at specific block numbers (for charting) |
-| `getStreamiaHistory(params)` | Premia and fee accrual over time for a position |
+| `getStreamiaHistory(params)` | Streamia and fee accrual over time for a position |
 | `getUniswapFeeHistory(params)` | Historical Uniswap fee data for a pool |
 
 ---

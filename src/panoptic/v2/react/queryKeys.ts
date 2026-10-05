@@ -283,19 +283,19 @@ export const queryKeys = {
     [...queryKeys.all, 'marginBuffer', chainId.toString(), poolAddress, account] as const,
 
   /**
-   * Key for account premia.
+   * Key for account streamia.
    */
   accountPremia: (chainId: bigint, poolAddress: Address, account: Address) =>
     [...queryKeys.all, 'accountPremia', chainId.toString(), poolAddress, account] as const,
 
   /**
-   * Key for positions with premia.
+   * Key for positions with streamia.
    */
   positionsWithPremia: (chainId: bigint, poolAddress: Address, account: Address) =>
     [...queryKeys.all, 'positionsWithPremia', chainId.toString(), poolAddress, account] as const,
 
   /**
-   * Key prefix for forfeitable premium. Used both as the query key prefix (the
+   * Key prefix for forfeitable streamia. Used both as the query key prefix (the
    * hook appends the client scope and tokenIds) and for prefix invalidation
    * after settle / force-exercise mutations.
    */

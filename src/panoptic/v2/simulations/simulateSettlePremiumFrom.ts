@@ -1,5 +1,5 @@
 /**
- * Settle premium (on another account) simulation for the Panoptic v2 SDK.
+ * Settle streamia (on another account) simulation for the Panoptic v2 SDK.
  * @module v2/simulations/simulateSettlePremiumFrom
  */
 
@@ -15,7 +15,7 @@ import { decodeLeftRightUnsigned } from '../writes/utils'
 import { simulateWithTokenFlow } from './tokenFlow'
 
 /**
- * Parameters for simulating settling another account's long premium.
+ * Parameters for simulating settling another account's long streamia.
  */
 export interface SimulateSettlePremiumFromParams {
   /** Public client */
@@ -24,7 +24,7 @@ export interface SimulateSettlePremiumFromParams {
   poolAddress: Address
   /** Caller (settler) account address */
   account: Address
-  /** Account whose long premium is being settled */
+  /** Account whose long streamia is being settled */
   user: Address
   /** Position IDs from the caller's account (full held list) */
   positionIdListFrom: bigint[]
@@ -36,23 +36,23 @@ export interface SimulateSettlePremiumFromParams {
   blockNumber?: bigint
 }
 
-/** Soft-failure revert markers for settle premium (target-state issues, not caller errors). */
+/** Soft-failure revert markers for settle streamia (target-state issues, not caller errors). */
 const SOFT_FAILURES: Array<{ marker: string; reason: string }> = [
-  { marker: 'AccountInsolvent', reason: 'Target account is insolvent; premium cannot be settled' },
+  { marker: 'AccountInsolvent', reason: 'Target account is insolvent; streamia cannot be settled' },
   { marker: 'PositionNotOwned', reason: 'Target account no longer owns the position' },
   { marker: 'StaleOracle', reason: 'Oracle price is stale; settlement temporarily unavailable' },
   { marker: 'InputListFail', reason: 'Position list is stale (target positions changed)' },
 ]
 
 /**
- * Simulate settling another account's accumulated long premium via `dispatchFrom`
+ * Simulate settling another account's accumulated long streamia via `dispatchFrom`
  * (equal-length `positionIdListTo`/`positionIdListToFinal` selects the settle mode).
  *
- * The measured token flow is the CALLER's collateral delta — i.e. the premium
+ * The measured token flow is the CALLER's collateral delta — i.e. the streamia
  * the caller receives from the settlement (for chunks they sold).
  *
  * @param params - Simulation parameters
- * @returns Simulation result with settled premium data or error
+ * @returns Simulation result with settled streamia data or error
  */
 export async function simulateSettlePremiumFrom(
   params: SimulateSettlePremiumFromParams,

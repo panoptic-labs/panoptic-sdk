@@ -104,7 +104,7 @@ export interface OpenPositionParams extends Partial<PositionStorageParams> {
    * When false (default), tickLimits are passed in ascending order (low, high).
    */
   swapAtMint?: boolean
-  /** Whether to use premia as collateral */
+  /** Whether to use streamia as collateral */
   usePremiaAsCollateral?: boolean
   /** Builder code (defaults to 0) */
   builderCode?: bigint
@@ -327,7 +327,7 @@ export interface ClosePositionParams extends Partial<PositionStorageParams> {
    * When false (default), tickLimits are passed in ascending order (low, high).
    */
   swapAtMint?: boolean
-  /** Whether to use premia as collateral */
+  /** Whether to use streamia as collateral */
   usePremiaAsCollateral?: boolean
   /** Builder code (defaults to 0) */
   builderCode?: bigint
@@ -457,7 +457,7 @@ export interface RollPositionParams extends Partial<PositionStorageParams> {
   openSpreadLimit?: bigint
   /** Whether to swap tokens when opening */
   openSwapAtMint?: boolean
-  /** Whether to use premia as collateral */
+  /** Whether to use streamia as collateral */
   usePremiaAsCollateral?: boolean
   /** Builder code */
   builderCode?: bigint

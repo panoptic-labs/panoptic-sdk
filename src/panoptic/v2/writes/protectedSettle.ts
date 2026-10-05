@@ -1,7 +1,7 @@
 /**
  * Construction of fee-protected self-settlement dispatches.
  *
- * A short position's displayed premium can include fees that still live in
+ * A short position's displayed streamia can include fees that still live in
  * Uniswap. Minting a temporary, minimal short over the same chunks collects
  * those fees into `settledTokens`; burning it after settlement leaves the
  * caller's position list unchanged.
@@ -19,7 +19,7 @@ const MAX_UINT128 = (1n << 128n) - 1n
 const SETTLE_LIMITS = [-887272n, 887272n, 0n] as const
 
 export interface BuildProtectedSettleDispatchParams {
-  /** Positions whose premium should be settled. */
+  /** Positions whose streamia should be settled. */
   positionIdList: bigint[]
   /** The caller's complete held list. A settlement does not change it. */
   finalPositionIdList: bigint[]
@@ -32,7 +32,7 @@ export interface BuildProtectedSettleDispatchParams {
 export interface ProtectedSettlePlan {
   /** Atomic poke/settle/poke dispatch submitted after buyer settlements. */
   dispatch: DispatchIntent
-  /** Poke-only dispatch used to verify no displayed premium remains uncollected. */
+  /** Poke-only dispatch used to verify no displayed streamia remains uncollected. */
   collectionDispatch?: DispatchIntent
   /** Temporary position IDs, one for each settled position containing short chunks. */
   pokingTokenIds: bigint[]

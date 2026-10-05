@@ -24,7 +24,7 @@ It is intentionally high-level so individual example READMEs can focus on implem
 ## Intermediate Examples
 
 - `10-event-subscription`: Real-time event stream with reconnect and gap fill.
-- `11-position-lifecycle`: Open -> roll -> settle premia -> close lifecycle.
+- `11-position-lifecycle`: Open -> roll -> settle streamia -> close lifecycle.
 - `12-query-utils`: Portfolio/collateral utility reads from PanopticQuery helpers.
 - `13-delta-hedge`: Use account/position greeks to keep delta near target.
 - `14-vertical-spreads`: Build and manage defined-risk vertical structures.

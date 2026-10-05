@@ -16,7 +16,7 @@ import type { BlockMeta } from '../types'
 import { NO_LOWER_LIQUIDATION_TICK, NO_UPPER_LIQUIDATION_TICK } from '../utils/constants'
 
 /**
- * Portfolio value result (without premia).
+ * Portfolio value result (without streamia).
  */
 export interface PortfolioValue {
   /** Value in token 0 */
@@ -52,10 +52,10 @@ export interface GetPortfolioValueParams {
 }
 
 /**
- * Get portfolio value (NAV) without premia.
+ * Get portfolio value (NAV) without streamia.
  *
  * This calculates the net asset value of the portfolio based on Uniswap liquidity
- * at a given tick, excluding accumulated premia. Useful for PnL tracking separate
+ * at a given tick, excluding accumulated streamia. Useful for PnL tracking separate
  * from liquidation value.
  *
  * ## Same-Block Guarantee

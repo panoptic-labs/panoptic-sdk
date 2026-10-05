@@ -773,7 +773,7 @@ export function useAccountPremia(
 }
 
 /**
- * Unsettled short premium the account would forfeit by closing `tokenIds` now
+ * Unsettled short streamia the account would forfeit by closing `tokenIds` now
  * (owed-including-pending minus available-to-collect).
  */
 export function useForfeitablePremium(

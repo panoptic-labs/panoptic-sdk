@@ -402,7 +402,7 @@ export class NotALongLegError extends PanopticError {
   override readonly name = 'NotALongLegError'
 
   constructor(cause?: Error) {
-    super('Cannot settle premium for non-long leg', cause)
+    super('Cannot settle streamia for non-long leg', cause)
   }
 }
 

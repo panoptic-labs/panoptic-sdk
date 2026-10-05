@@ -158,7 +158,7 @@ export const mutationEffects = {
   },
 
   /**
-   * Queries to invalidate after settling accumulated premia.
+   * Queries to invalidate after settling accumulated streamia.
    */
   settleAccumulatedPremia: (params: MutationEffectParams): readonly (readonly string[])[] => {
     const { chainId, poolAddress, account, tokenId } = params

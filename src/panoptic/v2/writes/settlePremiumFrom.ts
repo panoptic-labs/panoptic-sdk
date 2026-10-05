@@ -1,8 +1,8 @@
 /**
- * Settle premium functions for the Panoptic v2 SDK.
+ * Settle streamia functions for the Panoptic v2 SDK.
  *
  * In v2 there is no standalone `settleLongPremium` entrypoint (v1). Settling
- * another account's accumulated long premium is a mode of `dispatchFrom`,
+ * another account's accumulated long streamia is a mode of `dispatchFrom`,
  * selected when `positionIdListTo.length == positionIdListToFinal.length`.
  * @module v2/writes/settlePremiumFrom
  */
@@ -20,7 +20,7 @@ import { submitWrite } from './utils'
  * Reorder a position ID list so `tokenId` is the last element.
  *
  * The position list fingerprint is an XOR hash, so ordering is free to change.
- * The contract settles premium on the last element of `positionIdListTo`.
+ * The contract settles streamia on the last element of `positionIdListTo`.
  *
  * @throws PanopticError if `tokenId` is not in the list
  */
@@ -32,7 +32,7 @@ export function orderListForSettle(positionIdList: bigint[], tokenId: bigint): b
 }
 
 /**
- * Parameters for settling another account's long premium.
+ * Parameters for settling another account's long streamia.
  */
 export interface SettlePremiumFromParams {
   /** Public client */
@@ -43,19 +43,19 @@ export interface SettlePremiumFromParams {
   account: Address
   /** PanopticPool address */
   poolAddress: Address
-  /** Account whose long premium is being settled */
+  /** Account whose long streamia is being settled */
   user: Address
   /** Position IDs from the caller's account (full held list) */
   positionIdListFrom: bigint[]
   /** The target user's full held position ID list (passed as both To and ToFinal) */
   positionIdList: bigint[]
   /**
-   * The target position to settle premium on. The contract settles the LAST
+   * The target position to settle streamia on. The contract settles the LAST
    * element of the list; when provided, the list is reordered to end with
    * this tokenId. When omitted, the last element of `positionIdList` is settled.
    */
   tokenId?: bigint
-  /** Packed value for using premia as collateral */
+  /** Packed value for using streamia as collateral */
   usePremiaAsCollateral?: bigint
   /** Gas and transaction overrides */
   txOverrides?: TxOverrides
@@ -66,15 +66,15 @@ export interface SettlePremiumFromParams {
 }
 
 /**
- * Settle another account's accumulated long premium.
+ * Settle another account's accumulated long streamia.
  *
  * Calls `dispatchFrom` with the target's position list passed as both
  * `positionIdListTo` and `positionIdListToFinal` (equal lengths select the
- * settle-premium mode and cannot force-exercise or liquidate). Requires the
- * target account to be solvent; the settled premium is credited to the
+ * settle-streamia mode and cannot force-exercise or liquidate). Requires the
+ * target account to be solvent; the settled streamia is credited to the
  * sellers of the corresponding chunks.
  *
- * @param params - Settle premium parameters
+ * @param params - Settle streamia parameters
  * @returns TxResult
  *
  * @example
@@ -121,7 +121,7 @@ export async function settlePremiumFrom(params: SettlePremiumFromParams): Promis
 }
 
 /**
- * Settle another account's premium and wait for confirmation.
+ * Settle another account's streamia and wait for confirmation.
  *
  * When `storage` and `chainId` are provided, automatically syncs the
  * caller's positions after the transaction confirms.

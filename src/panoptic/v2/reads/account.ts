@@ -239,7 +239,7 @@ export interface GetAccountSummaryRiskParams extends GetAccountSummaryBasicParam
   queryAddress: Address
   /** Optional: Tick to calculate risk metrics at (defaults to current tick) */
   atTick?: bigint
-  /** Optional: Whether to include pending premium in NLV */
+  /** Optional: Whether to include pending streamia in NLV */
   includePendingPremium?: boolean
 }
 
@@ -444,7 +444,7 @@ export interface GetNetLiquidationValueParams {
   tokenIds: bigint[]
   /** Optional: Tick to calculate NLV at (defaults to current tick) */
   atTick?: bigint
-  /** Optional: Whether to include pending premium */
+  /** Optional: Whether to include pending streamia */
   includePendingPremium?: boolean
   /** PanopticQuery address (required) */
   queryAddress: Address
@@ -460,7 +460,7 @@ export interface GetNetLiquidationValueParams {
  * ## Same-Block Guarantee
  * Tick and NLV are queried at the same target block.
  *
- * Requires PanopticQuery for accurate value and premium accounting.
+ * Requires PanopticQuery for accurate value and streamia accounting.
  *
  * @param params - The parameters
  * @returns Net liquidation value with block metadata
@@ -535,7 +535,7 @@ export interface GetNetLiquidationValuesParams {
   tokenIds: bigint[]
   /** Ticks to calculate NLV at */
   atTicks: bigint[]
-  /** Optional: Whether to include pending premium */
+  /** Optional: Whether to include pending streamia */
   includePendingPremium?: boolean
   /** PanopticQuery address (required) */
   queryAddress: Address

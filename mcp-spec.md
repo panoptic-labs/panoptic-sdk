@@ -203,7 +203,7 @@ An agent helping a user open a hedged position:
 These invariants hold across **both** surfaces:
 
 - **Bigints serialize as decimal strings.** Every numeric on-chain quantity
-  (sizes, balances, ticks passed as bigint, premia) is a JSON string, never a
+  (sizes, balances, ticks passed as bigint, streamia) is a JSON string, never a
   JS number, to avoid precision loss.
 - **Block context is attached.** Read results carry a `_meta` block
   `{ blockNumber, blockTimestamp, blockHash }` (all strings) so agents can reason
@@ -258,7 +258,7 @@ are planned and **not yet exposed**.
 - `chunk_spread({ timescale?, width?, tickLower?, tickUpper?, vegoid? })` —
   **SHIPPED.** Per-chunk spread multiplier via `scanChunks` (`spreadWad / WAD`).
   Carries the interpretation that ~1.0x chunks (no removed liquidity, lowest IV)
-  are cheapest to BUY and higher-multiplier chunks pay a richer premium so are
+  are cheapest to BUY and higher-multiplier chunks pay a richer streamia so are
   most profitable to SELL.
 - `identify_address({ address, chainId? })` — **SHIPPED.** Map an address to
   pool, tracker, factory, query, vault, manager, router, or unknown, from the
@@ -509,7 +509,7 @@ ids, and tx hashes.
    bound auth, indexer-backed analytics. Only if demand or indexer-only analytics
    force it.
 5. **v4 — agent-native accounts**: delegated session wallets, leaves/Roles-derived
-   manifests, premium analytics / payment hooks.
+   manifests, streamia analytics / payment hooks.
 
 **Hedger:**
 

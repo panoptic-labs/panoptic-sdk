@@ -75,7 +75,7 @@ export interface OptionBurntEvent extends BaseEvent {
   tokenId: bigint
   /** Position size that was burnt */
   positionSize: bigint
-  /** Premia settled for each leg (token0 right, token1 left per leg) */
+  /** Streamia settled for each leg (token0 right, token1 left per leg) */
   premiaByLeg: readonly [bigint, bigint, bigint, bigint]
 }
 
