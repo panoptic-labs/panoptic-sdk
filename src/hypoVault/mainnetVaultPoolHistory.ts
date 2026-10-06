@@ -11,7 +11,11 @@ import {
   MainnetWETHPLPV3AuthorizedVaultPoolInfos,
   MainnetWETHPLPVaultPoolInfos,
 } from './hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
-import { RobinhoodUSDGPLP30bpsVaultPoolInfos } from './hypoVaultManagerArtifacts/RobinhoodUSDGPLPVaultPoolInfos'
+import { RobinhoodUSDGPLP5bpsStrategistLeaves } from './hypoVaultManagerArtifacts/RobinhoodUSDGPLPStrategistLeaves'
+import {
+  RobinhoodUSDGPLP5bpsVaultPoolInfos,
+  RobinhoodUSDGPLP30bpsVaultPoolInfos,
+} from './hypoVaultManagerArtifacts/RobinhoodUSDGPLPVaultPoolInfos'
 import type { PoolInfo } from './utils/buildManagerInput'
 
 const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
@@ -21,6 +25,9 @@ const MAINNET_POOL_RETIREMENT_TRANSACTION =
 export const ROBINHOOD_USDG_VAULT_DEPLOYMENT_BLOCK = 63_972_776n
 const ROBINHOOD_USDG_VAULT_DEPLOYMENT_TRANSACTION =
   '0x738c8a6d30a45f9b71d2d6260aa1c04aff558489631b3a9c6ccd5f49e0f57df4' as const
+export const ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_BLOCK = 78_163_813n
+export const ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_TRANSACTION =
+  '0x1286b4dc49f88741b1c05619e5dd4f3d6a7f187bbbaae309f84c9e926dfcf743' as const
 
 const POOL_INFO_ARRAY_ABI = {
   type: 'tuple[]',
@@ -209,12 +216,22 @@ const ROBINHOOD_VAULT_HISTORIES: readonly VaultHistory[] = [
         ROBINHOOD_USDG_VAULT_DEPLOYMENT_TRANSACTION,
         RobinhoodUSDGPLP30bpsVaultPoolInfos.poolInfos,
       ),
+      poolConfiguration(
+        ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_BLOCK,
+        ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_TRANSACTION,
+        RobinhoodUSDGPLP5bpsVaultPoolInfos.poolInfos,
+      ),
     ],
     managerRootTransitions: [
       {
         activationBlockNumber: ROBINHOOD_USDG_VAULT_DEPLOYMENT_BLOCK,
         transactionHash: ROBINHOOD_USDG_VAULT_DEPLOYMENT_TRANSACTION,
         manageRoot: '0x5ef821042a85fea05901e4612e8a8d60efd2468ca08f0810d5691e23ea98967f',
+      },
+      {
+        activationBlockNumber: ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_BLOCK,
+        transactionHash: ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_TRANSACTION,
+        manageRoot: RobinhoodUSDGPLP5bpsStrategistLeaves.metadata.ManageRoot,
       },
     ],
   },

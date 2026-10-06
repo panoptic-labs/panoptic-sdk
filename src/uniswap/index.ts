@@ -4,9 +4,11 @@
  */
 
 export * from './estimateLpFees'
+export * from './lpAccounting'
 export * from './lpDeposit'
 export * from './lpFeeReturn'
 export * from './lpGreeks'
+export * from './lpHistory'
 export * from './lpVolatility'
 export * from './quoteTokenPrices'
 export * from './rangeProbability'

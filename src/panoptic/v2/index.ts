@@ -1209,6 +1209,7 @@ export {
   type PositionVolatilityObservation,
   type VolatilityComparisonReason,
   calculatePositionVolatilityMetrics,
+  prepareLiquidityGamma,
   preparePositionGamma,
   valuePositionAccrual,
 } from './greeks/positionVolatility'

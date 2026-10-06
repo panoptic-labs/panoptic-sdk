@@ -2,6 +2,12 @@ import Decimal from 'decimal.js'
 import { describe, expect, it } from 'vitest'
 
 import { tickToSqrtPriceX96 } from '../panoptic/v2/formatters/tick'
+import {
+  calculatePositionVolatilityMetrics,
+  prepareLiquidityGamma,
+  preparePositionGamma,
+} from '../panoptic/v2/greeks/positionVolatility'
+import { encodeLeg, encodePoolId } from '../panoptic/v2/tokenId/encoding'
 import { calculateLpPositionVolatility } from './lpVolatility'
 
 const snapshot = (timestamp: bigint, tick: number, token0 = 0n, token1 = 0n) => ({
@@ -105,4 +111,92 @@ describe('Uniswap LP historical convexity', () => {
       }),
     ).toThrow('increasing')
   })
+})
+
+describe('LP candle observations', () => {
+  it.each([false, true])(
+    'captures a round trip hidden between accounting snapshots (%s)',
+    (quoteIsToken0) => {
+      const quoteDecimals = quoteIsToken0 ? 18 : 6
+      const snapshots = [snapshot(1000n, -200000), snapshot(8200n, -200000, 10n ** 15n, 1000000n)]
+      const gamma = prepareLiquidityGamma({
+        chunks: [
+          { lowerTick: -201000, upperTick: -199000, liquidity: base.liquidity, isLong: false },
+        ],
+        quoteIsToken0,
+        quoteDecimals,
+      })
+      const observations = [-200000n, -199900n, -200000n].map((tick, index) => ({
+        timestamp: 1000n + BigInt(index) * 3600n,
+        price: new Decimal('1.0001').pow((quoteIsToken0 ? -tick : tick).toString()).toString(),
+        gamma: gamma.atTick(tick).toString(),
+      }))
+      const input = { ...base, quoteIsToken0, quoteDecimals, snapshots }
+      const sparse = calculateLpPositionVolatility(input)
+      const candles = calculateLpPositionVolatility({ ...input, observations })
+      expect(sparse.weightedRealizedVolatility).toBe('0')
+      expect(Number(candles.weightedRealizedVolatility)).toBeGreaterThan(0)
+      expect(candles.netPremium).toBe(sparse.netPremium)
+      expect(() =>
+        calculateLpPositionVolatility({ ...input, observations: observations.slice(1) }),
+      ).toThrow('same window')
+    },
+  )
+
+  it.each([false, true])(
+    'matches a mixed-asset, multi-leg Panoptic position in quote token0=%s',
+    (quoteIsToken0) => {
+      const poolId = encodePoolId('0x0000000000000000000000000000000000000001', 10n)
+      const tokenId = [0n, 1n].reduce(
+        (id, index) =>
+          id |
+          encodeLeg({
+            index,
+            isLong: 0n,
+            asset: index,
+            strike: -200000n,
+            width: 200n,
+            optionRatio: 1n,
+            tokenType: index,
+            riskPartner: index,
+          }),
+        poolId,
+      )
+      const quoteDecimals = quoteIsToken0 ? 18 : 6
+      const panoptic = preparePositionGamma({
+        tokenId,
+        positionSize: 10n ** 18n,
+        quoteIsToken0,
+        quoteDecimals,
+      })
+      const liquidity = panoptic.chunks.reduce((sum, chunk) => sum + chunk.liquidity, 0n)
+      const lp = prepareLiquidityGamma({
+        chunks: [{ lowerTick: -201000, upperTick: -199000, liquidity, isLong: false }],
+        quoteIsToken0,
+        quoteDecimals,
+      })
+      const ticks = [-201100n, -201000n, -200000n, -199000n, -199900n]
+      const observations = (gamma: typeof lp) =>
+        ticks.map((tick, index) => ({
+          timestamp: 1000n + BigInt(index) * 3600n,
+          price: new Decimal('1.0001').pow((quoteIsToken0 ? -tick : tick).toString()).toString(),
+          gamma: gamma.atTick(tick).toString(),
+        }))
+      const expected = calculatePositionVolatilityMetrics({
+        observations: observations(panoptic),
+        quoteDecimals,
+        netPremium: 0,
+      })
+      const actual = calculateLpPositionVolatility({
+        ...base,
+        liquidity,
+        quoteIsToken0,
+        quoteDecimals,
+        observations: observations(lp),
+        snapshots: [snapshot(1000n, -201100), snapshot(15400n, -199900)],
+      })
+      expect(actual.weightedRealizedVolatility).toBe(expected.weightedRealizedVolatility)
+      expect(actual.signedConvexity).toBe(expected.signedConvexity)
+    },
+  )
 })

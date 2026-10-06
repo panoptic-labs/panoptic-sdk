@@ -47,6 +47,34 @@ export function preparePositionGamma({
       { lowerTick: Number(lowerTick), upperTick: Number(upperTick), liquidity, isLong: leg.isLong },
     ]
   })
+  return prepareLiquidityGamma({ chunks, quoteIsToken0, quoteDecimals })
+}
+
+/** Signed dollar-gamma for fixed liquidity ranges in one quote frame. */
+export function prepareLiquidityGamma({
+  chunks,
+  quoteIsToken0,
+  quoteDecimals,
+}: {
+  chunks: readonly { lowerTick: number; upperTick: number; liquidity: bigint; isLong: boolean }[]
+  quoteIsToken0: boolean
+  quoteDecimals: number
+}) {
+  if (!Number.isInteger(quoteDecimals) || quoteDecimals < 0 || quoteDecimals > 255) {
+    throw new RangeError('Invalid quote decimals')
+  }
+  for (const chunk of chunks) {
+    if (
+      !Number.isInteger(chunk.lowerTick) ||
+      !Number.isInteger(chunk.upperTick) ||
+      chunk.lowerTick < -887272 ||
+      chunk.upperTick > 887272 ||
+      chunk.lowerTick >= chunk.upperTick ||
+      chunk.liquidity < 0n ||
+      chunk.liquidity >= 1n << 128n
+    )
+      throw new RangeError('Invalid liquidity range')
+  }
   const scale = new Precision(10).pow(quoteDecimals)
   const atTick = (tick: bigint) => {
     const netLiquidity = chunks.reduce(

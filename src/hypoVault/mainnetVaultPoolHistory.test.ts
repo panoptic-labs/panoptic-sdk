@@ -6,6 +6,8 @@ import {
   getMainnetVaultManagerRootHistory,
   getMainnetVaultPoolConfigurationAtBlock,
   getMainnetVaultPoolConfigurationHistory,
+  ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_BLOCK,
+  ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_TRANSACTION,
 } from './mainnetVaultPoolHistory'
 
 const deployment = requireChainDeployment(MAINNET_CHAIN_ID)
@@ -135,6 +137,35 @@ describe('mainnet vault pool history', () => {
     ).toBeNull()
   })
 
+  it('switches the Robinhood vault history atomically to the 5bps pool', () => {
+    const history = getMainnetVaultPoolConfigurationHistory({
+      chainId: ROBINHOOD_CHAIN_ID,
+      vaultAddress: robinhoodUsdgVault,
+    })
+    expect(history?.map((entry) => entry.activationBlockNumber)).toEqual([
+      63_972_776n,
+      ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_BLOCK,
+    ])
+    expect(history?.at(-1)?.transactionHash).toBe(ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_TRANSACTION)
+
+    const before = getMainnetVaultPoolConfigurationAtBlock({
+      chainId: ROBINHOOD_CHAIN_ID,
+      vaultAddress: robinhoodUsdgVault,
+      blockNumber: ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_BLOCK - 1n,
+    })
+    const after = getMainnetVaultPoolConfigurationAtBlock({
+      chainId: ROBINHOOD_CHAIN_ID,
+      vaultAddress: robinhoodUsdgVault,
+      blockNumber: ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_BLOCK,
+    })
+    expect(before?.poolInfos[0]?.pool.toLowerCase()).toBe(
+      '0x00000000989bcb6f24af4a1ab2a6d6a31c98a58e',
+    )
+    expect(after?.poolInfos[0]?.pool.toLowerCase()).toBe(
+      '0x000000000c21b38c54aca7c7145df01ff09d69bb',
+    )
+  })
+
   it('records every manager root transition independently of accountant changes', () => {
     const wethHistory = getMainnetVaultManagerRootHistory({
       chainId: MAINNET_CHAIN_ID,
@@ -143,6 +174,10 @@ describe('mainnet vault pool history', () => {
     const usdcHistory = getMainnetVaultManagerRootHistory({
       chainId: MAINNET_CHAIN_ID,
       vaultAddress: usdcVault,
+    })
+    const robinhoodHistory = getMainnetVaultManagerRootHistory({
+      chainId: ROBINHOOD_CHAIN_ID,
+      vaultAddress: robinhoodUsdgVault,
     })
 
     expect(wethHistory?.map((entry) => entry.activationBlockNumber)).toEqual([
@@ -157,6 +192,10 @@ describe('mainnet vault pool history', () => {
       25_332_022n,
       25_704_951n,
       25_898_997n,
+    ])
+    expect(robinhoodHistory?.map((entry) => entry.activationBlockNumber)).toEqual([
+      63_972_776n,
+      ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_BLOCK,
     ])
 
     expect(wethHistory?.at(-1)).toEqual({
@@ -231,7 +270,7 @@ describe('mainnet vault pool history', () => {
       vaultAddress: robinhoodUsdgVault,
     })
 
-    expect(poolHistory).toHaveLength(1)
+    expect(poolHistory).toHaveLength(2)
     expect(poolHistory?.[0]).toMatchObject({
       activationBlockNumber: 63_972_776n,
       transactionHash: '0x738c8a6d30a45f9b71d2d6260aa1c04aff558489631b3a9c6ccd5f49e0f57df4',
@@ -245,11 +284,23 @@ describe('mainnet vault pool history', () => {
         positionScanFromBlock: 62_901_925n,
       },
     ])
+    expect(poolHistory?.[1]).toMatchObject({
+      activationBlockNumber: ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_BLOCK,
+      transactionHash: ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_TRANSACTION,
+    })
+    expect(poolHistory?.[1]?.poolInfos[0]?.pool.toLowerCase()).toBe(
+      '0x000000000c21b38c54aca7c7145df01ff09d69bb',
+    )
     expect(rootHistory).toEqual([
       {
         activationBlockNumber: 63_972_776n,
         transactionHash: '0x738c8a6d30a45f9b71d2d6260aa1c04aff558489631b3a9c6ccd5f49e0f57df4',
         manageRoot: '0x5ef821042a85fea05901e4612e8a8d60efd2468ca08f0810d5691e23ea98967f',
+      },
+      {
+        activationBlockNumber: ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_BLOCK,
+        transactionHash: ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_TRANSACTION,
+        manageRoot: '0x47b10d0b354a9c6f42e22ad86cda6a7f94a09328092dc1a8a974c89dc126635a',
       },
     ])
     expect(
