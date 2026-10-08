@@ -1214,6 +1214,10 @@ export {
   valuePositionAccrual,
 } from './greeks/positionVolatility'
 export {
+  estimateCloseZapSwap,
+  getClosePositionTransferEstimate,
+} from './reads/closePositionTransferEstimate'
+export {
   collateralCurveTicks,
   getCollateralCurve,
   getCollateralCurveInputs,

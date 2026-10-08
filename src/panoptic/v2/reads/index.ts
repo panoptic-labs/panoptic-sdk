@@ -384,6 +384,12 @@ export {
 // Current stored positionSize lookup (used by settle flows)
 export { type GetCurrentPositionSizesParams, getCurrentPositionSizes } from './positionSizes'
 
+/** Transfer estimates do not execute dispatch or validate account solvency. */
+export {
+  estimateCloseZapSwap,
+  getClosePositionTransferEstimate,
+} from './closePositionTransferEstimate'
+
 // Position enrichment (batched reads for UI display)
 export {
   type GetPositionEnrichmentDataParams,
