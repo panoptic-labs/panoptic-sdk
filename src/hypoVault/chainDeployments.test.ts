@@ -44,7 +44,7 @@ describe('chainDeployments', () => {
     expect(deployment.panoptic.v2.panopticFactoryV4).toBe(
       MAINNET_PANOPTIC_V2_ADDRESSES.panopticFactoryV4,
     )
-    expect(deployment.panoptic.v2.riskEngine).toBe('0x0000000000000fE1E261f66ce2F44def4F5Ae0CB')
+    expect(deployment.panoptic.v2.riskEngine).toBe('0x000000000000FfADa7c641E2aD6B13b51b50Cc94')
     expect(() => getEthUsdcMarket(deployment)).toThrow('Missing ETH/USDC market for chainId 4663')
     expect(getSpyUsdgMarket(deployment)).toMatchObject({
       currency0: '0x117cc2133c37B721F49dE2A7a74833232B3B4C0C',

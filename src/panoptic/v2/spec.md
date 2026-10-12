@@ -986,7 +986,20 @@ Static/constant data that never changes for a given chain:
 - **Pool constants**: tickSpacing, fee tier, enforced tick range (fetched once per pool)
 - **PanopticPool constants**: `sfpm`, `poolId`, `poolKey`
 - **RiskEngine constants**: `guardian`, `EMA_PERIODS`, `MAX_TICKS_DELTA`, `MAX_TWAP_DELTA_DISPATCH`, `MAX_SPREAD`, `BP_DECREASE_BUFFER`, `MAX_CLAMP_DELTA`, `VEGOID`, `NOTIONAL_FEE`, `PREMIUM_FEE`, `PROTOCOL_SPLIT`, `BUILDER_SPLIT`, `SELLER_COLLATERAL_RATIO`, `BUYER_COLLATERAL_RATIO`, `MAINT_MARGIN_RATE`, `FORCE_EXERCISE_COST`, `TARGET_POOL_UTIL`, `SATURATED_POOL_UTIL`, `CROSS_BUFFER_0`, `CROSS_BUFFER_1`, `MAX_OPEN_LEGS`, `CURVE_STEEPNESS`, `MIN_RATE_AT_TARGET`, `MAX_RATE_AT_TARGET`, `TARGET_UTILIZATION`, `INITIAL_RATE_AT_TARGET`, `ADJUSTMENT_SPEED`
+
 - **CollateralTracker constants**: `panopticPool`, `riskEngine`, `poolManager`, `underlyingIsToken0`, `underlyingToken`, `token0`, `token1`, `poolFee`, `name`, `symbol`, `decimals`
+
+BlueChip (`0x000000000000ffE5eFdB5AE76b9200263C58b4c0`) and XStocks
+(`0x000000000000FfADa7c641E2aD6B13b51b50Cc94`) use upgradeable proxies on Ethereum
+and Robinhood. Their implementations omit most constant getters. Pool, risk, oracle,
+and hedge-limit reads resolve the EIP-1967 implementation slot at the requested
+block and use the constructor parameters recorded in `reads/riskEngineDeployment.ts`.
+The values come from `panoptic-v2-core/build-config-RiskEngine.json` and
+`build-config-RiskEngineXStocks.json`, matched to the corresponding deployment-info
+implementation addresses. Small integer getter results preserve viem's number types.
+Legacy deployments continue reading getters on-chain. Unknown proxy implementations
+raise an explicit error; add verified implementation parameters when upgrading a
+proxy. Proxy-to-implementation mappings are never cached across blocks.
 
 **Position static data** (cached after first fetch per position):
 - `tickAtMint`, `timestampAtMint`, `blockNumberAtMint`, `utilization0AtMint`, `utilization1AtMint`

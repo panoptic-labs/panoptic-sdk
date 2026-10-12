@@ -12,6 +12,7 @@ import {
   hedgeMargin,
 } from './hedgeCapacity'
 import { availableToBorrow, getPoolMetadata } from './pool'
+import { riskEngineMulticall } from './riskEngineDeployment'
 
 const SCALE = 10_000_000n
 const MAX_SIZE = (1n << 127n) - 1n
@@ -85,7 +86,7 @@ export async function getHedgeLimits({
     accountLegs,
     supply0,
     supply1,
-  ] = await client.multicall({
+  ] = await riskEngineMulticall(client, {
     contracts: [
       {
         address: poolAddress,

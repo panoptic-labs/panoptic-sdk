@@ -14,7 +14,7 @@
  * @module v2/reads/pool
  */
 
-import type { Address, PublicClient } from 'viem'
+import type { Address, ContractFunctionParameters, PublicClient } from 'viem'
 import { decodeAbiParameters, keccak256, zeroAddress } from 'viem'
 
 import { collateralTrackerV2Abi, panopticPoolV2Abi, riskEngineAbi } from '../../../generated'
@@ -35,6 +35,7 @@ import type {
 import { decodeOraclePack } from '../utils/oraclePack'
 import { type OracleRiskParameters, decodeOracleRiskParameters } from '../utils/oracleSafeMode'
 import { DEFAULT_MINT_BUFFER } from './mintBuffer'
+import { riskEngineMulticall } from './riskEngineDeployment'
 
 // ERC20 minimal ABI for token metadata
 const erc20Abi = [
@@ -323,7 +324,7 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
   const metadata = poolMetadata ?? (await getPoolMetadata({ client, poolAddress }))
 
   // Build Uniswap pool liquidity read (V3 vs V4)
-  const liquidityContract =
+  const liquidityContract: ContractFunctionParameters | null =
     metadata.isV4 && params.stateViewAddress
       ? {
           address: params.stateViewAddress,
@@ -341,7 +342,7 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
 
   // SINGLE multicall for ALL dynamic data - ensures same-block consistency
   const [dynamicResults, _meta] = await Promise.all([
-    client.multicall({
+    riskEngineMulticall(client, {
       contracts: [
         // Pool dynamic state
         {
@@ -386,7 +387,7 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
           abi: collateralTrackerV2Abi,
           functionName: 'interestRate',
         },
-        // Risk engine parameters (technically immutable but included for completeness)
+        // Immutable parameters are resolved against the implementation at the target block.
         {
           address: metadata.riskEngineAddress,
           abi: riskEngineAbi,
@@ -418,9 +419,8 @@ export async function getPool(params: GetPoolParams): Promise<Pool> {
           functionName: 'MAX_SPREAD',
         },
         // Uniswap pool in-range liquidity (V3 or V4 via StateView)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ...(liquidityContract ? [liquidityContract as any] : []),
-      ],
+        ...(liquidityContract ? [liquidityContract] : []),
+      ] as const,
       blockNumber: targetBlockNumber,
       allowFailure: true,
     }),
@@ -765,13 +765,13 @@ export interface OracleRiskParametersState extends OracleRiskParameters {
   _meta: BlockMeta
 }
 
-/** Read the oracle constants from a specific deployed RiskEngine. */
+/** Resolve the oracle constants for a specific deployed RiskEngine at the target block. */
 export async function getOracleRiskParameters(
   params: GetOracleRiskParametersParams,
 ): Promise<OracleRiskParametersState> {
   const targetBlockNumber = params.blockNumber ?? (await params.client.getBlockNumber())
   const [[emaPeriods, maxTicksDelta, maxClampDelta], _meta] = await Promise.all([
-    params.client.multicall({
+    riskEngineMulticall(params.client, {
       contracts: [
         {
           address: params.riskEngineAddress,
@@ -849,9 +849,8 @@ export async function getRiskParameters(params: GetRiskParametersParams): Promis
       functionName: 'riskEngine',
     }))
 
-  // SINGLE multicall for ALL risk parameters - ensures same-block consistency
   const [riskEngineResults, _meta] = await Promise.all([
-    client.multicall({
+    riskEngineMulticall(client, {
       contracts: [
         {
           address: riskEngineAddress,
@@ -883,9 +882,6 @@ export async function getRiskParameters(params: GetRiskParametersParams): Promis
           abi: riskEngineAbi,
           functionName: 'SATURATED_POOL_UTIL',
         },
-        // The mint-time margin buffer, read live rather than compiled in, so a
-        // redeployed RiskEngine cannot silently desync the displayed "required
-        // at mint" from what the solvency check actually enforces.
         {
           address: riskEngineAddress,
           abi: riskEngineAbi,
@@ -928,8 +924,7 @@ export async function getRiskParameters(params: GetRiskParametersParams): Promis
     targetUtilization: targetPoolUtil,
     saturatedUtilization: saturatedPoolUtil,
     itmSpreadMultiplier: buyerCollateralRatio, // Using buyer ratio as ITM multiplier
-    // A live numerator is meaningful only with its live scale. If the scale is
-    // invalid, fall back to the complete compiled-in ratio.
+    // An invalid scale requires falling back to the complete ratio.
     mintBuffer:
       BigInt(riskEngineDecimals) > 0n
         ? { numerator: BigInt(bpDecreaseBuffer), denominator: BigInt(riskEngineDecimals) }
