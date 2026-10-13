@@ -448,6 +448,11 @@ export {
 
 // Panoptic V2 IRM helpers
 export {
+  MAINNET_USDC_REPLACEMENT_ARTIFACTS,
+  MAINNET_WETH_REPLACEMENT_ARTIFACTS,
+  ROBINHOOD_USDG_REPLACEMENT_ARTIFACTS,
+} from './hypoVault/hypoVaultManagerArtifacts/replacementPoolArtifacts'
+export {
   BORROW_INDEX_BITS,
   BPS_SCALE,
   deriveSupplyRatePerSecWad,

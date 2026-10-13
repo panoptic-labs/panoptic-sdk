@@ -111,7 +111,7 @@ describe('mainnet v3 authorization transition', () => {
     )
   })
 
-  it.each(['current', 'next', 'previous'] as const)(
+  it.each(['current', 'next', 'previous', 'replacement'] as const)(
     'selects the %s generation atomically',
     async (version) => {
       const generations = getMainnetV3AuthorizationGenerations({

@@ -116,6 +116,7 @@ describe('vault pool generation selection', () => {
       previous: { poolInfos: [poolA] },
       next: { poolInfos: [poolA, poolB] },
       current: { poolInfos: [poolB] },
+      replacement: { poolInfos: [poolB] },
     })
 
     expect(getVaultCandidatePoolInfos(vaultAddress, 1)).toEqual([poolA, poolB])

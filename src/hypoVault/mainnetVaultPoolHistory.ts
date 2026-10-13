@@ -11,6 +11,7 @@ import {
   MainnetWETHPLPV3AuthorizedVaultPoolInfos,
   MainnetWETHPLPVaultPoolInfos,
 } from './hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
+import { ROBINHOOD_USDG_REPLACEMENT_ARTIFACTS } from './hypoVaultManagerArtifacts/replacementPoolArtifacts'
 import { RobinhoodUSDGPLP5bpsStrategistLeaves } from './hypoVaultManagerArtifacts/RobinhoodUSDGPLPStrategistLeaves'
 import {
   RobinhoodUSDGPLP5bpsVaultPoolInfos,
@@ -28,6 +29,10 @@ const ROBINHOOD_USDG_VAULT_DEPLOYMENT_TRANSACTION =
 export const ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_BLOCK = 78_163_813n
 export const ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_TRANSACTION =
   '0x1286b4dc49f88741b1c05619e5dd4f3d6a7f187bbbaae309f84c9e926dfcf743' as const
+
+export const ROBINHOOD_REPLACEMENT_POOL_ACTIVATION_BLOCK = 87_303_483n
+export const ROBINHOOD_REPLACEMENT_POOL_ACTIVATION_TRANSACTION =
+  '0x1bb0334dd9c763da17d57995ec60b4aada2b49e5f899b18c2cb00f6b5c3e86b2' as const
 
 const POOL_INFO_ARRAY_ABI = {
   type: 'tuple[]',
@@ -221,6 +226,11 @@ const ROBINHOOD_VAULT_HISTORIES: readonly VaultHistory[] = [
         ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_TRANSACTION,
         RobinhoodUSDGPLP5bpsVaultPoolInfos.poolInfos,
       ),
+      poolConfiguration(
+        ROBINHOOD_REPLACEMENT_POOL_ACTIVATION_BLOCK,
+        ROBINHOOD_REPLACEMENT_POOL_ACTIVATION_TRANSACTION,
+        ROBINHOOD_USDG_REPLACEMENT_ARTIFACTS.vaultPoolInfos.poolInfos,
+      ),
     ],
     managerRootTransitions: [
       {
@@ -232,6 +242,11 @@ const ROBINHOOD_VAULT_HISTORIES: readonly VaultHistory[] = [
         activationBlockNumber: ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_BLOCK,
         transactionHash: ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_TRANSACTION,
         manageRoot: RobinhoodUSDGPLP5bpsStrategistLeaves.metadata.ManageRoot,
+      },
+      {
+        activationBlockNumber: ROBINHOOD_REPLACEMENT_POOL_ACTIVATION_BLOCK,
+        transactionHash: ROBINHOOD_REPLACEMENT_POOL_ACTIVATION_TRANSACTION,
+        manageRoot: ROBINHOOD_USDG_REPLACEMENT_ARTIFACTS.strategistLeaves.metadata.ManageRoot,
       },
     ],
   },

@@ -139,6 +139,7 @@ describe('fetchVaultLendingAllocation', () => {
 
     const client = {
       readContract,
+      getBlockNumber: vi.fn(async () => 1n),
       getBalance: vi.fn(async () => 0n),
     } as unknown as PublicClient
 

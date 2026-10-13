@@ -477,6 +477,7 @@ export function getVaultCandidatePoolInfos(
           ...generations.previous.poolInfos,
           ...generations.next.poolInfos,
           ...generations.current.poolInfos,
+          ...generations.replacement.poolInfos,
         ]),
     ...robinhoodGenerations.flatMap((generation) => generation.poolInfos),
   ]

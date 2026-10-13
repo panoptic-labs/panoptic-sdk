@@ -5,8 +5,7 @@ import { zeroAddress } from 'viem'
 import { HypoVaultAbi } from '../../abis/HypoVault'
 import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../generated'
 import { tickToSqrtPriceX96 } from '../../panoptic/v2/formatters/tick'
-import { getHypoVaultConfigForVault } from '../hypoVaultManagerConfigs/vaultToConfig'
-import { getVaultPoolInfos } from '../utils/vaultManagerInput'
+import { resolveVaultPoolInfosAtBlock } from '../utils/vaultManagerInput'
 
 const erc20Abi = [
   {
@@ -128,37 +127,24 @@ function addressesEqual(a: Address, b: Address): boolean {
   return a.toLowerCase() === b.toLowerCase()
 }
 
-function discoverPoolAddresses({
+async function discoverPoolAddresses({
+  client,
   chainId,
   vaultAddress,
+  blockNumber,
 }: {
+  client: PublicClient
   chainId: number
   vaultAddress: Address
-}): Address[] {
-  const seen = new Set<string>()
-  const addresses: Address[] = []
-
-  const config = getHypoVaultConfigForVault(vaultAddress, chainId)
-  const configuredPool = config?.addresses?.ethUsdc500bpsV4PanopticPool
-  if (configuredPool !== undefined) {
-    const key = configuredPool.toLowerCase()
-    if (!seen.has(key)) {
-      seen.add(key)
-      addresses.push(configuredPool)
-    }
-  }
-
-  const artifactInfos = getVaultPoolInfos(vaultAddress, chainId)
-
-  for (const info of artifactInfos) {
-    const key = info.pool.toLowerCase()
-    if (!seen.has(key)) {
-      seen.add(key)
-      addresses.push(info.pool as Address)
-    }
-  }
-
-  return addresses
+  blockNumber: bigint
+}): Promise<Address[]> {
+  const poolInfos = await resolveVaultPoolInfosAtBlock({
+    viemClient: client,
+    chainId,
+    vaultAddress,
+    blockNumber,
+  })
+  return [...new Set(poolInfos.map(({ pool }) => pool))]
 }
 
 function computeAllocationPctBps({
@@ -487,9 +473,12 @@ export async function fetchVaultNetLendingApyPct({
   underlyingTokenAddress: Address
   blockNumber?: bigint
 }): Promise<number | null> {
-  const poolAddresses = discoverPoolAddresses({
+  blockNumber ??= await client.getBlockNumber()
+  const poolAddresses = await discoverPoolAddresses({
+    client,
     chainId,
     vaultAddress,
+    blockNumber,
   })
   if (poolAddresses.length === 0) {
     return null
@@ -626,9 +615,11 @@ export async function fetchVaultNetLendingYieldUnderlying({
   blockNumber: bigint
   intervalSeconds: bigint
 }): Promise<bigint | null> {
-  const poolAddresses = discoverPoolAddresses({
+  const poolAddresses = await discoverPoolAddresses({
+    client,
     chainId,
     vaultAddress,
+    blockNumber,
   })
   if (poolAddresses.length === 0) {
     return null
@@ -766,6 +757,7 @@ export async function fetchVaultLendingAllocation({
   underlyingTokenAddress: Address
   blockNumber?: bigint
 }): Promise<VaultLendingAllocationRow[]> {
+  blockNumber ??= await client.getBlockNumber()
   const [reservedWithdrawalAssetsRaw, depositEpochRaw] = await Promise.all([
     client.readContract({
       address: vaultAddress,
@@ -798,9 +790,11 @@ export async function fetchVaultLendingAllocation({
       ? 0n
       : getAssetsDepositedFromDepositEpochState(depositEpochStateRaw)
 
-  const poolAddresses = discoverPoolAddresses({
+  const poolAddresses = await discoverPoolAddresses({
+    client,
     chainId,
     vaultAddress,
+    blockNumber,
   })
 
   const poolContexts = await Promise.all(

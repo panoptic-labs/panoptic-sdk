@@ -11,6 +11,7 @@ import { getBlockNumber, readContract } from 'viem/actions'
 import { HypoVaultManagerWithMerkleVerificationAbi } from '../abis/HypoVaultManagerWithMerkleVerification'
 import { PanopticVaultAccountantAbi } from '../abis/PanopticVaultAccountant'
 import { requireChainDeployment, ROBINHOOD_CHAIN_ID } from './chainDeployments'
+import { ROBINHOOD_USDG_REPLACEMENT_ARTIFACTS } from './hypoVaultManagerArtifacts/replacementPoolArtifacts'
 import {
   RobinhoodUSDGPLP5bpsStrategistLeaves,
   RobinhoodUSDGPLP30bpsStrategistLeaves,
@@ -51,7 +52,7 @@ export const ROBINHOOD_USDG_30BPS_POOL_HASH =
 export const ROBINHOOD_USDG_5BPS_POOL_HASH =
   '0xc5dcfa7ae982f641493c9f848bb93cb138a1ad5b3bc13c309b7625850af8562b' as const
 
-export type RobinhoodSpyUsdgAuthorizationVersion = '30bps' | '5bps'
+export type RobinhoodSpyUsdgAuthorizationVersion = '30bps' | '5bps' | 'replacement'
 
 export type RobinhoodSpyUsdgAuthorizationArtifacts = {
   readonly version: RobinhoodSpyUsdgAuthorizationVersion
@@ -94,6 +95,15 @@ const generations = [
     strategistLeaves: RobinhoodUSDGPLP5bpsStrategistLeaves,
     poolHash: ROBINHOOD_USDG_5BPS_POOL_HASH,
     manageRoot: RobinhoodUSDGPLP5bpsStrategistLeaves.metadata.ManageRoot,
+  },
+  {
+    version: 'replacement',
+    poolInfos: ROBINHOOD_USDG_REPLACEMENT_ARTIFACTS.vaultPoolInfos.poolInfos,
+    strategistLeaves: ROBINHOOD_USDG_REPLACEMENT_ARTIFACTS.strategistLeaves,
+    poolHash: hashRobinhoodSpyUsdgPoolInfos(
+      ROBINHOOD_USDG_REPLACEMENT_ARTIFACTS.vaultPoolInfos.poolInfos,
+    ),
+    manageRoot: ROBINHOOD_USDG_REPLACEMENT_ARTIFACTS.strategistLeaves.metadata.ManageRoot,
   },
 ] as const satisfies readonly Generation[]
 

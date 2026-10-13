@@ -1,10 +1,11 @@
 import type { Address, PublicClient } from 'viem'
+import { zeroAddress } from 'viem'
 
 import { getAccountCollateral } from '../../panoptic/v2/reads/account'
 import { getCollateralData } from '../../panoptic/v2/reads/collateral'
 import { getPoolMetadata } from '../../panoptic/v2/reads/pool'
-import { getHypoVaultConfigForVault } from '../hypoVaultManagerConfigs/vaultToConfig'
-import { getVaultPoolInfos } from '../utils/vaultManagerInput'
+import { getChainDeployment } from '../chainDeployments'
+import { resolveVaultPoolInfosAtBlock } from '../utils/vaultManagerInput'
 
 const erc20BalanceOfAbi = [
   {
@@ -35,39 +36,6 @@ export type LendingAllocationResult = {
 
 function toLowerAddress(address: string): string {
   return address.toLowerCase()
-}
-
-function discoverPoolAddresses({
-  chainId,
-  vaultAddress,
-}: {
-  chainId: number
-  vaultAddress: Address
-}): Address[] {
-  const discoveredAddresses: Address[] = []
-  const seen = new Set<string>()
-
-  const config = getHypoVaultConfigForVault(vaultAddress, chainId)
-  const poolFromConfig = config?.addresses?.ethUsdc500bpsV4PanopticPool
-  if (poolFromConfig !== undefined) {
-    const key = toLowerAddress(poolFromConfig)
-    if (!seen.has(key)) {
-      seen.add(key)
-      discoveredAddresses.push(poolFromConfig)
-    }
-  }
-
-  const artifactPoolInfos = getVaultPoolInfos(vaultAddress, chainId)
-
-  for (const poolInfo of artifactPoolInfos) {
-    const key = toLowerAddress(poolInfo.pool)
-    if (!seen.has(key)) {
-      seen.add(key)
-      discoveredAddresses.push(poolInfo.pool as Address)
-    }
-  }
-
-  return discoveredAddresses
 }
 
 function getUnderlyingIndex({
@@ -102,11 +70,19 @@ export async function getLendingAllocationRows({
   underlyingTokenAddress: Address
   blockNumber?: bigint
 }): Promise<LendingAllocationResult> {
-  const poolAddresses = discoverPoolAddresses({
+  blockNumber ??= await client.getBlockNumber()
+  const poolInfos = await resolveVaultPoolInfosAtBlock({
+    viemClient: client,
     chainId,
     vaultAddress,
+    blockNumber,
   })
+  const poolAddresses = [...new Set(poolInfos.map(({ pool }) => pool))]
 
+  const wrappedNativeToken = getChainDeployment(chainId)?.sfpmSwap?.weth
+  const underlyingIsWrappedNative =
+    wrappedNativeToken !== undefined &&
+    toLowerAddress(underlyingTokenAddress) === toLowerAddress(wrappedNativeToken)
   const poolRows = await Promise.all(
     poolAddresses.map(async (poolAddress): Promise<LendingAllocationRow | null> => {
       const metadata = await getPoolMetadata({
@@ -115,7 +91,11 @@ export async function getLendingAllocationRows({
       })
 
       const underlyingIndex = getUnderlyingIndex({
-        underlyingTokenAddress,
+        underlyingTokenAddress:
+          underlyingIsWrappedNative &&
+          (metadata.token0Asset === zeroAddress || metadata.token1Asset === zeroAddress)
+            ? zeroAddress
+            : underlyingTokenAddress,
         token0Asset: metadata.token0Asset,
         token1Asset: metadata.token1Asset,
       })
@@ -163,7 +143,7 @@ export async function getLendingAllocationRows({
     (row): row is Exclude<LendingAllocationRow, null> => row !== null,
   )
 
-  const idleBalance = await client.readContract({
+  const wrappedIdleBalance = await client.readContract({
     address: underlyingTokenAddress,
     abi: erc20BalanceOfAbi,
     functionName: 'balanceOf',
@@ -171,6 +151,10 @@ export async function getLendingAllocationRows({
     blockNumber,
   })
 
+  const nativeIdleBalance = underlyingIsWrappedNative
+    ? await client.getBalance({ address: vaultAddress, blockNumber })
+    : 0n
+  const idleBalance = wrappedIdleBalance + nativeIdleBalance
   const idleRow: LendingAllocationRow = {
     market: 'Idle Funds',
     borrowRateWad: null,

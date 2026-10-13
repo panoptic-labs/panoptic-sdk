@@ -31,6 +31,10 @@ import {
   MainnetWETHPLPV3AuthorizedVaultPoolInfos,
   MainnetWETHPLPVaultPoolInfos,
 } from './hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
+import {
+  MAINNET_USDC_REPLACEMENT_ARTIFACTS,
+  MAINNET_WETH_REPLACEMENT_ARTIFACTS,
+} from './hypoVaultManagerArtifacts/replacementPoolArtifacts'
 import type { StrategistLeavesArtifact } from './utils/buildManageArgs'
 import type { PoolInfo } from './utils/buildManagerInput'
 
@@ -49,7 +53,7 @@ const POOL_INFO_ARRAY_ABI = {
   ],
 } as const
 
-export type MainnetV3AuthorizationVersion = 'previous' | 'next' | 'v3-only'
+export type MainnetV3AuthorizationVersion = 'previous' | 'next' | 'v3-only' | 'replacement'
 
 export type MainnetV3AuthorizationArtifacts = {
   readonly version: MainnetV3AuthorizationVersion
@@ -70,6 +74,7 @@ type VaultTransition = {
   readonly previous: AuthorizationGeneration
   readonly next: AuthorizationGeneration
   readonly current: AuthorizationGeneration
+  readonly replacement: AuthorizationGeneration
   readonly generations: readonly (AuthorizationGeneration & {
     readonly version: MainnetV3AuthorizationVersion
   })[]
@@ -82,6 +87,7 @@ function createVaultTransition(transition: Omit<VaultTransition, 'generations'>)
       { version: 'previous', ...transition.previous },
       { version: 'next', ...transition.next },
       { version: 'v3-only', ...transition.current },
+      { version: 'replacement', ...transition.replacement },
     ],
   }
 }
@@ -129,6 +135,10 @@ const MAINNET_V3_AUTHORIZATION_TRANSITIONS: readonly VaultTransition[] = [
       MainnetWETHPLPV3AuthorizedStrategistLeaves,
     ),
     current: generation(MainnetWETHPLPVaultPoolInfos.poolInfos, MainnetWETHPLPStrategistLeaves),
+    replacement: generation(
+      MAINNET_WETH_REPLACEMENT_ARTIFACTS.vaultPoolInfos.poolInfos,
+      MAINNET_WETH_REPLACEMENT_ARTIFACTS.strategistLeaves,
+    ),
   }),
   createVaultTransition({
     vaultAddress: MAINNET_DEPLOYMENT.hypovault.vaults.usdcPlpVault,
@@ -144,6 +154,10 @@ const MAINNET_V3_AUTHORIZATION_TRANSITIONS: readonly VaultTransition[] = [
       MainnetUSDCPLPV3AuthorizedStrategistLeaves,
     ),
     current: generation(MainnetUSDCPLPVaultPoolInfos.poolInfos, MainnetUSDCPLPStrategistLeaves),
+    replacement: generation(
+      MAINNET_USDC_REPLACEMENT_ARTIFACTS.vaultPoolInfos.poolInfos,
+      MAINNET_USDC_REPLACEMENT_ARTIFACTS.strategistLeaves,
+    ),
   }),
 ] as const
 
@@ -164,23 +178,28 @@ function findTransition(chainId: number, vaultAddress: Address): VaultTransition
   )
 }
 
-/** Returns both known generations without reading chain state. */
+/** Returns every recognized generation without reading chain state. */
 export function getMainnetV3AuthorizationGenerations({
   chainId,
   vaultAddress,
 }: {
   chainId: number
   vaultAddress: Address
-}): Pick<VaultTransition, 'previous' | 'next' | 'current'> | null {
+}): Pick<VaultTransition, 'previous' | 'next' | 'current' | 'replacement'> | null {
   const transition = findTransition(chainId, vaultAddress)
   return transition === null
     ? null
-    : { previous: transition.previous, next: transition.next, current: transition.current }
+    : {
+        previous: transition.previous,
+        next: transition.next,
+        current: transition.current,
+        replacement: transition.replacement,
+      }
 }
 
 /**
  * Selects the mainnet authorization artifacts active at a historical block without RPC reads.
- * Live callers should use the compiled current artifacts directly; this selector exists for
+ * Live callers should resolve the on-chain generation; this selector exists for
  * block-pinned NAV and manager-input reconstruction across the V3 authorization boundary.
  */
 export function getMainnetV3AuthorizationArtifactsAtBlock({
