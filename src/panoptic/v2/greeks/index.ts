@@ -17,6 +17,7 @@
 
 import { tickToSqrtPriceX96 } from '../formatters/tick'
 import type { TokenIdLeg } from '../types'
+import { getLegTokenInventory } from './legLiquidity'
 
 // --- Internal Helpers ---
 
@@ -575,7 +576,10 @@ export function toVaultFrameAtTick(
  * Calculate one leg's wallet-aware delta in the vault asset frame.
  *
  * Width-zero loans and credits must be evaluated directly in the vault frame.
- * Option legs remain in their natural leg frame until converted at the mark tick.
+ * An option leg is measured as its current holding of the vault token, so
+ * `mintTick` and `definedRisk` do not affect it. Tokens swapped at mint belong
+ * to the account's collateral balance, not to the position: a per-position
+ * display omits them by design, and a whole-account delta adds the balance.
  */
 export function getLegDeltaInVaultFrame(
   leg: TokenIdLeg,
@@ -598,15 +602,7 @@ export function getLegDeltaInVaultFrame(
     )
   }
 
-  const legDelta = getLegDelta(
-    leg,
-    currentTick,
-    positionSize,
-    poolTickSpacing,
-    mintTick,
-    definedRisk,
-  )
-  return toVaultFrameAtTick(legDelta, leg.asset, vaultAssetIndex, currentTick, true)
+  return getLegTokenInventory(leg, currentTick, positionSize, poolTickSpacing, vaultAssetIndex)
 }
 
 /**
@@ -832,9 +828,9 @@ export function calculatePositionDelta(input: PositionGreeksInput): bigint {
 /**
  * Calculate debt-only position delta in a single target asset frame.
  *
- * Option legs are first valued in their natural `leg.asset` frame, then
- * converted into `assetIndex` using the current pool price. Width-zero legs
- * are evaluated directly in the target frame.
+ * Option legs contribute their current holding of the `assetIndex` token,
+ * without any mint-time adjustment. Width-zero legs are evaluated directly in
+ * the target frame.
  *
  * Width=0 loan/credit legs include only their debt obligation. The held-token
  * side must be added separately from account collateral balances, preventing a

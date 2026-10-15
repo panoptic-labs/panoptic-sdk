@@ -1,19 +1,18 @@
-import {
-  type Abi,
-  type PublicClient,
-  ContractFunctionExecutionError,
-  ContractFunctionRevertedError,
-} from 'viem'
+import { type PublicClient, encodeErrorResult, encodeFunctionResult } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
+import { Multicall3Abi } from '../../abis/multicall3'
+import { panopticPoolV2Abi } from '../../abis/panoptic_v2_abis'
 import {
   getVaultCandidatePoolInfos,
   recoverVaultCandidateTokenIdsByPool,
   resolveVaultPoolInfosAtBlock,
   resolveVaultTokenIdsByPool,
+  verifyVaultOpenTokenIdsAtBlock,
 } from './vaultManagerInput'
 
 const readContractMock = vi.fn()
+const callMock = vi.fn()
 const getOpenPositionIdsMock = vi.fn()
 const resolveAuthorizationMock = vi.fn()
 const resolveRobinhoodAuthorizationMock = vi.fn()
@@ -23,6 +22,16 @@ const getHistoricalPoolConfigurationMock = vi.fn()
 const getHistoricalPoolConfigurationsMock = vi.fn()
 
 vi.mock('viem/actions', () => ({
+  call: async (...args: unknown[]) => {
+    const results = await callMock(...args)
+    return {
+      data: encodeFunctionResult({
+        abi: Multicall3Abi,
+        functionName: 'aggregate3',
+        result: results,
+      }),
+    }
+  },
   readContract: (...args: unknown[]) => readContractMock(...args),
 }))
 
@@ -52,25 +61,25 @@ vi.mock('../robinhoodSpyUsdgAuthorization', () => ({
     resolveRobinhoodAuthorizationMock(...args),
 }))
 
-/**
- * Build a viem-shaped revert error so the bisect path treats it as a
- * "bad batch" the same way it would in production. The bisect only
- * catches `ContractFunctionExecutionError`; plain `Error` is treated as
- * a transport failure and rethrown, which is the desired behavior.
- */
-function makeRevertError(reason: string): ContractFunctionExecutionError {
-  return new ContractFunctionExecutionError(
-    new ContractFunctionRevertedError({
-      abi: [] as Abi,
-      data: undefined,
+function ownedPosition(size: bigint) {
+  return {
+    success: true,
+    returnData: encodeFunctionResult({
+      abi: panopticPoolV2Abi,
       functionName: 'getFullPositionsData',
-      message: reason,
+      result: [0n, 0n, [size], [0n], [0n]],
     }),
-    {
-      abi: [] as Abi,
-      functionName: 'getFullPositionsData',
-    },
-  )
+  }
+}
+
+function missingPosition() {
+  return {
+    success: false,
+    returnData: encodeErrorResult({
+      abi: panopticPoolV2Abi,
+      errorName: 'PositionNotOwned',
+    }),
+  }
 }
 
 function jsonResponse(body: unknown) {
@@ -162,7 +171,7 @@ describe('resolveVaultTokenIdsByPool', () => {
           data: {
             panopticPoolAccounts: [
               {
-                panopticPool: { id: '0xpool' },
+                panopticPool: { id: '0x0000000000000000000000000000000000000010' },
                 accountBalances: [{ tokenId: { id: '10' } }, { tokenId: { id: '20' } }],
               },
             ],
@@ -173,17 +182,17 @@ describe('resolveVaultTokenIdsByPool', () => {
         data: {
           optionMints: [
             {
-              panopticPool: { id: '0xpool' },
+              panopticPool: { id: '0x0000000000000000000000000000000000000010' },
               tokenId: { id: '30', idHexString: '0x1e' },
             },
           ],
           optionBurns: [
             {
-              panopticPool: { id: '0xpool' },
+              panopticPool: { id: '0x0000000000000000000000000000000000000010' },
               tokenId: { id: '20', idHexString: '0x14' },
             },
             {
-              panopticPool: { id: '0xpool' },
+              panopticPool: { id: '0x0000000000000000000000000000000000000010' },
               tokenId: { id: '42', idHexString: '0x2a' },
             },
           ],
@@ -202,7 +211,7 @@ describe('resolveVaultTokenIdsByPool', () => {
       managerAddress: '0xa1b9A9943FE39C36403daB99D3B654f6d44cF7c4',
       poolInfos: [
         {
-          pool: '0xpool',
+          pool: '0x0000000000000000000000000000000000000010',
           token0: '0x0000000000000000000000000000000000000000',
           token1: '0x0000000000000000000000000000000000000001',
           maxPriceDeviation: 100,
@@ -288,7 +297,7 @@ describe('resolveVaultTokenIdsByPool', () => {
           data: {
             panopticPoolAccounts: [
               {
-                panopticPool: { id: '0xpool' },
+                panopticPool: { id: '0x0000000000000000000000000000000000000010' },
                 accountBalances: [{ tokenId: { id: '10' } }, { tokenId: { id: '20' } }],
               },
             ],
@@ -303,13 +312,8 @@ describe('resolveVaultTokenIdsByPool', () => {
       })
     })
 
-    readContractMock
-      // Batch validation of [10, 20] reverts because one tokenId is stale at this block.
-      .mockRejectedValueOnce(makeRevertError('PositionNotOwned'))
-      // Per-token fallback for 10 -> not owned
-      .mockRejectedValueOnce(makeRevertError('PositionNotOwned'))
-      // Per-token fallback for 20 -> open with positionSize=3
-      .mockResolvedValueOnce([0n, 0n, [3n], [0n], [0n]])
+    callMock.mockReset()
+    callMock.mockResolvedValueOnce([missingPosition(), ownedPosition(3n)])
 
     const viemClient = {} as unknown as PublicClient
 
@@ -320,7 +324,7 @@ describe('resolveVaultTokenIdsByPool', () => {
       managerAddress: '0xa1b9A9943FE39C36403daB99D3B654f6d44cF7c4',
       poolInfos: [
         {
-          pool: '0xpool',
+          pool: '0x0000000000000000000000000000000000000010',
           token0: '0x0000000000000000000000000000000000000000',
           token1: '0x0000000000000000000000000000000000000001',
           maxPriceDeviation: 100,
@@ -332,7 +336,7 @@ describe('resolveVaultTokenIdsByPool', () => {
     })
 
     expect(result).toEqual([[20n]])
-    expect(readContractMock).toHaveBeenCalledTimes(3)
+    expect(callMock).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -436,5 +440,55 @@ describe('recoverVaultCandidateTokenIdsByPool', () => {
         fromBlock: 100n,
       }),
     ).rejects.toThrow('RPC unavailable')
+  })
+})
+
+describe('bounded historical position verification', () => {
+  const client = {} as PublicClient
+  const vaultAddress = '0x236d0558f06cd60780b232d4ec4c92d2cb7e4d18' as const
+  const poolAddress = '0x00000000563b70d704f4c6675a5f6ac989fbae13' as const
+  const verify = (candidates: bigint[]) =>
+    verifyVaultOpenTokenIdsAtBlock({
+      viemClient: client,
+      vaultAddress,
+      candidatesByPool: [{ poolAddress, candidates }],
+      blockNumber: 26128353n,
+    })
+
+  it('checks 33 closed candidates in three sequential RPC calls without recursive probes', async () => {
+    callMock.mockReset()
+    callMock
+      .mockResolvedValueOnce(Array.from({ length: 16 }, missingPosition))
+      .mockResolvedValueOnce(Array.from({ length: 16 }, missingPosition))
+      .mockResolvedValueOnce([missingPosition()])
+    expect(await verify(Array.from({ length: 33 }, (_, i) => BigInt(i)))).toEqual([[]])
+    expect(callMock).toHaveBeenCalledTimes(3)
+    for (const [, request] of callMock.mock.calls) {
+      expect(request).toMatchObject({
+        to: '0xcA11bde05977b3631167028862bE2a173976CA11',
+        blockNumber: 26128353n,
+      })
+    }
+  })
+
+  it('keeps open positions and ignores zero balances and missing positions', async () => {
+    callMock.mockReset()
+    callMock.mockResolvedValueOnce([ownedPosition(4n), missingPosition(), ownedPosition(0n)])
+    expect(await verify([1n, 2n, 3n])).toEqual([[1n]])
+  })
+
+  it('propagates provider failures without treating positions as closed', async () => {
+    callMock.mockReset()
+    callMock.mockRejectedValueOnce(new Error('429 throughput limit'))
+    await expect(verify([1n, 2n])).rejects.toThrow('429 throughput limit')
+    expect(callMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects unexpected contract reverts and incomplete responses', async () => {
+    callMock.mockReset()
+    callMock.mockResolvedValueOnce([{ success: false, returnData: '0x' }])
+    await expect(verify([1n])).rejects.toThrow()
+    callMock.mockResolvedValueOnce([])
+    await expect(verify([1n])).rejects.toThrow('Incomplete')
   })
 })

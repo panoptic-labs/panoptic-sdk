@@ -1,5 +1,6 @@
 import { type HttpTransportConfig, type Transport, fallback, http } from 'viem'
 
+import { rateLimitedRpcFetch } from './rateLimit'
 import type { RpcEndpoint } from './resolve'
 
 export type RpcHttpConfig = Omit<HttpTransportConfig, 'fetchOptions'>
@@ -16,6 +17,8 @@ export type RpcTransportOptions = RpcHttpConfig & {
    * another surfaces as "already known" / "nonce too low" although it was sent.
    */
   failover?: boolean
+  /** Shared HTTP attempt limit, including retries and failover. Disables HTTP batching. */
+  requestsPerSecond?: number
 }
 
 /**
@@ -24,13 +27,21 @@ export type RpcTransportOptions = RpcHttpConfig & {
  */
 export function rpcTransport(
   endpoints: readonly RpcEndpoint[],
-  { failover = true, ...config }: RpcTransportOptions = {},
+  { failover = true, requestsPerSecond, ...config }: RpcTransportOptions = {},
 ): Transport {
+  const httpConfig =
+    requestsPerSecond === undefined
+      ? config
+      : {
+          ...config,
+          batch: false as const,
+          fetchFn: rateLimitedRpcFetch(requestsPerSecond, config.fetchFn),
+        }
   const [primary, ...rest] = endpoints
   if (primary === undefined) throw new Error('rpcTransport needs at least one endpoint')
-  if (!failover || rest.length === 0) return rpcHttp(primary, config)
+  if (!failover || rest.length === 0) return rpcHttp(primary, httpConfig)
   return fallback(
-    endpoints.map((endpoint) => rpcHttp(endpoint, config)),
+    endpoints.map((endpoint) => rpcHttp(endpoint, httpConfig)),
     { rank: false },
   )
 }

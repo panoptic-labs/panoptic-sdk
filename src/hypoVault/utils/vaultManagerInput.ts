@@ -1,7 +1,16 @@
-import { type Address, type Client, type PublicClient, ContractFunctionExecutionError } from 'viem'
-import { getBlockNumber, readContract } from 'viem/actions'
+import {
+  type Address,
+  type Client,
+  type PublicClient,
+  decodeErrorResult,
+  decodeFunctionResult,
+  encodeFunctionData,
+} from 'viem'
+import { call, getBlockNumber, readContract } from 'viem/actions'
 
+import { Multicall3Abi } from '../../abis/multicall3'
 import { panopticPoolV2Abi as panopticPoolAbi } from '../../abis/panoptic_v2_abis'
+import { MULTICALL3_ADDRESS } from '../../panoptic/v2/reads/multicallBlock'
 import { getOpenPositionIds } from '../../panoptic/v2/sync/getTrackedPositionIds'
 import {
   BASE_CHAIN_ID,
@@ -339,52 +348,7 @@ function extractPositionSizeFromPackedBalance(value: unknown): bigint | null {
   return value & ((1n << 128n) - 1n)
 }
 
-// When the whole-batch read reverts (any single bad tokenId — burned or
-// not-yet-minted at `blockNumber` — reverts `getFullPositionsData` for the
-// entire list), we bisect the candidate list. This way a handful of bad
-// tokenIds collapses to O(log N) reads instead of O(N), and the leaf-level
-// per-tokenId reads run in parallel so viem's JSON-RPC batching can fold
-// them into a single HTTP request.
-const BISECT_LEAF_THRESHOLD = 1
-
-async function readPositionBalances({
-  viemClient,
-  poolAddress,
-  account,
-  candidates,
-  blockNumber,
-}: {
-  viemClient: Client
-  poolAddress: Address
-  account: Address
-  candidates: readonly bigint[]
-  blockNumber: bigint
-}): Promise<readonly unknown[] | null> {
-  let result: unknown
-  try {
-    result = await readContract(viemClient, {
-      address: poolAddress,
-      abi: panopticPoolAbi,
-      functionName: 'getFullPositionsData',
-      args: [account, false, candidates],
-      blockNumber,
-    })
-  } catch (error) {
-    // Only treat contract reverts (e.g. `PositionNotOwned` from a stale
-    // candidate) as "bad batch — caller should bisect". Transport, JSON-RPC,
-    // or other transient failures must propagate so the caller doesn't
-    // silently treat a network blip as "all candidates closed".
-    if (error instanceof ContractFunctionExecutionError) {
-      return null
-    }
-    throw error
-  }
-  const maybePositionBalances = Array.isArray(result) ? result[2] : undefined
-  if (!Array.isArray(maybePositionBalances)) {
-    return null
-  }
-  return maybePositionBalances
-}
+const POSITION_VERIFICATION_BATCH_SIZE = 16
 
 async function filterOpenTokenIdsAtBlock({
   viemClient,
@@ -399,50 +363,58 @@ async function filterOpenTokenIdsAtBlock({
   candidates: readonly bigint[]
   blockNumber: bigint
 }): Promise<bigint[]> {
-  if (candidates.length === 0) {
-    return []
-  }
-
-  const collectOpen = async (chunk: readonly bigint[]): Promise<bigint[]> => {
-    if (chunk.length === 0) {
-      return []
-    }
-
-    const balances = await readPositionBalances({
-      viemClient,
-      poolAddress,
-      account,
-      candidates: chunk,
+  const open: bigint[] = []
+  for (let offset = 0; offset < candidates.length; offset += POSITION_VERIFICATION_BATCH_SIZE) {
+    const chunk = candidates.slice(offset, offset + POSITION_VERIFICATION_BATCH_SIZE)
+    // Capture missing positions inside the EVM; RPC failures must never imply zero ownership.
+    const response = await call(viemClient, {
+      to: MULTICALL3_ADDRESS,
+      data: encodeFunctionData({
+        abi: Multicall3Abi,
+        functionName: 'aggregate3',
+        args: [
+          chunk.map((tokenId) => ({
+            target: poolAddress,
+            allowFailure: true,
+            callData: encodeFunctionData({
+              abi: panopticPoolAbi,
+              functionName: 'getFullPositionsData',
+              args: [account, false, [tokenId]],
+            }),
+          })),
+        ],
+      }),
       blockNumber,
     })
-
-    if (balances !== null) {
-      const open: bigint[] = []
-      for (let index = 0; index < chunk.length; index += 1) {
-        const tokenId = chunk[index]
-        const positionSize = extractPositionSizeFromPackedBalance(balances[index])
-        if (tokenId !== undefined && positionSize !== null && positionSize > 0n) {
-          open.push(tokenId)
-        }
+    if (response.data === undefined) throw new Error('Missing vault position verification response')
+    const results = decodeFunctionResult({
+      abi: Multicall3Abi,
+      functionName: 'aggregate3',
+      data: response.data,
+    })
+    if (results.length !== chunk.length) {
+      throw new Error('Incomplete vault position verification response')
+    }
+    for (const [index, tokenId] of chunk.entries()) {
+      const result = results[index]
+      if (!result.success) {
+        const error = decodeErrorResult({ abi: panopticPoolAbi, data: result.returnData })
+        if (error.errorName === 'PositionNotOwned') continue
+        throw new Error(`Vault position verification reverted: ${error.errorName}`)
       }
-      return open
+      const data = decodeFunctionResult({
+        abi: panopticPoolAbi,
+        functionName: 'getFullPositionsData',
+        data: result.returnData,
+      })
+      const size = extractPositionSizeFromPackedBalance(data[2][0])
+      if (size === null || data[2].length !== 1) {
+        throw new Error('Invalid vault position balance response')
+      }
+      if (size > 0n) open.push(tokenId)
     }
-
-    if (chunk.length <= BISECT_LEAF_THRESHOLD) {
-      // Single bad tokenId — drop it.
-      return []
-    }
-
-    const mid = chunk.length >> 1
-    const [leftOpen, rightOpen] = await Promise.all([
-      collectOpen(chunk.slice(0, mid)),
-      collectOpen(chunk.slice(mid)),
-    ])
-    return [...leftOpen, ...rightOpen]
   }
-
-  const openTokenIds = await collectOpen(candidates)
-  return sortBigintsAscending(openTokenIds)
+  return sortBigintsAscending(open)
 }
 
 export function getVaultPoolInfos(vaultAddress: Address, chainId?: number): readonly PoolInfo[] {
@@ -680,8 +652,7 @@ export async function resolveVaultHistoricalCandidatesByPool({
 
 /**
  * Narrow pre-resolved {@link VaultPoolCandidateTokenIds} to the tokenIds actually
- * open at `blockNumber`, per pool, via on-chain `getFullPositionsData` (bisecting
- * on stale candidates). This is the per-block half of the candidate/verify split.
+ * open at `blockNumber`, per pool, via bounded on-chain multicalls of `getFullPositionsData`. This is the per-block half of the candidate/verify split.
  */
 export async function verifyVaultOpenTokenIdsAtBlock({
   viemClient,

@@ -170,3 +170,39 @@ describe('statusForVaultSharePriceSnapshot', () => {
     expect(statusForVaultSharePriceSnapshot(snapshot)).toBe(expected)
   })
 })
+
+it('passes each historical position snapshot through without discovering candidates', async () => {
+  const resolveCandidates = vi.fn(async () => [])
+  const recoverCandidates = vi.fn(async () => [])
+  const managerInputProvider = vi.fn(async () => ({ managerInput: '0x' as const }))
+  const strategy: VaultApyStrategy = {
+    enabledMetrics: ['nav'],
+    resolveCandidates,
+    recoverCandidates,
+    managerInputProvider,
+  }
+  setVaultApyStrategyOverride({ chainId, vaultAddress, strategy })
+  const processor = createVaultSharePriceProcessor({ chainId, client: {} as PublicClient })
+  const readContractFn: ReadContractFn = async (_client, params) => {
+    if (params.functionName === 'depositEpochState') return [0n]
+    return params.functionName === 'reservedWithdrawalAssets' ? 0n : 1_000n
+  }
+  for (const blockNumber of [200n, 201n]) {
+    const positionsByPool = [{ poolAddress, tokenIds: blockNumber === 200n ? [7n] : [] }]
+    await processor.process({
+      vault,
+      strategy,
+      blockNumber,
+      blockTimestamp: blockNumber * 12n,
+      recoveryFallbackBlock: 50n,
+      loadLastTrustedBlock: async () => undefined,
+      readContractFn,
+      positionsByPool,
+    })
+    expect(managerInputProvider).toHaveBeenLastCalledWith(
+      expect.objectContaining({ blockNumber, positionsByPool }),
+    )
+  }
+  expect(resolveCandidates).not.toHaveBeenCalled()
+  expect(recoverCandidates).not.toHaveBeenCalled()
+})

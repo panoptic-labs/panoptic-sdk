@@ -1,4 +1,4 @@
-import type { Hex, PublicClient } from 'viem'
+import type { Address, Hex, PublicClient } from 'viem'
 
 import type { VaultPoolCandidateTokenIds } from '../utils/vaultManagerInput'
 
@@ -71,6 +71,11 @@ export type BorrowRateApyConfig = {
   rateSourceId?: string
 }
 
+export type VaultPoolPositions = {
+  poolAddress: Address
+  tokenIds: readonly bigint[]
+}
+
 export type ManagerInputProviderContext = {
   chainId: number
   vault: VaultApyVaultLike
@@ -83,6 +88,8 @@ export type ManagerInputProviderContext = {
    * timeseries resolve candidates once per vault rather than once per anchor.
    */
   candidates?: readonly VaultPoolCandidateTokenIds[]
+  /** Complete position lists at blockNumber, reconstructed from confirmed chain history. */
+  positionsByPool?: readonly VaultPoolPositions[]
 }
 
 export type ManagerInputProviderDiagnostics = {

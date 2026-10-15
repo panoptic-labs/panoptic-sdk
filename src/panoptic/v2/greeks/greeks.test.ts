@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import { tickToSqrtPriceX96 } from '../formatters/tick'
 import type { TokenIdLeg } from '../types'
 import {
   calculatePortfolioDelta,
@@ -23,6 +22,7 @@ import {
   isCall,
   isDefinedRisk,
 } from './index'
+import { getLegTokenInventory } from './legLiquidity'
 
 // Helper to create a mock leg
 function createLeg(overrides: Partial<TokenIdLeg> = {}): TokenIdLeg {
@@ -463,16 +463,186 @@ describe('greeks module', () => {
       )
     })
 
-    it('converts option delta from the leg frame at the current tick', () => {
-      const currentTick = 1_000n
-      const leg = createLeg({ asset: 1n, tokenType: 0n, isLong: true, width: 2n })
-      const legDelta = getLegDelta(leg, currentTick, positionSize, poolTickSpacing, 0n, false)
-      const sqrtPriceX96 = tickToSqrtPriceX96(currentTick)
-      const expected = -((legDelta * (1n << 192n)) / (sqrtPriceX96 * sqrtPriceX96))
+    describe('option legs whose asset is not the vault asset', () => {
+      const wethPut = (overrides: Partial<TokenIdLeg> = {}) =>
+        createLeg({ asset: 1n, tokenType: 0n, strike: 198_490n, width: 480n, ...overrides })
+      const usdcDelta = (leg: TokenIdLeg, tick: bigint, size: bigint) =>
+        getLegDeltaInVaultFrame(leg, tick, size, 10n, undefined, false, 0n)
+      const expectWithin = (actual: bigint, expected: bigint, tolerance: bigint) => {
+        const gap = actual - expected
+        expect(gap < 0n ? -gap : gap).toBeLessThanOrEqual(tolerance)
+      }
+      const size = 63n * 10n ** 18n
+      const movedUsdc = 151_168_173_246n
 
-      expect(
-        getLegDeltaInVaultFrame(leg, currentTick, positionSize, poolTickSpacing, 0n, false, 0n),
-      ).toBe(expected)
+      it.each([
+        [198_116n, size, 1n, -68_252_621_914n],
+        [198_541n, size, 1n, -81_713_744_459n],
+        [198_541n, 2_825n * 10n ** 16n, 2n, -73_282_961_301n],
+        [196_930n, 2_825n * 10n ** 16n, 2n, -26_133_015_759n],
+        [197_790n, 2_825n * 10n ** 16n, 2n, -51_775_118_784n],
+      ])(
+        'matches on-chain USDC inventory of a WETH short put at tick %s',
+        (tick, positionSize, optionRatio, expected) => {
+          expectWithin(usdcDelta(wethPut({ optionRatio }), tick, positionSize), expected, 2n)
+        },
+      )
+
+      it('owes the full moved amount when in the money past the range and nothing when out', () => {
+        expect(usdcDelta(wethPut(), 201_000n, size)).toBe(-movedUsdc)
+        expectWithin(usdcDelta(wethPut(), 196_000n, size), 0n, 1n)
+      })
+
+      it('gives a long leg the opposite delta', () => {
+        expectWithin(
+          usdcDelta(wethPut({ isLong: true }), 198_116n, size),
+          -usdcDelta(wethPut(), 198_116n, size),
+          1n,
+        )
+      })
+
+      it('counts only liquidity for a call, which owes the other token', () => {
+        const call = wethPut({ tokenType: 1n })
+
+        expectWithin(usdcDelta(call, 198_116n, size), 82_915_551_333n, 2n)
+        expectWithin(usdcDelta(call, 196_000n, size), movedUsdc, 1n)
+        expect(usdcDelta(call, 201_000n, size)).toBe(0n)
+      })
+
+      it.each([
+        [0n, 1n],
+        [1n, 0n],
+      ] as const)('mirrors across token orderings for tokenType %s', (tokenType, mirrored) => {
+        const delta = getLegDeltaInVaultFrame(
+          createLeg({ asset: 0n, tokenType: mirrored, strike: -198_490n, width: 480n }),
+          -198_116n,
+          size,
+          10n,
+          undefined,
+          false,
+          1n,
+        )
+
+        expectWithin(delta, usdcDelta(wethPut({ tokenType }), 198_116n, size), 2n)
+      })
+
+      it('equals the slope of the leg value against the vault token price', () => {
+        const wethValue = (tick: bigint) =>
+          Number(getLegTokenInventory(wethPut(), tick, size, 10n, 1n)) +
+          Number(usdcDelta(wethPut(), tick, size)) * 1.0001 ** Number(tick)
+        const slope =
+          (wethValue(198_117n) - wethValue(198_115n)) / (1.0001 ** 198_117 - 1.0001 ** 198_115)
+
+        expect(slope / Number(usdcDelta(wethPut(), 198_116n, size))).toBeCloseTo(1, 6)
+      })
+
+      it('sums with same-frame legs in a multi-leg position', () => {
+        const sameFrameLeg = createLeg({ asset: 0n, tokenType: 0n, strike: 198_490n, width: 480n })
+        const input = [198_116n, size, 10n, undefined, true] as const
+
+        expectWithin(
+          calculatePositionDeltaDebtOnly({
+            legs: [wethPut({ riskPartner: 1n }), { ...sameFrameLeg, index: 1n, riskPartner: 0n }],
+            currentTick: 198_116n,
+            mintTick: 198_116n,
+            positionSize: size,
+            poolTickSpacing: 10n,
+            assetIndex: 0n,
+          }),
+          -68_252_621_914n + getLegDelta(sameFrameLeg, ...input),
+          2n,
+        )
+      })
+    })
+
+    describe('option legs in the vault asset frame', () => {
+      const straddle = [
+        createLeg({ asset: 0n, tokenType: 1n, strike: 197_100n, width: 240n, riskPartner: 1n }),
+        createLeg({ asset: 0n, tokenType: 0n, strike: 197_100n, width: 240n, index: 1n }),
+      ]
+      const delta = (legs: TokenIdLeg[], mintTick: bigint) =>
+        calculatePositionDeltaDebtOnly({
+          legs,
+          currentTick: 198_116n,
+          mintTick,
+          positionSize: 25_000_000_000n,
+          poolTickSpacing: 10n,
+          assetIndex: 0n,
+        })
+
+      it('matches on-chain USDC inventory of a USDC straddle minted in the money', () => {
+        const gap = delta(straddle, 198_416n) + 21_375_410_014n
+
+        expect(gap < 0n ? -gap : gap).toBeLessThanOrEqual(2n)
+      })
+
+      it.each([0n, 1n] as const)('ignores the mint tick for a call on asset %s', (asset) => {
+        const call = [createLeg({ asset, tokenType: 0n, strike: 197_100n, width: 240n })]
+
+        expect(delta(call, 198_416n)).toBe(delta(call, 190_000n))
+        expect(delta(call, 197_000n)).toBe(delta(call, 190_000n))
+      })
+    })
+
+    describe('positions with width-zero legs', () => {
+      const size = 10n ** 18n
+      const expectWithin = (actual: bigint, expected: bigint, tolerance: bigint) => {
+        const gap = actual - expected
+        expect(gap < 0n ? -gap : gap).toBeLessThanOrEqual(tolerance)
+      }
+
+      it.each([0n, 1n] as const)(
+        'gives a covered call on token%s the delta of a short put',
+        (asset) => {
+          const quoted = (tick: bigint) => (asset === 0n ? tick : -tick)
+          const legs = [
+            createLeg({ asset, tokenType: asset, strike: 0n, width: 480n, riskPartner: 0n }),
+            createLeg({ asset, tokenType: asset, isLong: true, width: 0n, index: 1n }),
+          ]
+          const delta = (quotedTick: bigint) =>
+            calculatePositionDeltaDebtOnly({
+              legs,
+              currentTick: quoted(quotedTick),
+              mintTick: quoted(3_000n),
+              positionSize: size,
+              poolTickSpacing: 10n,
+              assetIndex: asset,
+            })
+
+          expectWithin(delta(-3_000n), size, 2n)
+          expectWithin(delta(3_000n), 0n, 2n)
+          expect(delta(0n)).toBeGreaterThan(size / 4n)
+          expect(delta(0n)).toBeLessThan((size * 3n) / 4n)
+        },
+      )
+
+      it('starts a short put near zero delta when a loan neutralizes its mint-time holding', () => {
+        const put = createLeg({ asset: 1n, tokenType: 0n, strike: 198_490n, width: 480n })
+        const mintTick = 198_541n
+        const heldAt = (tick: bigint) => getLegTokenInventory(put, tick, size, 10n, 1n)
+        const loanStrike = BigInt(
+          Math.round(Math.log(Number(heldAt(mintTick)) / Number(size)) / Math.log(1.0001)),
+        )
+        const loan = createLeg({
+          asset: 0n,
+          tokenType: 1n,
+          strike: loanStrike,
+          width: 0n,
+          index: 1n,
+        })
+        const delta = (currentTick: bigint) =>
+          calculatePositionDeltaDebtOnly({
+            legs: [put, loan],
+            currentTick,
+            mintTick,
+            positionSize: size,
+            poolTickSpacing: 10n,
+            assetIndex: 1n,
+          })
+
+        expectWithin(delta(mintTick), 0n, size / 5_000n)
+        expectWithin(delta(197_790n) - delta(mintTick), heldAt(197_790n) - heldAt(mintTick), 1n)
+      })
     })
 
     it('propagates an out-of-bounds current tick', () => {
@@ -982,39 +1152,6 @@ describe('greeks module', () => {
           assetIndex: 0n,
         }),
       ).toBe(-positionSize)
-    })
-
-    it('converts mixed-asset option legs from their natural frame', () => {
-      const currentTick = 1000n
-      const leg = createLeg({
-        asset: 1n,
-        tokenType: 0n,
-        isLong: true,
-        width: 2n,
-        tickLower: -10n,
-        tickUpper: 10n,
-      })
-      const legDelta = getLegDelta(
-        leg,
-        currentTick,
-        positionSize,
-        poolTickSpacing,
-        currentTick,
-        false,
-      )
-      const sqrtPriceX96 = tickToSqrtPriceX96(currentTick)
-      const expected = -((legDelta * (1n << 192n)) / (sqrtPriceX96 * sqrtPriceX96))
-
-      expect(
-        calculatePositionDeltaDebtOnly({
-          legs: [leg],
-          currentTick,
-          mintTick: currentTick,
-          positionSize,
-          poolTickSpacing,
-          assetIndex: 0n,
-        }),
-      ).toBe(expected)
     })
   })
 

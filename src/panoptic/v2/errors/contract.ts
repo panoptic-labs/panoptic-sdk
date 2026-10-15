@@ -50,6 +50,10 @@ export class NotMarginCalledError extends PanopticError {
 export class NotEnoughTokensError extends PanopticError {
   override readonly name = 'NotEnoughTokensError'
 
+  get deficit(): bigint {
+    return this.assetsRequested > this.assetBalance ? this.assetsRequested - this.assetBalance : 0n
+  }
+
   constructor(
     public readonly tokenAddress: Address,
     public readonly assetsRequested: bigint,

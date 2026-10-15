@@ -11,7 +11,11 @@ import {
   MainnetWETHPLPV3AuthorizedVaultPoolInfos,
   MainnetWETHPLPVaultPoolInfos,
 } from './hypoVaultManagerArtifacts/MainnetWETHPLPVaultPoolInfos'
-import { ROBINHOOD_USDG_REPLACEMENT_ARTIFACTS } from './hypoVaultManagerArtifacts/replacementPoolArtifacts'
+import {
+  MAINNET_USDC_REPLACEMENT_ARTIFACTS,
+  MAINNET_WETH_REPLACEMENT_ARTIFACTS,
+  ROBINHOOD_USDG_REPLACEMENT_ARTIFACTS,
+} from './hypoVaultManagerArtifacts/replacementPoolArtifacts'
 import { RobinhoodUSDGPLP5bpsStrategistLeaves } from './hypoVaultManagerArtifacts/RobinhoodUSDGPLPStrategistLeaves'
 import {
   RobinhoodUSDGPLP5bpsVaultPoolInfos,
@@ -23,6 +27,9 @@ const MAINNET_DEPLOYMENT = requireChainDeployment(MAINNET_CHAIN_ID)
 const MAINNET_POOL_RETIREMENT_BLOCK = 25_898_997n
 const MAINNET_POOL_RETIREMENT_TRANSACTION =
   '0xfca6a6dd0f081649dd6f50496175a58e6a119d574b594390beab23618b05ba2c' as const
+export const MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK = 26_191_216n
+export const MAINNET_REPLACEMENT_POOL_ACTIVATION_TRANSACTION =
+  '0xc498e22a62c6281fabf05af114abc4914b00c89db07c9c207b20d293dce30de7' as const
 export const ROBINHOOD_USDG_VAULT_DEPLOYMENT_BLOCK = 63_972_776n
 const ROBINHOOD_USDG_VAULT_DEPLOYMENT_TRANSACTION =
   '0x738c8a6d30a45f9b71d2d6260aa1c04aff558489631b3a9c6ccd5f49e0f57df4' as const
@@ -129,6 +136,11 @@ const MAINNET_VAULT_HISTORIES: readonly VaultHistory[] = [
         MAINNET_POOL_RETIREMENT_TRANSACTION,
         MainnetWETHPLPVaultPoolInfos.poolInfos,
       ),
+      poolConfiguration(
+        MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK,
+        MAINNET_REPLACEMENT_POOL_ACTIVATION_TRANSACTION,
+        MAINNET_WETH_REPLACEMENT_ARTIFACTS.vaultPoolInfos.poolInfos,
+      ),
     ],
     managerRootTransitions: [
       {
@@ -150,6 +162,11 @@ const MAINNET_VAULT_HISTORIES: readonly VaultHistory[] = [
         activationBlockNumber: MAINNET_POOL_RETIREMENT_BLOCK,
         transactionHash: MAINNET_POOL_RETIREMENT_TRANSACTION,
         manageRoot: '0x99baae2a0ddf55db31bf2e340856e6e76c87d37add86e95483bd7d1bad93e95c',
+      },
+      {
+        activationBlockNumber: MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK,
+        transactionHash: MAINNET_REPLACEMENT_POOL_ACTIVATION_TRANSACTION,
+        manageRoot: MAINNET_WETH_REPLACEMENT_ARTIFACTS.strategistLeaves.metadata.ManageRoot,
       },
     ],
   },
@@ -181,6 +198,11 @@ const MAINNET_VAULT_HISTORIES: readonly VaultHistory[] = [
         MAINNET_POOL_RETIREMENT_TRANSACTION,
         MainnetUSDCPLPVaultPoolInfos.poolInfos,
       ),
+      poolConfiguration(
+        MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK,
+        MAINNET_REPLACEMENT_POOL_ACTIVATION_TRANSACTION,
+        MAINNET_USDC_REPLACEMENT_ARTIFACTS.vaultPoolInfos.poolInfos,
+      ),
     ],
     managerRootTransitions: [
       {
@@ -207,6 +229,11 @@ const MAINNET_VAULT_HISTORIES: readonly VaultHistory[] = [
         activationBlockNumber: MAINNET_POOL_RETIREMENT_BLOCK,
         transactionHash: MAINNET_POOL_RETIREMENT_TRANSACTION,
         manageRoot: '0x29587b0f67aefbf4a11ecffe3bfb56ebef54e441df95fa260d44273d182027b7',
+      },
+      {
+        activationBlockNumber: MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK,
+        transactionHash: MAINNET_REPLACEMENT_POOL_ACTIVATION_TRANSACTION,
+        manageRoot: MAINNET_USDC_REPLACEMENT_ARTIFACTS.strategistLeaves.metadata.ManageRoot,
       },
     ],
   },

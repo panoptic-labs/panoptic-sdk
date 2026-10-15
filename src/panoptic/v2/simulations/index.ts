@@ -9,6 +9,11 @@ export {
   simulateBatchDispatch,
 } from './simulateBatchDispatch'
 export { type SimulateClosePositionParams, simulateClosePosition } from './simulateClosePosition'
+export {
+  type ClosePremiumProtectionSimulation,
+  type SimulateClosePremiumProtectionParams,
+  simulateClosePremiumProtection,
+} from './simulateClosePremiumProtection'
 export { type SimulateDispatchParams, simulateDispatch } from './simulateDispatch'
 export { type SimulateForceExerciseParams, simulateForceExercise } from './simulateForceExercise'
 export { type SimulateLiquidateParams, simulateLiquidate } from './simulateLiquidate'
@@ -77,6 +82,7 @@ export {
   DEFAULT_MIN_SWAP_RATIO_BPS,
   quoteOneTokenFlow,
 } from './oneTokenFlow'
+export { quoteTokenShortfallSwap } from './quoteTokenShortfallSwap'
 export {
   type BuildTemporaryLoanRecoveryDispatchParams,
   type TemporaryLoanRecoveryQuote,

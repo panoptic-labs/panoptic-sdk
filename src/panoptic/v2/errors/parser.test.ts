@@ -1,6 +1,7 @@
 import { BaseError, ContractFunctionRevertedError, encodeErrorResult } from 'viem'
 import { describe, expect, it } from 'vitest'
 
+import { getNotEnoughTokensError } from '../simulations/tokenShortfallRecovery'
 import { NotEnoughTokensError } from './contract'
 import { panopticErrorsAbi } from './errorsAbi'
 import { parsePanopticError } from './parser'
@@ -37,5 +38,50 @@ describe('undecoded viem errors', () => {
     'Unable to decode signature "0x71c3730b"',
   ])('recognizes selector-only message: %s', (message) => {
     expect(parsePanopticError(new Error(message))?.errorName).toBe('NotEnoughTokens')
+  })
+})
+
+describe('token shortfall signatures', () => {
+  it.each([false, true])('decodes the account-address variant: %s', (withAccount) => {
+    const data = withAccount
+      ? encodeErrorResult({
+          abi: panopticErrorsAbi,
+          errorName: 'NotEnoughTokens',
+          args: [tracker, '0x0000000000000000000000000000000000000001', 30_000_000n, 29_990_994n],
+        })
+      : encodeErrorResult({
+          abi: panopticErrorsAbi,
+          errorName: 'NotEnoughTokens',
+          args: [tracker, 30_000_000n, 29_990_994n],
+        })
+    const parsed = getNotEnoughTokensError({ data })
+    expect(parsed).toMatchObject({
+      assetsRequested: 30_000_000n,
+      assetBalance: 29_990_994n,
+      deficit: 9_006n,
+    })
+  })
+
+  it('unwraps nested executeBatch failures', () => {
+    const inner = encodeErrorResult({
+      abi: panopticErrorsAbi,
+      errorName: 'NotEnoughTokens',
+      args: [tracker, 10n, 4n],
+    })
+    const wrapped = encodeErrorResult({
+      abi: panopticErrorsAbi,
+      errorName: 'ExecuteError',
+      args: [2n, inner],
+    })
+    const outer = encodeErrorResult({
+      abi: panopticErrorsAbi,
+      errorName: 'ExecuteError',
+      args: [1n, wrapped],
+    })
+    expect(getNotEnoughTokensError({ data: outer })?.deficit).toBe(6n)
+  })
+
+  it('does not report a negative deficit', () => {
+    expect(new NotEnoughTokensError(tracker, 4n, 10n).deficit).toBe(0n)
   })
 })

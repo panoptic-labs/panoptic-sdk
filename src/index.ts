@@ -336,6 +336,7 @@ export type {
   VaultApyStrategy,
   VaultApyTimescale,
   VaultApyVaultLike,
+  VaultPoolPositions,
   VaultSharePriceSeriesPoint,
   VaultSharePriceSnapshot,
 } from './hypoVault/sharePrice/types'
@@ -469,4 +470,5 @@ export {
   utilizationPctToWad,
   WAD,
 } from './panoptic/v2/reads/irm'
+export { updatePositionSnapshot } from './panoptic/v2/sync/positionSnapshot'
 export type { IrmCurrent, IrmMarketStateInputs, IrmPoint } from './panoptic/v2/types/irm'

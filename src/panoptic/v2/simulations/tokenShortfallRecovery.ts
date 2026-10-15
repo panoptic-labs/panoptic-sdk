@@ -1,4 +1,4 @@
-import type { Address, PublicClient } from 'viem'
+import { type Address, type PublicClient, isAddress, isHex } from 'viem'
 
 import { NotEnoughTokensError, PanopticError, parsePanopticError } from '../errors'
 import { tickLimits } from '../formatters/tick'
@@ -141,8 +141,8 @@ export function getNotEnoughTokensError(error: unknown): NotEnoughTokensError | 
 
   while (current !== undefined && current !== null && !visited.has(current)) {
     visited.add(current)
-    const parsed =
-      current instanceof NotEnoughTokensError ? current : parsePanopticError(current)?.error
+    const decoded = parsePanopticError(current)
+    const parsed = current instanceof NotEnoughTokensError ? current : decoded?.error
     const candidate = parsed instanceof NotEnoughTokensError ? parsed : null
     if (candidate !== null) {
       // Selector-only decodes yield undefined args at runtime despite the types.
@@ -150,15 +150,22 @@ export function getNotEnoughTokensError(error: unknown): NotEnoughTokensError | 
         Pick<NotEnoughTokensError, 'tokenAddress' | 'assetsRequested' | 'assetBalance'>
       > = candidate
       if (
-        args.tokenAddress !== undefined &&
-        args.assetsRequested !== undefined &&
-        args.assetBalance !== undefined
+        typeof args.tokenAddress === 'string' &&
+        isAddress(args.tokenAddress) &&
+        typeof args.assetsRequested === 'bigint' &&
+        typeof args.assetBalance === 'bigint'
       ) {
         return candidate
       }
     }
 
-    current = current instanceof Error && 'cause' in current ? current.cause : undefined
+    const innerData = decoded?.errorName === 'ExecuteError' ? decoded.args[1] : undefined
+    current =
+      typeof innerData === 'string' && isHex(innerData)
+        ? { data: innerData }
+        : current instanceof Error && 'cause' in current
+          ? current.cause
+          : undefined
   }
   return null
 }

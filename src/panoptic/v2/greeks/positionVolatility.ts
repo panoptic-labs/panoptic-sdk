@@ -2,6 +2,7 @@ import Decimal from 'decimal.js'
 
 import { tickToSqrtPriceX96 } from '../formatters/tick'
 import { decodeTokenId } from '../tokenId/decode'
+import { getLegLiquidityRange } from './legLiquidity'
 
 const Precision = Decimal.clone({ precision: 80 })
 const Q96 = 1n << 96n
@@ -28,20 +29,11 @@ export function preparePositionGamma({
   const decoded = decodeTokenId(tokenId)
   const chunks = decoded.legs.flatMap((leg) => {
     if (leg.width === 0n) return []
-    const width = leg.width * decoded.tickSpacing
-    const lowerTick = leg.strike - width / 2n
-    const upperTick = leg.strike + (width + 1n) / 2n
-    if (lowerTick < -887272n || upperTick > 887272n || lowerTick >= upperTick) {
-      throw new RangeError('Invalid position range')
-    }
-    const lower = tickToSqrtPriceX96(lowerTick)
-    const upper = tickToSqrtPriceX96(upperTick)
-    const amount = positionSize * leg.optionRatio
-    // Match the contract's intermediate truncation for token0 liquidity.
-    const liquidity =
-      leg.asset === 0n
-        ? (amount * ((lower * upper) / Q96)) / (upper - lower)
-        : (amount * Q96) / (upper - lower)
+    const { lowerTick, upperTick, liquidity } = getLegLiquidityRange(
+      leg,
+      positionSize,
+      decoded.tickSpacing,
+    )
     if (liquidity >= 1n << 128n) throw new RangeError('Liquidity exceeds uint128')
     return [
       { lowerTick: Number(lowerTick), upperTick: Number(upperTick), liquidity, isLong: leg.isLong },

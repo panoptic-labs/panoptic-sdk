@@ -7,7 +7,12 @@ import {
   type ReadContractFn,
   fetchVaultSharePriceSnapshotWithCandidateRecovery,
 } from './snapshot'
-import type { VaultApyStrategy, VaultApyVaultLike, VaultSharePriceSnapshot } from './types'
+import type {
+  VaultApyStrategy,
+  VaultApyVaultLike,
+  VaultPoolPositions,
+  VaultSharePriceSnapshot,
+} from './types'
 
 const DEFAULT_CANDIDATE_REFRESH_SECONDS = 3_600n
 
@@ -94,6 +99,7 @@ export function createVaultSharePriceProcessor({
       recoveryFallbackBlock,
       loadLastTrustedBlock,
       readContractFn,
+      positionsByPool,
       windowLabel = 'series',
     }: {
       vault: VaultApyVaultLike
@@ -102,10 +108,14 @@ export function createVaultSharePriceProcessor({
       blockTimestamp: bigint
       recoveryFallbackBlock: bigint
       loadLastTrustedBlock: () => Promise<bigint | undefined>
+      positionsByPool?: readonly VaultPoolPositions[]
       readContractFn: ReadContractFn
       windowLabel?: FetchVaultSharePriceSnapshotParams['windowLabel']
     }): Promise<{ snapshot: VaultSharePriceSnapshot; status: VaultSharePriceStatus }> {
-      const candidates = await getCandidates({ strategy, vault, blockTimestamp })
+      const candidates =
+        positionsByPool === undefined
+          ? await getCandidates({ strategy, vault, blockTimestamp })
+          : undefined
       const recoveryFromBlock = await getRecoveryFromBlock({
         vault,
         recoveryFallbackBlock,
@@ -119,6 +129,7 @@ export function createVaultSharePriceProcessor({
         blockNumber,
         readContractFn,
         candidates,
+        positionsByPool,
         recoveryFromBlock,
       })
 

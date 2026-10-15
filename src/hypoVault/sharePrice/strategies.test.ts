@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   resolveVaultPoolInfosAtBlock,
+  resolveVaultTokenIdsByPool,
   verifyVaultOpenTokenIdsAtBlock,
 } from '../utils/vaultManagerInput'
 import { getVaultApyStrategy, setVaultApyStrategyOverride } from './strategies'
@@ -278,4 +279,34 @@ describe('getVaultApyStrategy', () => {
       }),
     ).resolves.toBe('0x')
   })
+})
+
+it('uses persisted position snapshots without discovery or ownership probes', async () => {
+  vi.clearAllMocks()
+  const strategy = getVaultApyStrategy({
+    chainId: 1,
+    vaultAddress: '0x0000000000000000000000000000000000000102',
+  })
+  const context = {
+    chainId: 1,
+    vault: {
+      id: '0x0000000000000000000000000000000000000102',
+      underlyingToken: { id: '0x00000000000000000000000000000000000000cc' },
+    } as never,
+    client: {} as never,
+    blockNumber: 25_704_951n,
+  }
+  await expect(
+    strategy.managerInputProvider({
+      ...context,
+      positionsByPool: [
+        { poolAddress: '0x00000000000000000000000000000000000000aa', tokenIds: [7n, 8n] },
+      ],
+    }),
+  ).resolves.toMatchObject({ diagnostics: { tokenIdsByPool: [[7n, 8n]] } })
+  expect(resolveVaultTokenIdsByPool).not.toHaveBeenCalled()
+  expect(verifyVaultOpenTokenIdsAtBlock).not.toHaveBeenCalled()
+  await expect(strategy.managerInputProvider({ ...context, positionsByPool: [] })).rejects.toThrow(
+    'Missing position snapshot',
+  )
 })

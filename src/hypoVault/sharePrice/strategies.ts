@@ -107,7 +107,14 @@ function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
         fromBlock,
       })
     },
-    managerInputProvider: async ({ chainId, client, vault, blockNumber, candidates }) => {
+    managerInputProvider: async ({
+      chainId,
+      client,
+      vault,
+      blockNumber,
+      candidates,
+      positionsByPool,
+    }) => {
       const vaultAddress = vault.id as Address
       if (minBlock !== undefined && blockNumber < minBlock) {
         throw new VaultApyPreInceptionBlockError({
@@ -127,37 +134,44 @@ function createPlpManagerInputStrategy(minBlock?: bigint): VaultApyStrategy {
         return DEFAULT_MANAGER_INPUT
       }
 
-      // When the caller pre-resolved the (block-independent) candidate set, verify
-      // it on-chain at this block instead of re-running the subgraph paging.
       const tokenIds =
-        candidates === undefined
-          ? await resolveVaultTokenIdsByPool({
-              viemClient: client,
-              chainId,
-              vaultAddress,
-              managerAddress: getPlpManagerAddress(chainId, vaultAddress),
-              poolInfos,
-              verificationBlockNumber: blockNumber,
+        positionsByPool !== undefined
+          ? poolInfos.map(({ pool }) => {
+              const positions = positionsByPool.find(
+                ({ poolAddress }) => poolAddress.toLowerCase() === pool.toLowerCase(),
+              )
+              if (positions === undefined)
+                throw new Error(`Missing position snapshot for pool ${pool}`)
+              return [...positions.tokenIds]
             })
-          : await verifyVaultOpenTokenIdsAtBlock({
-              viemClient: client,
-              vaultAddress,
-              candidatesByPool: poolInfos.map((poolInfo) => {
-                const candidate = candidates.find(
-                  (item) => item.poolAddress.toLowerCase() === poolInfo.pool.toLowerCase(),
-                )
-                if (candidate === undefined) {
-                  throw new Error(
-                    `Missing token-id candidates for authorized pool ${poolInfo.pool}`,
+          : candidates === undefined
+            ? await resolveVaultTokenIdsByPool({
+                viemClient: client,
+                chainId,
+                vaultAddress,
+                managerAddress: getPlpManagerAddress(chainId, vaultAddress),
+                poolInfos,
+                verificationBlockNumber: blockNumber,
+              })
+            : await verifyVaultOpenTokenIdsAtBlock({
+                viemClient: client,
+                vaultAddress,
+                candidatesByPool: poolInfos.map((poolInfo) => {
+                  const candidate = candidates.find(
+                    (item) => item.poolAddress.toLowerCase() === poolInfo.pool.toLowerCase(),
                   )
-                }
-                return {
-                  poolAddress: poolInfo.pool,
-                  candidates: candidate.candidates,
-                }
-              }),
-              blockNumber,
-            })
+                  if (candidate === undefined) {
+                    throw new Error(
+                      `Missing token-id candidates for authorized pool ${poolInfo.pool}`,
+                    )
+                  }
+                  return {
+                    poolAddress: poolInfo.pool,
+                    candidates: candidate.candidates,
+                  }
+                }),
+                blockNumber,
+              })
 
       const wethAddress = resolveChainWethAddress(chainId)
 

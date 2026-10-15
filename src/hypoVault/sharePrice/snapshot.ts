@@ -7,7 +7,7 @@ import type { VaultPoolCandidateTokenIds } from '../utils/vaultManagerInput'
 import { isIncorrectPositionListReadError, isStaleOraclePriceReadError } from './errors'
 import { computeSharePriceFromNavSnapshot } from './math'
 import { getVaultApyStrategy } from './strategies'
-import type { VaultApyVaultLike, VaultSharePriceSnapshot } from './types'
+import type { VaultApyVaultLike, VaultPoolPositions, VaultSharePriceSnapshot } from './types'
 
 export type ReadContractParams = {
   address: Address
@@ -33,6 +33,7 @@ export type FetchVaultSharePriceSnapshotParams = {
    * subgraph candidate gather. Omit for one-shot snapshots.
    */
   candidates?: readonly VaultPoolCandidateTokenIds[]
+  positionsByPool?: readonly VaultPoolPositions[]
   /** Populate full token-id diagnostics instead of counts only. */
   includeTokenIdsInDiagnostics?: boolean
 }
@@ -68,6 +69,7 @@ export async function fetchVaultSharePriceSnapshot({
   blockNumber,
   readContractFn,
   candidates,
+  positionsByPool,
   includeTokenIdsInDiagnostics = false,
 }: FetchVaultSharePriceSnapshotParams): Promise<VaultSharePriceSnapshot> {
   const vaultAddress = vault.id as Address
@@ -84,6 +86,7 @@ export async function fetchVaultSharePriceSnapshot({
     client,
     blockNumber,
     candidates,
+    positionsByPool,
   })
   const managerInput =
     typeof managerInputProviderResult === 'string'
@@ -274,7 +277,8 @@ export async function fetchVaultSharePriceSnapshotWithCandidateRecovery({
     if (
       !isIncorrectPositionListReadError(error) ||
       strategy.recoverCandidates === undefined ||
-      params.candidates === undefined
+      params.candidates === undefined ||
+      params.positionsByPool !== undefined
     ) {
       throw error
     }

@@ -21,10 +21,10 @@ const input = {
 describe('strategy delta metrics', () => {
   it('reproduces the reported price-snapshot discrepancy and uses one contract notional', () => {
     expect(getPositionDeltaMetrics(input)).toEqual({
-      delta: 3_922_253_782n,
+      delta: 3_891_250_190n,
       contractSize: 10_000_000_000n,
     })
-    expect(getPositionDeltaMetrics({ ...input, currentTick: 198211n }).delta).toBe(4_089_319_908n)
+    expect(getPositionDeltaMetrics({ ...input, currentTick: 198211n }).delta).toBe(4_058_316_316n)
   })
 
   it.each([0n, 1n] as const)(

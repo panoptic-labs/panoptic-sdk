@@ -111,7 +111,12 @@ const errorConstructors: Record<
 
   // Token & Collateral
   NotEnoughTokens: (args, cause) =>
-    new NotEnoughTokensError(args[0] as `0x${string}`, args[1] as bigint, args[2] as bigint, cause),
+    new NotEnoughTokensError(
+      args[0] as `0x${string}`,
+      args[args.length === 4 ? 2 : 1] as bigint,
+      args[args.length === 4 ? 3 : 2] as bigint,
+      cause,
+    ),
   NotEnoughLiquidityInChunk: (_args, cause) => new NotEnoughLiquidityInChunkError(cause),
   InsufficientCreditLiquidity: (_args, cause) => new InsufficientCreditLiquidityError(cause),
   DepositTooLarge: (_args, cause) => new DepositTooLargeError(cause),

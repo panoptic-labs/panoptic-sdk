@@ -197,6 +197,25 @@ export const panopticErrorsAbi = [
     ],
   },
 
+  {
+    type: 'error',
+    name: 'NotEnoughTokens',
+    inputs: [
+      { name: 'tokenAddress', type: 'address' },
+      { name: 'account', type: 'address' },
+      { name: 'assetsRequested', type: 'uint256' },
+      { name: 'assetBalance', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'error',
+    name: 'ExecuteError',
+    inputs: [
+      { name: 'callIndex', type: 'uint256' },
+      { name: 'revertData', type: 'bytes' },
+    ],
+  },
+
   // NotGuardian() - 0xef6d0f02
   {
     type: 'error',

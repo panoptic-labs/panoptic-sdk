@@ -6,6 +6,8 @@ import {
   getMainnetVaultManagerRootHistory,
   getMainnetVaultPoolConfigurationAtBlock,
   getMainnetVaultPoolConfigurationHistory,
+  MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK,
+  MAINNET_REPLACEMENT_POOL_ACTIVATION_TRANSACTION,
   ROBINHOOD_REPLACEMENT_POOL_ACTIVATION_BLOCK,
   ROBINHOOD_REPLACEMENT_POOL_ACTIVATION_TRANSACTION,
   ROBINHOOD_SPY_USDG_5BPS_ACTIVATION_BLOCK,
@@ -37,11 +39,13 @@ describe('mainnet vault pool history', () => {
       25_296_753n,
       25_704_951n,
       25_898_997n,
+      MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK,
     ])
     expect(wethHistory?.map((entry) => entry.poolHash)).toEqual([
       '0x10c87ff39e0bfadaa7b8ef86391b0578b66cec8b93e4bf5157c9ab7cc8db578b',
       '0x9d6a4835d0acf5b962185bc9ae5c82d8b3f0424945aa13e86d9766549011ca1f',
       '0x450c55809afb4950087cf439f3ee4c9ec6f13478568c0a7c9e919418b379b975',
+      '0xc5b8b076033dff0e5786627eb33b9a857e1e907ecce721de286e45408e7c411c',
     ])
 
     expect(usdcHistory?.map((entry) => entry.activationBlockNumber)).toEqual([
@@ -50,6 +54,7 @@ describe('mainnet vault pool history', () => {
       25_332_931n,
       25_704_951n,
       25_898_997n,
+      MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK,
     ])
     expect(usdcHistory?.map((entry) => entry.poolHash)).toEqual([
       '0x10c87ff39e0bfadaa7b8ef86391b0578b66cec8b93e4bf5157c9ab7cc8db578b',
@@ -57,13 +62,14 @@ describe('mainnet vault pool history', () => {
       '0x32148c1d3efa7ecf95c9b76cdaef4497a14a756deca81cfa2adfe4f6f30a9889',
       '0x34f9775b7712b73ed2f82344ae1e727f3d217c5df69fd9cfd230796731de62c9',
       '0x450c55809afb4950087cf439f3ee4c9ec6f13478568c0a7c9e919418b379b975',
+      '0xc5b8b076033dff0e5786627eb33b9a857e1e907ecce721de286e45408e7c411c',
     ])
 
     expect(wethHistory?.at(-1)?.transactionHash).toBe(
-      '0xfca6a6dd0f081649dd6f50496175a58e6a119d574b594390beab23618b05ba2c',
+      MAINNET_REPLACEMENT_POOL_ACTIVATION_TRANSACTION,
     )
     expect(usdcHistory?.at(-1)?.transactionHash).toBe(
-      '0xfca6a6dd0f081649dd6f50496175a58e6a119d574b594390beab23618b05ba2c',
+      MAINNET_REPLACEMENT_POOL_ACTIVATION_TRANSACTION,
     )
   })
 
@@ -121,6 +127,36 @@ describe('mainnet vault pool history', () => {
       )
     }
   })
+
+  it.each([wethVault, usdcVault])(
+    'switches Ethereum pool at the execution boundary for %s',
+    (vaultAddress) => {
+      const before = getMainnetVaultPoolConfigurationAtBlock({
+        chainId: MAINNET_CHAIN_ID,
+        vaultAddress,
+        blockNumber: MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK - 1n,
+      })
+      const after = getMainnetVaultPoolConfigurationAtBlock({
+        chainId: MAINNET_CHAIN_ID,
+        vaultAddress,
+        blockNumber: MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK,
+      })
+      expect(before?.poolInfos[0]?.pool.toLowerCase()).toBe(
+        '0x00000000009c7b687e833559e34503f64d7ed7c4',
+      )
+      expect(after?.poolInfos[0]?.pool.toLowerCase()).toBe(
+        '0x00000000000e98f6c5ae16835badf2f7cc0d49d7',
+      )
+      expect(after?.transactionHash).toBe(MAINNET_REPLACEMENT_POOL_ACTIVATION_TRANSACTION)
+      expect(
+        getMainnetVaultManagerRootAtBlock({
+          chainId: MAINNET_CHAIN_ID,
+          vaultAddress,
+          blockNumber: MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK,
+        })?.activationBlockNumber,
+      ).toBe(MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK)
+    },
+  )
 
   it('returns no configuration before the accountant was initialized', () => {
     expect(
@@ -222,6 +258,7 @@ describe('mainnet vault pool history', () => {
       25_303_785n,
       25_704_951n,
       25_898_997n,
+      MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK,
     ])
     expect(usdcHistory?.map((entry) => entry.activationBlockNumber)).toEqual([
       25_296_786n,
@@ -229,6 +266,7 @@ describe('mainnet vault pool history', () => {
       25_332_022n,
       25_704_951n,
       25_898_997n,
+      MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK,
     ])
     expect(robinhoodHistory?.map((entry) => entry.activationBlockNumber)).toEqual([
       63_972_776n,
@@ -237,14 +275,14 @@ describe('mainnet vault pool history', () => {
     ])
 
     expect(wethHistory?.at(-1)).toEqual({
-      activationBlockNumber: 25_898_997n,
-      transactionHash: '0xfca6a6dd0f081649dd6f50496175a58e6a119d574b594390beab23618b05ba2c',
-      manageRoot: '0x99baae2a0ddf55db31bf2e340856e6e76c87d37add86e95483bd7d1bad93e95c',
+      activationBlockNumber: MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK,
+      transactionHash: MAINNET_REPLACEMENT_POOL_ACTIVATION_TRANSACTION,
+      manageRoot: '0x4d6b2f97937939f378ff26d99d85ccaeeef73f33e495946d3ba0fb17ae624da3',
     })
     expect(usdcHistory?.at(-1)).toEqual({
-      activationBlockNumber: 25_898_997n,
-      transactionHash: '0xfca6a6dd0f081649dd6f50496175a58e6a119d574b594390beab23618b05ba2c',
-      manageRoot: '0x29587b0f67aefbf4a11ecffe3bfb56ebef54e441df95fa260d44273d182027b7',
+      activationBlockNumber: MAINNET_REPLACEMENT_POOL_ACTIVATION_BLOCK,
+      transactionHash: MAINNET_REPLACEMENT_POOL_ACTIVATION_TRANSACTION,
+      manageRoot: '0x035589e259ab734a0083fdd20a5930f9f1a6daf547b69d0b0a1fe40a2043662d',
     })
 
     const rootBetweenChanges = getMainnetVaultManagerRootAtBlock({
@@ -276,7 +314,7 @@ describe('mainnet vault pool history', () => {
       chainId: MAINNET_CHAIN_ID,
       vaultAddress: usdcVault,
     })
-    expect(freshHistory).toHaveLength(5)
+    expect(freshHistory).toHaveLength(6)
     expect(freshHistory?.[0]?.poolInfos[0]?.maxPriceDeviation).toBe(originalMaxPriceDeviation)
 
     const atBlock = getMainnetVaultPoolConfigurationAtBlock({
