@@ -1,23 +1,4 @@
-/**
- * The mint-time margin buffer — the single place the SDK and every UI surface
- * turn a maintenance requirement into the figure the contract actually enforces
- * at mint.
- *
- * `RiskEngine._checkSolvencyAtTick` applies `BP_DECREASE_BUFFER / DECIMALS` to
- * the NATIVE token0 and token1 requirements, with `Math.mulDivRoundingUp`, and
- * only then compares each side against that side's balance. Three properties of
- * that sentence are load-bearing and were each wrong somewhere in the UI:
- *
- *  1. **Scale.** The ratio is `10_666_667 / 10_000_000`, not `10_666 / 10_000`.
- *     The truncated form understates the requirement by ~6.3 ppm of notional.
- *  2. **Rounding.** The contract rounds UP. Flooring lets a position read as
- *     affordable at exactly the boundary and then revert at mint.
- *  3. **Order.** The buffer is applied per token BEFORE any price conversion.
- *     Buffering an already-quote-converted total re-rounds the conversion dust
- *     through the buffer, so the two disagree by more than the ratio implies.
- *
- * @module v2/reads/mintBuffer
- */
+/** Mint buffers apply per native token, rounding up before price conversion. */
 
 import { PanopticValidationError } from '../errors'
 import type { MintBufferRatio } from '../types/mintBuffer'
@@ -30,7 +11,7 @@ export type { MintBufferRatio } from '../types/mintBuffer'
  * Exported so callers can display the constant; prefer {@link applyMintBuffer}
  * over multiplying by it directly, which is how the rounding bug reappears.
  */
-export const MINT_BUFFER = 10_666_667n
+export const MINT_BUFFER = 10_750_000n
 
 /** `RiskEngine.DECIMALS` — the denominator {@link MINT_BUFFER} is taken over. */
 export const MINT_BUFFER_DENOMINATOR = 10_000_000n

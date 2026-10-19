@@ -93,6 +93,7 @@ export {
   usePokeOracle as usePokeOracleHook,
   usePool,
   usePoolLiquidities,
+  usePoolSwaps,
   usePoolVersion,
   usePosition,
   usePositionGreeks,

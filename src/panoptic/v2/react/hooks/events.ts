@@ -4,15 +4,20 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import type { Address, Hash } from 'viem'
+import type { Address, Hash, PublicClient } from 'viem'
 import { zeroAddress } from 'viem'
 
 import { watchEvents } from '../../events'
 import {
   type EventPoller,
   type EventSubscriptionHandle,
+  type PoolSwap,
+  type PoolSwapKey,
+  type PoolSwapTransport,
+  type SwapPoolRef,
   createEventPoller,
   createEventSubscription,
+  subscribePoolSwaps,
 } from '../../events'
 import type { PanopticEvent, PanopticEventType } from '../../types'
 import { usePanopticContext } from '../provider'
@@ -328,4 +333,65 @@ export function useTxEventConfirmation({
     isLoading: isLoading && data === undefined,
     isSuccess: data !== undefined,
   }
+}
+
+/**
+ * Follow a pool's Uniswap `Swap` logs while `enabled`: streamed from `streamUrl`
+ * when given, else polled over HTTP. Mounts with the same chain, pool, `fromBlock`
+ * and `streamUrl` share one watcher. Takes the client explicitly so it works
+ * outside `PanopticProvider`.
+ */
+export function usePoolSwaps(params: {
+  client: PublicClient | undefined
+  chainId: number
+  pool: SwapPoolRef | undefined
+  /** Inclusive first block to scan; changing it restarts the scan */
+  fromBlock: bigint | undefined
+  /** Relay SSE endpoint; when set swaps are streamed, with HTTP polling as fallback */
+  streamUrl?: string
+  enabled: boolean
+  onSwaps: (swaps: PoolSwap[]) => void
+  onRemoved?: (key: PoolSwapKey) => void
+  onError?: (error: Error) => void
+}): { transport: PoolSwapTransport } {
+  const { client, chainId, pool, fromBlock, streamUrl, enabled } = params
+  const [transport, setTransport] = useState<PoolSwapTransport>('off')
+  const onSwapsRef = useRef(params.onSwaps)
+  onSwapsRef.current = params.onSwaps
+  const onRemovedRef = useRef(params.onRemoved)
+  onRemovedRef.current = params.onRemoved
+  const onErrorRef = useRef(params.onError)
+  onErrorRef.current = params.onError
+
+  const poolKey = pool
+    ? pool.version === 'v3'
+      ? pool.poolAddress.toLowerCase()
+      : `${pool.poolManager.toLowerCase()}:${pool.poolId.toLowerCase()}`
+    : undefined
+  const poolRef = useRef(pool)
+  poolRef.current = pool
+
+  useEffect(() => {
+    const currentPool = poolRef.current
+    if (!enabled || !client || !currentPool || poolKey === undefined || fromBlock === undefined) {
+      return
+    }
+    const unsubscribe = subscribePoolSwaps({
+      key: `${chainId}:${poolKey}:${fromBlock}:${streamUrl ?? 'poll'}`,
+      client,
+      pool: currentPool,
+      fromBlock,
+      streamUrl,
+      onSwaps: (swaps) => onSwapsRef.current(swaps),
+      onRemoved: (key) => onRemovedRef.current?.(key),
+      onError: (error) => onErrorRef.current?.(error),
+      onTransport: setTransport,
+    })
+    return () => {
+      unsubscribe()
+      setTransport('off')
+    }
+  }, [client, chainId, poolKey, fromBlock, streamUrl, enabled])
+
+  return { transport }
 }

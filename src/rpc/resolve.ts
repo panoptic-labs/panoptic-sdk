@@ -60,6 +60,15 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+function isWsUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value)
+    return protocol === 'ws:' || protocol === 'wss:'
+  } catch {
+    return false
+  }
+}
+
 function presetApiKey(name: RpcProviderName, chainId: number, env: RpcEnv) {
   for (const envName of RPC_PROVIDER_PRESETS[name].apiKeyEnv(chainId)) {
     const key = present(env[envName])
@@ -170,4 +179,30 @@ export function resolveRpcEndpoints(
   throw new Error(
     `No RPC configured for chain ${chainId}: set ${[`RPC_URL_${chainId}`, ...legacyUrlEnv, ...keyEnv].join(', ')}`,
   )
+}
+
+/**
+ * Websocket RPC URL for `chainId`: `RPC_WS_URL_<chainId>`, else the first preset
+ * in `RPC_PROVIDERS` (or the defaults) that has an API key and serves websockets.
+ * Returns undefined when nothing is configured; throws on a non-ws(s) URL.
+ */
+export function resolveRpcWsUrl(chainId: number, env: RpcEnv): string | undefined {
+  const envName = `RPC_WS_URL_${chainId}`
+  const explicit = present(env[envName])
+  if (explicit !== undefined) {
+    if (!isWsUrl(explicit)) throw new Error(`${envName} must be a ws(s) URL`)
+    return explicit
+  }
+  const providers = present(env.RPC_PROVIDERS)
+    ? splitList(env.RPC_PROVIDERS)
+    : DEFAULT_RPC_PROVIDERS
+  for (const name of providers) {
+    if (!isRpcProviderName(name)) continue
+    const wsEndpoint = RPC_PROVIDER_PRESETS[name].wsEndpoint
+    const apiKey = presetApiKey(name, chainId, env)
+    if (wsEndpoint === undefined || apiKey === undefined) continue
+    const url = wsEndpoint(chainId, apiKey)
+    if (url !== undefined) return url
+  }
+  return undefined
 }

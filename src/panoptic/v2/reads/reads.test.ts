@@ -333,7 +333,7 @@ describe('Pool Read Functions', () => {
         poolAddress: POOL_ADDRESS,
       })
 
-      expect(result.mintBuffer).toEqual({ numerator: 10_666_667n, denominator: 10_000_000n })
+      expect(result.mintBuffer).toEqual({ numerator: 10_750_000n, denominator: 10_000_000n })
     })
   })
 

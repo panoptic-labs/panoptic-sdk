@@ -221,6 +221,7 @@ export {
   generateOverlappingTokenIds,
   getAssetIndex,
   getSimpleLoanTokenIndex,
+  getTokenIdValidationError,
   hasLoanOrCredit,
   hasLongLeg,
   isCredit,
@@ -939,8 +940,19 @@ export type {
   CreateEventSubscriptionParams,
   EventPoller,
   EventSubscriptionHandle,
+  PoolSwap,
+  PoolSwapKey,
+  PoolSwapStream,
+  PoolSwapTransport,
+  PoolSwapWatcher,
   ReconnectConfig,
+  StreamPoolSwapsParams,
+  SubscribePoolSwapsParams,
+  SwapPoolRef,
+  SwapStreamEventSource,
+  SwapStreamEventSourceFactory,
   WatchEventsParams,
+  WatchPoolSwapsParams,
 } from './events'
 export {
   // HTTP polling alternative
@@ -948,11 +960,19 @@ export {
   // Resilient subscription with auto-reconnect
   createEventSubscription,
   DEFAULT_RECONNECT_CONFIG,
+  fetchPoolSwaps,
   parseCollateralLog,
   // Internal utilities (for advanced use)
   parsePoolLog,
+  parseStreamedKey,
+  parseStreamedSwap,
+  parseSwapLog,
+  streamPoolSwaps,
+  subscribePoolSwaps,
   // Simple WebSocket watching
   watchEvents,
+  // Pool-filtered Uniswap Swap polling
+  watchPoolSwaps,
 } from './events'
 
 // ============================================================================
@@ -1227,6 +1247,7 @@ export {
   getCollateralCurveInputs,
 } from './reads/collateralCurve'
 export { type HedgeLimitEstimate, getHedgeLimits } from './reads/hedgeLimits'
+export { type PositionMintFundingParams, getPositionMintFunding } from './reads/positionMintFunding'
 export {
   type PositionValueCurve,
   type PositionValueInput,

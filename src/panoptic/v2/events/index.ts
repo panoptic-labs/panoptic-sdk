@@ -19,6 +19,25 @@ export { createEventSubscription, DEFAULT_RECONNECT_CONFIG } from './subscriptio
 export type { CreateEventPollerParams, EventPoller } from './poller'
 export { createEventPoller } from './poller'
 
+// Pool-filtered Uniswap Swap polling
+export type {
+  PoolSwap,
+  PoolSwapKey,
+  PoolSwapTransport,
+  PoolSwapWatcher,
+  SubscribePoolSwapsParams,
+  SwapPoolRef,
+  WatchPoolSwapsParams,
+} from './poolSwaps'
+export { fetchPoolSwaps, parseSwapLog, subscribePoolSwaps, watchPoolSwaps } from './poolSwaps'
+export type {
+  PoolSwapStream,
+  StreamPoolSwapsParams,
+  SwapStreamEventSource,
+  SwapStreamEventSourceFactory,
+} from './poolSwapStream'
+export { parseStreamedKey, parseStreamedSwap, streamPoolSwaps } from './poolSwapStream'
+
 // Internal utilities (for testing)
 export {
   parseCollateralLog,

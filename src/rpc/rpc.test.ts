@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getAlchemyRpcUrl,
+  getAlchemyWsRpcUrl,
   ponderRpc,
   redactRpcSecrets,
   resolveRpcEndpoints,
+  resolveRpcWsUrl,
   rpcForkArgs,
   rpcTransport,
 } from '.'
@@ -168,6 +170,39 @@ function recordingFetch(failingUrls: ReadonlySet<string> = new Set()) {
 const TWO_ENDPOINTS = resolveRpcEndpoints(1, {
   RPC_URL_1: 'https://primary.example,https://secondary.example',
   RPC_HEADERS_1_0: 'x-api-key: primary-key',
+})
+
+describe('resolveRpcWsUrl', () => {
+  it('resolves Alchemy websockets from ALCHEMY_API_KEY', () => {
+    for (const chainId of [1, 4663] as const) {
+      expect(resolveRpcWsUrl(chainId, ALCHEMY_ONLY)).toBe(
+        getAlchemyWsRpcUrl(chainId, 'alchemy-key'),
+      )
+    }
+  })
+
+  it('prefers RPC_WS_URL_<chainId>', () => {
+    expect(resolveRpcWsUrl(1, { ...ALCHEMY_ONLY, RPC_WS_URL_1: 'wss://node.example/ws' })).toBe(
+      'wss://node.example/ws',
+    )
+  })
+
+  it('treats a blank RPC_WS_URL_<chainId> as unset', () => {
+    expect(resolveRpcWsUrl(1, { ...ALCHEMY_ONLY, RPC_WS_URL_1: '  ' })).toBe(
+      getAlchemyWsRpcUrl(1, 'alchemy-key'),
+    )
+  })
+
+  it('rejects a non-websocket RPC_WS_URL_<chainId>', () => {
+    expect(() => resolveRpcWsUrl(1, { RPC_WS_URL_1: 'https://node.example' })).toThrow(
+      'RPC_WS_URL_1 must be a ws(s) URL',
+    )
+  })
+
+  it('returns undefined without a websocket-capable key', () => {
+    expect(resolveRpcWsUrl(1, {})).toBeUndefined()
+    expect(resolveRpcWsUrl(4663, { UNIBLOCK_API_KEY: 'uniblock-key' })).toBeUndefined()
+  })
 })
 
 describe('rpcTransport', () => {

@@ -13,6 +13,7 @@ export {
   type RpcEnv,
   DEFAULT_RPC_PROVIDERS,
   resolveRpcEndpoints,
+  resolveRpcWsUrl,
 } from './resolve'
 export {
   type RpcHttpConfig,

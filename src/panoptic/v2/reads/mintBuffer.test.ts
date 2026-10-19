@@ -15,7 +15,7 @@ const mulDivRoundingUp = (a: bigint, b: bigint, d: bigint): bigint => (a * b + d
 
 describe('applyMintBuffer', () => {
   it('matches the on-chain BP_DECREASE_BUFFER / DECIMALS ratio', () => {
-    expect(MINT_BUFFER).toBe(10_666_667n)
+    expect(MINT_BUFFER).toBe(10_750_000n)
     expect(MINT_BUFFER_DENOMINATOR).toBe(10_000_000n)
   })
 
@@ -28,7 +28,6 @@ describe('applyMintBuffer', () => {
   })
 
   it('rounds UP rather than truncating', () => {
-    // 3 * 10_666_667 = 32_000_001 -> /10_000_000 = 3.0000001 -> ceil 4, floor 3.
     expect(applyMintBuffer(3n)).toBe(4n)
     expect((3n * MINT_BUFFER) / MINT_BUFFER_DENOMINATOR).toBe(3n)
   })

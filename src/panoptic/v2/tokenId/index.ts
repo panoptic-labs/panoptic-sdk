@@ -67,3 +67,4 @@ export {
   generateOverlappingTokenIds,
 } from './generateOverlapping'
 export { type SplitTokenIdByTimescaleResult, splitTokenIdByTimescale } from './split'
+export { getTokenIdValidationError } from './validate'

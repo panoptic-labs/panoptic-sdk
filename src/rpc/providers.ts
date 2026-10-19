@@ -12,6 +12,8 @@ export type RpcProviderPreset = {
     chainId: number,
     apiKey: string,
   ) => { url: string; headers?: Record<string, string> } | undefined
+  /** Websocket endpoint for `chainId`, or undefined when the vendor does not serve one. */
+  wsEndpoint?: (chainId: number, apiKey: string) => string | undefined
 }
 
 const alchemyChains = {
@@ -50,6 +52,8 @@ export const RPC_PROVIDER_PRESETS: Readonly<Record<RpcProviderName, RpcProviderP
       isAlchemyChainId(chainId)
         ? { url: `https://${alchemyChains[chainId]}.g.alchemy.com/v2/${apiKey}` }
         : undefined,
+    wsEndpoint: (chainId, apiKey) =>
+      isAlchemyChainId(chainId) ? getAlchemyWsRpcUrl(chainId, apiKey) : undefined,
   },
   infura: {
     apiKeyEnv: () => ['INFURA_API_KEY'],

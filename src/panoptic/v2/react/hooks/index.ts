@@ -162,6 +162,7 @@ export {
 export {
   useEventPoller,
   useEventSubscription,
+  usePoolSwaps,
   useTxEventConfirmation,
   useWatchEvents,
 } from './events'

@@ -217,9 +217,8 @@ describe('getMarginBuffer', () => {
     expect(result.crossMarginUsageBps).toBe(8950n)
 
     // Deployable headroom is the tighter side too: token0 has
-    // 18 - 5*1.0666667 = 12.67, token1 only 10 - 8.95*1.0666667 = 0.453.
     // The pooled view would have reported the roomier one.
-    const mintable1 = 10n * 10n ** 18n - (8950n * 10n ** 15n * 10_666_667n) / 10_000_000n
+    const mintable1 = 10n * 10n ** 18n - (8950n * 10n ** 15n * 10_750_000n) / 10_000_000n
     expect(result.mintableMarginBinding).toBe(mintable1)
     expect(result.mintableMarginBinding! < 10n ** 18n).toBe(true)
   })
