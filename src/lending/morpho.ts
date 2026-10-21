@@ -29,6 +29,13 @@ const responseSchema = z.object({
             marketId: z.string(),
             loanAsset: asset,
             collateralAsset: asset.nullable(),
+            state: z
+              .object({
+                supplyApy: z.number().finite().nullable(),
+                borrowApy: z.number().finite().nullable(),
+              })
+              .nullable()
+              .optional(),
           }),
           state: z.object({ supplyAssets: amount, borrowAssets: amount, collateral: amount }),
         }),
@@ -47,6 +54,8 @@ export async function getMorphoHoldings(account: Address, chainId: number) {
     priceUsd: string | null
     marketId: string
     kind: 'supply' | 'collateral' | 'debt'
+    /** Current APY in percent: supply APY, borrow APY for debt, 0 for collateral; null if unknown. */
+    apyPct: number | null
   }[] = []
   for (let skip = 0; skip < 10_000; skip += 100) {
     const response = await fetch('https://api.morpho.org/graphql', {
@@ -57,7 +66,8 @@ export async function getMorphoHoldings(account: Address, chainId: number) {
         query: `query Positions($account: [String!], $chains: [Int!], $skip: Int!) {
           marketPositions(first: 100, skip: $skip, where: {userAddress_in: $account, chainId_in: $chains}) {
             items { market { marketId loanAsset { address symbol decimals price { usd } }
-              collateralAsset { address symbol decimals price { usd } } }
+              collateralAsset { address symbol decimals price { usd } }
+              state { supplyApy borrowApy } }
               state { supplyAssets borrowAssets collateral } }
           }
         }`,
@@ -70,10 +80,26 @@ export async function getMorphoHoldings(account: Address, chainId: number) {
       throw new Error('Morpho query failed')
     const items = responseSchema.parse(body).data.marketPositions.items
     for (const { market, state } of items) {
+      const pct = (apy: number | null | undefined) => (apy == null ? null : apy * 100)
       const legs = [
-        { token: market.loanAsset, amount: state.supplyAssets, kind: 'supply' as const },
-        { token: market.loanAsset, amount: -state.borrowAssets, kind: 'debt' as const },
-        { token: market.collateralAsset, amount: state.collateral, kind: 'collateral' as const },
+        {
+          token: market.loanAsset,
+          amount: state.supplyAssets,
+          kind: 'supply' as const,
+          apyPct: pct(market.state?.supplyApy),
+        },
+        {
+          token: market.loanAsset,
+          amount: -state.borrowAssets,
+          kind: 'debt' as const,
+          apyPct: pct(market.state?.borrowApy),
+        },
+        {
+          token: market.collateralAsset,
+          amount: state.collateral,
+          kind: 'collateral' as const,
+          apyPct: 0,
+        },
       ]
       for (const leg of legs) {
         if (leg.amount === 0n) continue
@@ -82,6 +108,7 @@ export async function getMorphoHoldings(account: Address, chainId: number) {
           ...leg.token,
           amount: leg.amount,
           kind: leg.kind,
+          apyPct: leg.apyPct,
           marketId: market.marketId,
           priceUsd: leg.token.price?.usd?.toString() ?? null,
         })

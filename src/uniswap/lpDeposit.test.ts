@@ -7,6 +7,7 @@ import {
   getLpDepositBreakdown,
   getLpFundingDeposit,
   getLpPositionFunding,
+  getLpPositionSizeForTokenAmount,
   getMaxLpPositionSize,
   getUnhedgedLpRanges,
 } from './lpDeposit'
@@ -192,5 +193,68 @@ describe('LP position funding', () => {
     expect(() => getLpPositionFunding({ ...fundingParams(1n), positionSize: 1n })).toThrow(
       'AMM Liquidity',
     )
+  })
+})
+
+describe('LP token amount sizing', () => {
+  const straddle = (asset: bigint) =>
+    addLegToTokenId(addLegToTokenId(1n, leg(asset, 0n)), { ...leg(asset, 1n), optionRatio: 1n })
+
+  it.each([
+    { asset: 0n, tokenIndex: 0 as const },
+    { asset: 0n, tokenIndex: 1 as const },
+    { asset: 1n, tokenIndex: 0 as const },
+    { asset: 1n, tokenIndex: 1 as const },
+  ])('inverts the principal for asset=$asset via token$tokenIndex', ({ asset, tokenIndex }) => {
+    const mixedAssets = addLegToTokenId(addLegToTokenId(1n, leg(asset, 0n)), leg(1n - asset, 1n))
+    for (const tokenId of [addLegToTokenId(1n, leg(asset)), straddle(asset), mixedAssets]) {
+      const params = fundingParams(tokenId, 120n)
+      const referenceSize = 10n ** 18n
+      const reference = getLpPositionFunding({ ...params, positionSize: referenceSize }).principal
+      const amount = tokenIndex === 0 ? reference.amount0 : reference.amount1
+      const size = getLpPositionSizeForTokenAmount({ ...params, tokenIndex, amount })
+      expect(size).toBeDefined()
+      if (size === undefined) throw new Error('unreachable')
+      expect(size).toBeGreaterThanOrEqual(referenceSize - 2n)
+      expect(size).toBeLessThanOrEqual(referenceSize + 2n)
+      const principal = getLpPositionFunding({ ...params, positionSize: size }).principal
+      expect(tokenIndex === 0 ? principal.amount0 : principal.amount1).toBeLessThanOrEqual(amount)
+      const oneMore = getLpPositionFunding({ ...params, positionSize: size + 1n }).principal
+      expect(tokenIndex === 0 ? oneMore.amount0 : oneMore.amount1).toBeGreaterThan(amount)
+    }
+  })
+
+  it('reports the idle token side when the price is outside the range', () => {
+    const params = fundingParams(addLegToTokenId(1n, leg(0n)), 100_000n)
+    expect(getLpPositionSizeForTokenAmount({ ...params, tokenIndex: 0, amount: 10n ** 18n })).toBe(
+      undefined,
+    )
+    expect(
+      getLpPositionSizeForTokenAmount({ ...params, tokenIndex: 1, amount: 10n ** 18n }),
+    ).toBeGreaterThan(0n)
+    const below = fundingParams(addLegToTokenId(1n, leg(0n)), -100_000n)
+    expect(getLpPositionSizeForTokenAmount({ ...below, tokenIndex: 1, amount: 10n ** 18n })).toBe(
+      undefined,
+    )
+  })
+
+  it('maps a zero amount to a zero size and rejects negative amounts', () => {
+    const params = fundingParams(addLegToTokenId(1n, leg(0n)))
+    expect(getLpPositionSizeForTokenAmount({ ...params, tokenIndex: 0, amount: 0n })).toBe(0n)
+    // Liquidity floors to zero for small sizes here, so a naive search would return the
+    // top of that plateau rather than 0.
+    const coarse = fundingParams(
+      addLegToTokenId(1n, { ...leg(0n, 0n, -400_020n), width: 1n }),
+      -400_000n,
+    )
+    expect(getLpPositionFunding({ ...coarse, positionSize: 1n }).principal).toEqual({
+      amount0: 0n,
+      amount1: 0n,
+    })
+    expect(getLpPositionSizeForTokenAmount({ ...coarse, tokenIndex: 0, amount: 0n })).toBe(0n)
+    expect(getLpPositionSizeForTokenAmount({ ...coarse, tokenIndex: 1, amount: 0n })).toBe(0n)
+    expect(() =>
+      getLpPositionSizeForTokenAmount({ ...params, tokenIndex: 0, amount: -1n }),
+    ).toThrow('Invalid LP token amount')
   })
 })

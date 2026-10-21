@@ -162,6 +162,32 @@ export function getLpFundingDeposit({
   }
 }
 
+/**
+ * Largest raw size whose range principal needs at most `amount` of the given token.
+ * Undefined when the price sits outside every range on that token's side, so no
+ * amount of that token buys any liquidity.
+ */
+export function getLpPositionSizeForTokenAmount(
+  params: Omit<LpPositionFundingParams, 'positionSize'> & { tokenIndex: 0 | 1; amount: bigint },
+): bigint | undefined {
+  const { tokenIndex, amount, ...funding } = params
+  if (amount < 0n) throw new Error('Invalid LP token amount')
+  if (amount === 0n) return 0n
+  const principalFor = (positionSize: bigint) => {
+    const { principal } = getLpPositionFunding({ ...funding, positionSize })
+    return tokenIndex === 0 ? principal.amount0 : principal.amount1
+  }
+  let low = 0n
+  let high = (1n << 128n) - 1n
+  if (principalFor(high) === 0n) return undefined
+  while (low < high) {
+    const mid = (low + high + 1n) / 2n
+    if (principalFor(mid) <= amount) low = mid
+    else high = mid - 1n
+  }
+  return low
+}
+
 /** Largest raw size funded by available collateral, including native-token rounding. */
 export function getMaxLpPositionSize(
   params: Omit<LpPositionFundingParams, 'positionSize'> & {

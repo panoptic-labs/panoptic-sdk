@@ -5,7 +5,12 @@ import { getMorphoHoldings } from './morpho'
 const account = '0x0000000000000000000000000000000000000001'
 const token = { address: account, decimals: 18, symbol: 'WETH', price: { usd: 2000 } }
 const position = {
-  market: { marketId: 'market', loanAsset: token, collateralAsset: token },
+  market: {
+    marketId: 'market',
+    loanAsset: token,
+    collateralAsset: token,
+    state: { supplyApy: 0.04, borrowApy: 0.05 },
+  },
   state: {
     supplyAssets: '1000000000000000001',
     borrowAssets: '2000000000000000002',
@@ -26,6 +31,7 @@ describe('Morpho Blue holdings', () => {
       3000000000000000003n,
     ])
     expect(holdings.map((holding) => holding.kind)).toEqual(['supply', 'debt', 'collateral'])
+    expect(holdings.map((holding) => holding.apyPct)).toEqual([4, 5, 0])
   })
   it('paginates rather than truncating accounts at 100 markets', async () => {
     const fetch = vi
