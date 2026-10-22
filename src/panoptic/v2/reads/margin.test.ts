@@ -1,7 +1,7 @@
 /**
  * Tests for getMarginBuffer.
  *
- * The function now sources current margin from `CollateralTracker.assetsOf`
+ * The function now sources current margin from `CollateralTracker.assetsAndInterest`
  * (gross deposits + borrowed shares) and required margin from
  * `PanopticPool.getFullPositionsData.collateralRequirements[]`, replacing
  * the prior `PanopticQuery.checkCollateral` call that netted the loan's
@@ -20,6 +20,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Multicall3Abi } from '../../../abis/multicall3'
 import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import { panopticQueryAbi } from '../abis/panopticQuery'
+import { sqrtPriceX96ToTick, tickToSqrtPriceX96 } from '../formatters/tick'
 import { getMarginBuffer } from './margin'
 
 const POOL_ADDRESS = '0x1111111111111111111111111111111111111111' as const
@@ -103,6 +104,8 @@ function mockMarginMulticall(
     tick: number
     assets0: bigint
     assets1: bigint
+    interest0?: bigint
+    interest1?: bigint
     positionData?: FullPositionsData
     liquidationPrices?: readonly [number, number]
     /** checkCollateral(3-arg): [bal0[4], req0[4], bal1[4], req1[4]], index 0 = currentTick. */
@@ -120,15 +123,15 @@ function mockMarginMulticall(
     success(
       encodeFunctionResult({
         abi: collateralTrackerV2Abi,
-        functionName: 'assetsOf',
-        result: input.assets0,
+        functionName: 'assetsAndInterest',
+        result: [input.assets0, input.interest0 ?? 0n],
       }),
     ),
     success(
       encodeFunctionResult({
         abi: collateralTrackerV2Abi,
-        functionName: 'assetsOf',
-        result: input.assets1,
+        functionName: 'assetsAndInterest',
+        result: [input.assets1, input.interest1 ?? 0n],
       }),
     ),
   ]
@@ -177,6 +180,88 @@ function mockMarginMulticall(
   results.push(timestampResult())
   vi.mocked(client.call).mockResolvedValueOnce({ data: encodeBlockAndAggregate(results) } as never)
 }
+
+describe('getMarginBuffer owed interest', () => {
+  // tick 0 → price 1, so both denominations are identity.
+  const readWith = async (input: {
+    assets0: bigint
+    assets1: bigint
+    interest0?: bigint
+    interest1?: bigint
+  }) => {
+    const client = createMockClient()
+    mockMarginMulticall(client, {
+      tick: 0,
+      ...input,
+      positionData: mockFullPositionsData([{ token0: 4_000n, token1: 0n }]),
+      liquidationPrices: [-887272, 887272],
+    })
+    return getMarginBuffer({
+      client,
+      poolAddress: POOL_ADDRESS,
+      account: ACCOUNT_ADDRESS,
+      tokenIds: [1n],
+      queryAddress: QUERY_ADDRESS,
+      collateralAddresses: COLLATERAL_ADDRESSES,
+    })
+  }
+
+  it('deducts payable interest from the balance and leaves the requirement alone', async () => {
+    const result = await readWith({ assets0: 1_000n, interest0: 300n, assets1: 10_000n })
+    expect(result.currentMargin0).toBe(10_700n)
+    expect(result.requiredMargin0).toBe(4_000n)
+    expect(result.buffer0).toBe(6_700n)
+  })
+
+  it('adds unpayable interest to the requirement of the token it accrued in', async () => {
+    const result = await readWith({ assets0: 50n, interest0: 300n, assets1: 10_000n })
+    expect(result.currentMargin0).toBe(10_000n)
+    expect(result.requiredMargin0).toBe(4_250n)
+    expect(result.buffer0).toBe(5_750n)
+    // The other denomination carries the same remainder through conversion.
+    expect(result.requiredMargin1).toBe(4_250n)
+  })
+
+  it('applies token1 interest in token1 and converts it into the token0 denomination', async () => {
+    // sqrtPriceX96 = 2 * 2^96 → price 4 token1 per token0, so 1 token0 = 4 token1.
+    // Mixed collateral: 1_000 token0 and 10_000 token1. Requirement 4_000 token0.
+    // token1 owes 12_000 against a 10_000 balance: balance 0, +2_000 token1 due.
+    const client = createMockClient()
+    const tick = Number(sqrtPriceX96ToTick(2n * (1n << 96n)))
+    mockMarginMulticall(client, {
+      tick,
+      assets0: 1_000n,
+      assets1: 10_000n,
+      interest1: 12_000n,
+      positionData: mockFullPositionsData([{ token0: 4_000n, token1: 0n }]),
+      liquidationPrices: [-887272, 887272],
+    })
+    const result = await getMarginBuffer({
+      client,
+      poolAddress: POOL_ADDRESS,
+      account: ACCOUNT_ADDRESS,
+      tokenIds: [1n],
+      queryAddress: QUERY_ADDRESS,
+      collateralAddresses: COLLATERAL_ADDRESSES,
+    })
+    const sqrtPriceX96 = tickToSqrtPriceX96(BigInt(tick))
+    const t1to0 = (v: bigint) => (v * (1n << 192n)) / (sqrtPriceX96 * sqrtPriceX96)
+    const t0to1 = (v: bigint) => (v * sqrtPriceX96 * sqrtPriceX96) >> 192n
+    // token1 denomination: balance 0 + 1_000 token0 converted; requirement 2_000 + 4_000 converted.
+    expect(result.currentMargin1).toBe(t0to1(1_000n))
+    expect(result.requiredMargin1).toBe(2_000n + t0to1(4_000n))
+    // token0 denomination: balance 1_000 + 0 converted; requirement 4_000 + 2_000 converted.
+    expect(result.currentMargin0).toBe(1_000n)
+    expect(result.requiredMargin0).toBe(4_000n + t1to0(2_000n))
+    expect(result.denominatedInToken).toBe(1)
+  })
+
+  it('can turn a buffer negative on interest alone', async () => {
+    const result = await readWith({ assets0: 0n, interest0: 6_500n, assets1: 10_000n })
+    expect(result.requiredMargin0).toBe(10_500n)
+    expect(result.buffer0).toBe(-500n)
+  })
+})
 
 describe('getMarginBuffer', () => {
   // Regression: usage used to be requiredMargin/currentMargin, which pools both

@@ -13,6 +13,7 @@ import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import { tickToSqrtPriceX96 } from '../formatters/tick'
 import type { BlockMeta } from '../types'
 import { decodeLeftRightUnsigned } from '../writes/utils'
+import { applyOwedInterest } from './buyingPower'
 import { type MulticallBlockCall, readBlockAndAggregate, requireReturnData } from './multicallBlock'
 
 const FP96 = 1n << 96n
@@ -107,7 +108,7 @@ export interface IsLiquidatableParams {
 /**
  * Check if an account is liquidatable with detailed margin breakdown.
  *
- * Sources gross collateral from `CollateralTracker.assetsOf` and per-position
+ * Sources collateral and owed interest from `CollateralTracker.assetsAndInterest` and per-position
  * required margin from `PanopticPool.getFullPositionsData.collateralRequirements[]`,
  * cross-converted to each token denomination at `atTick`. Loan tokenIds
  * (width=0 shorts) contribute correctly to required margin.
@@ -171,7 +172,7 @@ export async function isLiquidatable(params: IsLiquidatableParams): Promise<Liqu
     target: collateralToken0,
     callData: encodeFunctionData({
       abi: collateralTrackerV2Abi,
-      functionName: 'assetsOf',
+      functionName: 'assetsAndInterest',
       args: [account],
     }),
   })
@@ -181,7 +182,7 @@ export async function isLiquidatable(params: IsLiquidatableParams): Promise<Liqu
     target: collateralToken1,
     callData: encodeFunctionData({
       abi: collateralTrackerV2Abi,
-      functionName: 'assetsOf',
+      functionName: 'assetsAndInterest',
       args: [account],
     }),
   })
@@ -217,16 +218,25 @@ export async function isLiquidatable(params: IsLiquidatableParams): Promise<Liqu
       }),
     )
   }
-  const assets0 = decodeFunctionResult({
+  const [rawAssets0, interest0] = decodeFunctionResult({
     abi: collateralTrackerV2Abi,
-    functionName: 'assetsOf',
-    data: requireReturnData(results, assets0Index, 'CollateralTracker.assetsOf token0'),
+    functionName: 'assetsAndInterest',
+    data: requireReturnData(results, assets0Index, 'CollateralTracker.assetsAndInterest token0'),
   })
-  const assets1 = decodeFunctionResult({
+  const [rawAssets1, interest1] = decodeFunctionResult({
     abi: collateralTrackerV2Abi,
-    functionName: 'assetsOf',
-    data: requireReturnData(results, assets1Index, 'CollateralTracker.assetsOf token1'),
+    functionName: 'assetsAndInterest',
+    data: requireReturnData(results, assets1Index, 'CollateralTracker.assetsAndInterest token1'),
   })
+  // Owed interest enters the solvency check as RiskEngine._getMargin applies it.
+  const { balance: assets0, requirementExtra: interestDue0 } = applyOwedInterest(
+    rawAssets0,
+    interest0,
+  )
+  const { balance: assets1, requirementExtra: interestDue1 } = applyOwedInterest(
+    rawAssets1,
+    interest1,
+  )
   const positionDataResult =
     positionDataIndex === null
       ? null
@@ -236,8 +246,8 @@ export async function isLiquidatable(params: IsLiquidatableParams): Promise<Liqu
           data: requireReturnData(results, positionDataIndex, 'PanopticPool.getFullPositionsData'),
         }) as readonly [bigint, bigint, readonly bigint[], readonly bigint[], readonly bigint[]])
 
-  let required0Native = 0n
-  let required1Native = 0n
+  let required0Native = interestDue0
+  let required1Native = interestDue1
   if (positionDataResult) {
     const collateralRequirements = positionDataResult[3]
     for (const packed of collateralRequirements) {

@@ -278,6 +278,7 @@ export { getCollateralTotalAssetsBatch } from './collateralTotalAssets'
 export {
   type AccountBuyingPower,
   type GetAccountBuyingPowerParams,
+  applyOwedInterest,
   getAccountBuyingPower,
 } from './buyingPower'
 

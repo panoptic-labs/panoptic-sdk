@@ -1,8 +1,8 @@
 /**
  * Tests for check functions.
  *
- * `isLiquidatable` now sources gross collateral from
- * `CollateralTracker.assetsOf` and required margin from
+ * `isLiquidatable` now sources collateral and owed interest from
+ * `CollateralTracker.assetsAndInterest` and required margin from
  * `PanopticPool.getFullPositionsData.collateralRequirements[]`, replacing
  * the prior `PanopticQuery.checkCollateral` call. Tests use `atTick=0` so
  * `sqrtPriceX96 = 2^96` and the token0↔token1 cross-conversion is identity.
@@ -87,6 +87,8 @@ function mockLiquidationMulticall(
     tick?: number
     assets0: bigint
     assets1: bigint
+    interest0?: bigint
+    interest1?: bigint
     positionData?: FullPositionsData
   },
 ) {
@@ -106,15 +108,15 @@ function mockLiquidationMulticall(
     success(
       encodeFunctionResult({
         abi: collateralTrackerV2Abi,
-        functionName: 'assetsOf',
-        result: input.assets0,
+        functionName: 'assetsAndInterest',
+        result: [input.assets0, input.interest0 ?? 0n],
       }),
     ),
     success(
       encodeFunctionResult({
         abi: collateralTrackerV2Abi,
-        functionName: 'assetsOf',
-        result: input.assets1,
+        functionName: 'assetsAndInterest',
+        result: [input.assets1, input.interest1 ?? 0n],
       }),
     ),
   )

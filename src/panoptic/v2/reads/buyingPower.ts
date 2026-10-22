@@ -1,9 +1,13 @@
 /**
  * Account buying power read function for the Panoptic v2 SDK.
  *
- * Sources gross collateral from `CollateralTracker.assetsOf` and per-position
- * required margin from `PanopticPool.getFullPositionsData.collateralRequirements[]`,
- * cross-converted to both token denominations at the current tick.
+ * Sources collateral and owed interest from `CollateralTracker.assetsAndInterest`
+ * and per-position required margin from
+ * `PanopticPool.getFullPositionsData.collateralRequirements[]`, cross-converted
+ * to both token denominations at the current tick. Owed interest is applied the
+ * way `RiskEngine._getMargin` applies it: subtracted from the balance of the
+ * token it accrued in, with any remainder the balance cannot cover added to
+ * that token's requirement.
  *
  * This replaces the prior `PanopticQuery.checkCollateral` (3-arg, oracle-ticks
  * overload) implementation that netted loan tokenId debt out of the balance
@@ -40,6 +44,23 @@ export async function getPoolCollateralAddresses(params: {
     allowFailure: false,
   })
   return { collateralToken0, collateralToken1 }
+}
+
+/**
+ * Apply owed interest to one token's collateral the way `RiskEngine._getMargin`
+ * does. Interest the balance can pay is deducted from the balance; interest it
+ * cannot pay zeroes the balance and the uncovered remainder becomes additional
+ * requirement in the same token, where cross-collateral conversion lets the
+ * other token cover it.
+ */
+export function applyOwedInterest(
+  assets: bigint,
+  interestOwed: bigint,
+): { balance: bigint; requirementExtra: bigint } {
+  if (interestOwed > assets) {
+    return { balance: 0n, requirementExtra: interestOwed - assets }
+  }
+  return { balance: assets - interestOwed, requirementExtra: 0n }
 }
 
 function convert0to1(amount: bigint, sqrtPriceX96: bigint): bigint {
@@ -87,19 +108,20 @@ export interface GetAccountBuyingPowerParams {
 /**
  * Result of getAccountBuyingPower.
  *
- * Both per-token values are the **gross** account total cross-converted
- * into the respective single-token denomination at the current tick:
+ * Both per-token values are the account total, net of owed interest,
+ * cross-converted into the respective single-token denomination at the current
+ * tick:
  *   - `collateralBalance0` / `requiredCollateral0` are in token0 units
  *   - `collateralBalance1` / `requiredCollateral1` are in token1 units
  */
 export interface AccountBuyingPower {
-  /** Gross collateral (deposits + borrowed shares), denominated in token0 */
+  /** Collateral (deposits + borrowed shares) net of payable owed interest, denominated in token0 */
   collateralBalance0: bigint
-  /** Sum of per-position collateral requirements, denominated in token0 */
+  /** Per-position collateral requirements plus unpayable owed interest, denominated in token0 */
   requiredCollateral0: bigint
-  /** Gross collateral (deposits + borrowed shares), denominated in token1 */
+  /** Collateral (deposits + borrowed shares) net of payable owed interest, denominated in token1 */
   collateralBalance1: bigint
-  /** Sum of per-position collateral requirements, denominated in token1 */
+  /** Per-position collateral requirements plus unpayable owed interest, denominated in token1 */
   requiredCollateral1: bigint
   /** Block metadata for the Multicall3 aggregate read */
   _meta: BlockMeta
@@ -108,10 +130,11 @@ export interface AccountBuyingPower {
 /**
  * Get account-level buying power.
  *
- * Uses {@link https://github.com/panoptic-xyz CollateralTracker.assetsOf} for
- * gross collateral and `PanopticPool.getFullPositionsData.collateralRequirements[]`
- * for the per-position required margin — so loan tokenIds (width=0 shorts)
- * contribute to the requirement instead of being netted out of the balance.
+ * Uses `CollateralTracker.assetsAndInterest` for collateral and owed interest
+ * and `PanopticPool.getFullPositionsData.collateralRequirements[]` for the
+ * per-position required margin — so loan tokenIds (width=0 shorts) contribute
+ * to the requirement instead of being netted out of the balance, and owed
+ * interest reduces headroom exactly as the RiskEngine solvency check does.
  *
  * Accepts a plain viem `Client` (not just `PublicClient`) so it works with wagmi's
  * `useClient()` without needing a cast.
@@ -149,7 +172,7 @@ export async function getAccountBuyingPower(
       target: collateralToken0,
       callData: encodeFunctionData({
         abi: collateralTrackerV2Abi,
-        functionName: 'assetsOf',
+        functionName: 'assetsAndInterest',
         args: [account],
       }),
     },
@@ -157,7 +180,7 @@ export async function getAccountBuyingPower(
       target: collateralToken1,
       callData: encodeFunctionData({
         abi: collateralTrackerV2Abi,
-        functionName: 'assetsOf',
+        functionName: 'assetsAndInterest',
         args: [account],
       }),
     },
@@ -182,16 +205,24 @@ export async function getAccountBuyingPower(
     functionName: 'getCurrentTick',
     data: requireReturnData(results, 0, 'PanopticPool.getCurrentTick'),
   })
-  const assets0 = decodeFunctionResult({
+  const [rawAssets0, interest0] = decodeFunctionResult({
     abi: collateralTrackerV2Abi,
-    functionName: 'assetsOf',
-    data: requireReturnData(results, 1, 'CollateralTracker.assetsOf token0'),
+    functionName: 'assetsAndInterest',
+    data: requireReturnData(results, 1, 'CollateralTracker.assetsAndInterest token0'),
   })
-  const assets1 = decodeFunctionResult({
+  const [rawAssets1, interest1] = decodeFunctionResult({
     abi: collateralTrackerV2Abi,
-    functionName: 'assetsOf',
-    data: requireReturnData(results, 2, 'CollateralTracker.assetsOf token1'),
+    functionName: 'assetsAndInterest',
+    data: requireReturnData(results, 2, 'CollateralTracker.assetsAndInterest token1'),
   })
+  const { balance: assets0, requirementExtra: interestDue0 } = applyOwedInterest(
+    rawAssets0,
+    interest0,
+  )
+  const { balance: assets1, requirementExtra: interestDue1 } = applyOwedInterest(
+    rawAssets1,
+    interest1,
+  )
   const currentTick = BigInt(currentTickResult)
   const positionDataResult =
     positionDataIndex === null
@@ -202,9 +233,10 @@ export async function getAccountBuyingPower(
           data: requireReturnData(results, positionDataIndex, 'PanopticPool.getFullPositionsData'),
         }) as readonly [bigint, bigint, readonly bigint[], readonly bigint[], readonly bigint[]])
 
-  // Sum collateral requirements across positions, per token.
-  let required0Native = 0n
-  let required1Native = 0n
+  // Sum collateral requirements across positions, per token, plus any owed
+  // interest the balance in that token could not pay.
+  let required0Native = interestDue0
+  let required1Native = interestDue1
   if (positionDataResult) {
     const collateralRequirements = positionDataResult[3]
     for (const packed of collateralRequirements) {

@@ -2,7 +2,7 @@
  * Margin buffer and distance-to-liquidation convenience function.
  *
  * Sources current and required margin directly from
- * `PanopticPool.getFullPositionsData` + `CollateralTracker.assetsOf`,
+ * `PanopticPool.getFullPositionsData` + `CollateralTracker.assetsAndInterest`,
  * rather than `PanopticQuery.checkCollateral`.
  *
  * Why: `checkCollateral` returns a `currentMargin` already netted of the
@@ -14,9 +14,12 @@
  * loan at `-notional`).
  *
  * `getFullPositionsData.collateralRequirements[]` attributes the loan as
- * a margin requirement (the accurate primitive), and `assetsOf` returns
- * the gross collateral (deposits + borrowed shares) — pairing them yields
- * a consistent gross-collateral / gross-requirement view.
+ * a margin requirement (the accurate primitive), and `assetsAndInterest`
+ * returns the gross collateral (deposits + borrowed shares) with the owed
+ * interest — pairing them yields a consistent collateral / requirement view.
+ * Owed interest is applied as `RiskEngine._getMargin` applies it: payable
+ * interest comes off the balance, unpayable interest zeroes it and the
+ * remainder joins that token's requirement (see {@link applyOwedInterest}).
  *
  * @module v2/reads/margin
  */
@@ -32,6 +35,7 @@ import { tickToSqrtPriceX96 } from '../formatters/tick'
 import type { BlockMeta } from '../types'
 import { NO_LOWER_LIQUIDATION_TICK, NO_UPPER_LIQUIDATION_TICK } from '../utils/constants'
 import { decodeLeftRightUnsigned } from '../writes/utils'
+import { applyOwedInterest } from './buyingPower'
 import { type MintBufferRatio, mintableAfterBuffer } from './mintBuffer'
 import { readBlockAndAggregate } from './multicallBlock'
 
@@ -128,13 +132,17 @@ export interface MarginBuffer {
   bufferPercent0: bigint | null
   /** Buffer as percentage of required margin in bps (slot 1). null if no requirement. */
   bufferPercent1: bigint | null
-  /** Current (gross) account collateral, denominated in token0 */
+  /**
+   * Account collateral net of the owed interest each token's balance can pay,
+   * denominated in token0. Equals gross collateral when no interest is owed.
+   */
   currentMargin0: bigint
-  /** Current (gross) account collateral, denominated in token1 */
+  /** Same, denominated in token1 */
   currentMargin1: bigint
   /**
    * Sum of per-position collateral requirements from
-   * `getFullPositionsData.collateralRequirements[]`, denominated in token0.
+   * `getFullPositionsData.collateralRequirements[]`, plus any owed interest
+   * that a token's balance could not pay, denominated in token0.
    * Loans/credits (width=0) contribute correctly.
    */
   requiredMargin0: bigint
@@ -200,7 +208,7 @@ export interface MarginBuffer {
  * Reads, all pinned to the same block:
  * - `getCurrentTick` (sequencing dependency for sqrtPrice conversion)
  * - `getFullPositionsData(account, true, tokenIds)` → collateralRequirements
- * - `CollateralTracker.assetsOf(account)` on both trackers → gross collateral
+ * - `CollateralTracker.assetsAndInterest(account)` on both trackers → collateral and owed interest
  * - `PanopticQuery.getLiquidationPrices(...)` → liquidation boundaries
  *
  * @param params - The parameters
@@ -287,6 +295,23 @@ function requireMulticallResult(
   return result.result
 }
 
+function requireAssetsAndInterestResult(
+  results: readonly MulticallResult[],
+  index: number,
+  label: string,
+): { assets: bigint; interest: bigint } {
+  const result = requireMulticallResult(results, index, label)
+  if (
+    !Array.isArray(result) ||
+    result.length < 2 ||
+    typeof result[0] !== 'bigint' ||
+    typeof result[1] !== 'bigint'
+  ) {
+    throw new PanopticError(`${label} returned an invalid value`)
+  }
+  return { assets: result[0], interest: result[1] }
+}
+
 function requireBigIntResult(
   results: readonly MulticallResult[],
   index: number,
@@ -322,13 +347,13 @@ export function prepareMarginBufferRead({
     {
       address: collateralAddresses.collateralToken0,
       abi: collateralTrackerV2Abi,
-      functionName: 'assetsOf',
+      functionName: 'assetsAndInterest',
       args: [account],
     },
     {
       address: collateralAddresses.collateralToken1,
       abi: collateralTrackerV2Abi,
-      functionName: 'assetsOf',
+      functionName: 'assetsAndInterest',
       args: [account],
     },
   ]
@@ -397,8 +422,25 @@ function decodeMarginBufferResults({
   mintBuffer: MintBufferRatio | undefined
 }): MarginBuffer {
   const currentTick = requireBigIntResult(results, 0, 'PanopticPool.getCurrentTick')
-  const assets0 = requireBigIntResult(results, 1, 'CollateralTracker.assetsOf token0')
-  const assets1 = requireBigIntResult(results, 2, 'CollateralTracker.assetsOf token1')
+  const tracker0 = requireAssetsAndInterestResult(
+    results,
+    1,
+    'CollateralTracker.assetsAndInterest token0',
+  )
+  const tracker1 = requireAssetsAndInterestResult(
+    results,
+    2,
+    'CollateralTracker.assetsAndInterest token1',
+  )
+  // Owed interest enters the margin the way RiskEngine._getMargin applies it.
+  const { balance: assets0, requirementExtra: interestDue0 } = applyOwedInterest(
+    tracker0.assets,
+    tracker0.interest,
+  )
+  const { balance: assets1, requirementExtra: interestDue1 } = applyOwedInterest(
+    tracker1.assets,
+    tracker1.interest,
+  )
   const positionDataResult =
     positionDataIndex === null
       ? null
@@ -472,9 +514,10 @@ function decodeMarginBufferResults({
     }
   }
 
-  // Sum collateral requirements across all positions, per token.
-  let required0Native = 0n
-  let required1Native = 0n
+  // Sum collateral requirements across all positions, per token, plus any owed
+  // interest the balance in that token could not pay.
+  let required0Native = interestDue0
+  let required1Native = interestDue1
   if (positionDataResult) {
     const collateralRequirements = positionDataResult[3]
     for (const packed of collateralRequirements) {

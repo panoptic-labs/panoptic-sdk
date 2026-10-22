@@ -49,7 +49,7 @@ export const WethPlpVaultMainnetProdConfig: HypoVaultManagerConfig = {
   },
   deltaHedge: {
     deltaThresholdBps: 100n,
-    maxHedgeSlots: 3,
+    maxHedgeSlots: 12,
   },
   alerts: {
     outOfRangeEnabled: true,

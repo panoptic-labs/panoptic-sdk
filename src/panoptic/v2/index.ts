@@ -1081,6 +1081,7 @@ export {
   preparePositionValue,
   toVaultFrameAtTick,
 } from './greeks'
+export { getLegLiquidityRange, getLegTokenInventory } from './greeks/legLiquidity'
 
 // ============================================================================
 // Bot Utilities
