@@ -1,0 +1,25 @@
+{
+  "name": "safe-vanity-local",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "cargo build --release --locked",
+    "test": "node cli.mjs test && pnpm records:check",
+    "bench": "node cli.mjs bench",
+    "mine": "node cli.mjs mine",
+    "lint": "cargo fmt --check && prettier --check cli.mjs pack-vast.mjs records.mjs package.json && node --check cli.mjs && node --check pack-vast.mjs && node --check records.mjs",
+    "format": "cargo fmt",
+    "build:cuda": "mkdir -p target && nvcc -O3 -std=c++17 -arch=native cuda.cu -o target/safe-vanity-cuda",
+    "build:cuda-host": "mkdir -p target && c++ -O3 -std=c++17 -Wno-unknown-pragmas -DHOST_TEST -x c++ cuda.cu -o target/safe-vanity-cuda-host",
+    "test:cuda-host": "SAFE_VANITY_BACKEND=cuda-host node cli.mjs test",
+    "test:cuda": "SAFE_VANITY_BACKEND=cuda node cli.mjs test",
+    "bench:cuda": "SAFE_VANITY_BACKEND=cuda node cli.mjs bench",
+    "mine:cuda": "SAFE_VANITY_BACKEND=cuda node cli.mjs mine",
+    "verify": "node cli.mjs verify",
+    "pack:vast": "node pack-vast.mjs",
+    "records": "node records.mjs status",
+    "records:check": "node records.mjs check",
+    "records:onchain": "node records.mjs onchain",
+    "format:js": "prettier --write cli.mjs pack-vast.mjs records.mjs package.json"
+  }
+}

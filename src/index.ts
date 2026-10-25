@@ -52,6 +52,12 @@ export { collateralTrackerV2Abi as collateralTrackerAbi } from './generated'
 
 // HypoVault
 export {
+  calculateFixedPortfolioScenarios,
+  estimateFixedPortfolioPremium,
+  fetchFixedVaultPortfolio,
+  prepareFixedPoolValue,
+} from './hypoVault/analytics/fixedPortfolio'
+export {
   type LendingAllocationResult,
   type LendingAllocationRow,
   getLendingAllocationRows,
@@ -66,6 +72,12 @@ export {
   fetchVaultNetLendingApyPct,
   fetchVaultNetLendingYieldUnderlying,
 } from './hypoVault/analytics/vaultLendingAllocation'
+export {
+  buildWeeklyVaultReturnHistogram,
+  calculateMaxSignedPriceChanges,
+  calculateMeanMaxAbsolutePriceChange,
+  calculateWeeklyVaultReturns,
+} from './hypoVault/analytics/weeklyReturns'
 export {
   cancelDeposit,
   encodeCancelDepositFunctionData,
@@ -448,6 +460,26 @@ export {
 } from './panoptic/v2/formatters/rates'
 
 // Panoptic V2 IRM helpers
+export {
+  getVaultDonationSources,
+  getVaultDonationTransfers,
+  valueVaultDonationBlock,
+} from './hypoVault/analytics/donationHistory'
+export {
+  type VaultDonationAdjustment,
+  adjustVaultSharePricesForDonations,
+  donationRetainedFactor,
+  valueDonationInUnderlying,
+} from './hypoVault/analytics/donations'
+export {
+  fetchVaultPositionActivity,
+  filterActiveVaultWeeks,
+  qualifyVaultWeeks,
+} from './hypoVault/analytics/positionActivity'
+export {
+  calculateLongOptionNotionalPct,
+  fetchVaultPositionExposureHistory,
+} from './hypoVault/analytics/positionExposure'
 export {
   MAINNET_USDC_REPLACEMENT_ARTIFACTS,
   MAINNET_WETH_REPLACEMENT_ARTIFACTS,

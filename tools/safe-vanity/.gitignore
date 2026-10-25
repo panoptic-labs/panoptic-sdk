@@ -1,0 +1,9 @@
+/target/
+/config.json
+/checkpoint*.json
+/results*.json
+/*.lockfile
+/config.mainnet-*.json
+*.swp
+*.swo
+/node_modules/

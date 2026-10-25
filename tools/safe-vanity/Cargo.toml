@@ -1,0 +1,9 @@
+[package]
+name = "safe-vanity-local"
+version = "0.1.0"
+edition = "2021"
+[dependencies]
+tiny-keccak = { version = "=2.0.2", features = ["keccak"] }
+[profile.release]
+lto = true
+codegen-units = 1

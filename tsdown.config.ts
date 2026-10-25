@@ -13,6 +13,7 @@ export default defineConfig({
     './src/uniswap/index.ts',
     './src/cow/index.ts',
     './src/zodiac/index.ts',
+    './src/safe/index.ts',
     './src/rpc/index.ts',
     './src/vault-transaction-fees.ts',
   ],

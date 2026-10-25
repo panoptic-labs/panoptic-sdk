@@ -1,6 +1,6 @@
 {
   "name": "@panoptic-eng/sdk",
-  "version": "1.0.72",
+  "version": "1.0.73",
   "repository": {
     "type": "git",
     "url": "https://github.com/panoptic-labs/panoptic-sdk.git"
@@ -38,6 +38,10 @@
     "./zodiac": {
       "types": "./dist/zodiac/index.d.ts",
       "import": "./dist/zodiac/index.js"
+    },
+    "./safe": {
+      "types": "./dist/safe/index.d.ts",
+      "import": "./dist/safe/index.js"
     },
     "./vault-transaction-fees": {
       "types": "./dist/vault-transaction-fees.d.ts",

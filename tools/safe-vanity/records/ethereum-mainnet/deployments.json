@@ -1,0 +1,146 @@
+{
+  "chainId": "1",
+  "safeVersion": "1.5.0",
+  "runs": {
+    "vanity": {
+      "config": "records/ethereum-mainnet/configs/vanity.json",
+      "checkpoint": "records/ethereum-mainnet/checkpoints/vanity.json"
+    },
+    "defi": {
+      "config": "records/ethereum-mainnet/configs/defi.json",
+      "checkpoint": "records/ethereum-mainnet/checkpoints/defi.json"
+    }
+  },
+  "safes": [
+    {
+      "prefix": "0x15abe1a00",
+      "address": "0x15abe1a000fea6b845d0de5818e129ec39e32861",
+      "saltNonce": "8762464074",
+      "run": "vanity",
+      "deploymentStatus": "verified-deployed",
+      "reportedDeployer": "0xcae438c8505be86b1a200d1c737A580170d5bF22",
+      "transactionHash": "0x26ae2f0a19499921a8e48afeb87a11cdee2f19d320ac0f9c3717903e7828a1ca",
+      "blockNumber": "26257081",
+      "onchainVerifiedAt": "2026-10-23T18:31:55.276Z",
+      "explorer": "https://etherscan.io/address/0x15abe1a000fea6b845d0de5818e129ec39e32861",
+      "verification": {
+        "blockNumber": "26257137",
+        "blockHash": "0xc33b155c532bf51f1c76b3195a18e898e3025256fd4043fa8abbaa67b23858a3",
+        "transactionFrom": "0xcae438c8505be86b1a200d1c737a580170d5bf22",
+        "owners": [
+          "0xcae438c8505be86b1a200d1c737A580170d5bF22"
+        ],
+        "threshold": "1",
+        "version": "1.5.0",
+        "singleton": "0xFf51A5898e281Db6DfC7855790607438dF2ca44b",
+        "fallbackHandler": "0x3efcbb83a4a7afcb4f68d501e2c2203a38be77f4",
+        "runtimeCodeHash": "0x4e381985ca68b3e5d27b4425fa581c19cf33146d3f887a3cfca96f55528ea46f",
+        "proxyCreationCodeHash": "0x941b3e88811b2f33b8e26783c7407d2e978404581a21c9f07abf2cad9cb87e12"
+      }
+    },
+    {
+      "prefix": "0xca1100000",
+      "address": "0xca1100000ea12af0a38d9e733d99370062d24996",
+      "saltNonce": "32285228806",
+      "run": "vanity",
+      "deploymentStatus": "verified-deployed",
+      "reportedDeployer": "0xcae438c8505be86b1a200d1c737A580170d5bF22",
+      "transactionHash": "0x6f52386b138f8a6b23250ff43861a0dffc49564fa6120e0db6c062c9876a879e",
+      "blockNumber": "26257093",
+      "onchainVerifiedAt": "2026-10-23T18:31:55.460Z",
+      "explorer": "https://etherscan.io/address/0xca1100000ea12af0a38d9e733d99370062d24996",
+      "verification": {
+        "blockNumber": "26257137",
+        "blockHash": "0xc33b155c532bf51f1c76b3195a18e898e3025256fd4043fa8abbaa67b23858a3",
+        "transactionFrom": "0xcae438c8505be86b1a200d1c737a580170d5bf22",
+        "owners": [
+          "0xcae438c8505be86b1a200d1c737A580170d5bF22"
+        ],
+        "threshold": "1",
+        "version": "1.5.0",
+        "singleton": "0xFf51A5898e281Db6DfC7855790607438dF2ca44b",
+        "fallbackHandler": "0x3efcbb83a4a7afcb4f68d501e2c2203a38be77f4",
+        "runtimeCodeHash": "0x4e381985ca68b3e5d27b4425fa581c19cf33146d3f887a3cfca96f55528ea46f",
+        "proxyCreationCodeHash": "0x941b3e88811b2f33b8e26783c7407d2e978404581a21c9f07abf2cad9cb87e12"
+      }
+    },
+    {
+      "prefix": "0xde17a0000",
+      "address": "0xde17a0000b33e58f05341a4c12787bcfcfb165a4",
+      "saltNonce": "110279123079",
+      "run": "vanity",
+      "deploymentStatus": "verified-deployed",
+      "reportedDeployer": "0xcae438c8505be86b1a200d1c737A580170d5bF22",
+      "transactionHash": "0xc5a16fc1842ff303518f87e07b8e556f3dc74b5a2a24aa4dc20562b28aec6c92",
+      "blockNumber": "26257094",
+      "onchainVerifiedAt": "2026-10-23T18:31:55.513Z",
+      "explorer": "https://etherscan.io/address/0xde17a0000b33e58f05341a4c12787bcfcfb165a4",
+      "verification": {
+        "blockNumber": "26257137",
+        "blockHash": "0xc33b155c532bf51f1c76b3195a18e898e3025256fd4043fa8abbaa67b23858a3",
+        "transactionFrom": "0xcae438c8505be86b1a200d1c737a580170d5bf22",
+        "owners": [
+          "0xcae438c8505be86b1a200d1c737A580170d5bF22"
+        ],
+        "threshold": "1",
+        "version": "1.5.0",
+        "singleton": "0xFf51A5898e281Db6DfC7855790607438dF2ca44b",
+        "fallbackHandler": "0x3efcbb83a4a7afcb4f68d501e2c2203a38be77f4",
+        "runtimeCodeHash": "0x4e381985ca68b3e5d27b4425fa581c19cf33146d3f887a3cfca96f55528ea46f",
+        "proxyCreationCodeHash": "0x941b3e88811b2f33b8e26783c7407d2e978404581a21c9f07abf2cad9cb87e12"
+      }
+    },
+    {
+      "prefix": "0x7e7a00000",
+      "address": "0x7e7a0000034a75827daa80a68d39c0103d287ac6",
+      "saltNonce": "22050260915",
+      "run": "vanity",
+      "deploymentStatus": "verified-deployed",
+      "reportedDeployer": "0xcae438c8505be86b1a200d1c737A580170d5bF22",
+      "transactionHash": "0xaab59b59f3f7be6eb1f73cde7ceb54b2d85e360bc8f68a7fcebf7be41569c1bf",
+      "blockNumber": "26257088",
+      "onchainVerifiedAt": "2026-10-23T18:31:55.354Z",
+      "explorer": "https://etherscan.io/address/0x7e7a0000034a75827daa80a68d39c0103d287ac6",
+      "verification": {
+        "blockNumber": "26257137",
+        "blockHash": "0xc33b155c532bf51f1c76b3195a18e898e3025256fd4043fa8abbaa67b23858a3",
+        "transactionFrom": "0xcae438c8505be86b1a200d1c737a580170d5bf22",
+        "owners": [
+          "0xcae438c8505be86b1a200d1c737A580170d5bF22"
+        ],
+        "threshold": "1",
+        "version": "1.5.0",
+        "singleton": "0xFf51A5898e281Db6DfC7855790607438dF2ca44b",
+        "fallbackHandler": "0x3efcbb83a4a7afcb4f68d501e2c2203a38be77f4",
+        "runtimeCodeHash": "0x4e381985ca68b3e5d27b4425fa581c19cf33146d3f887a3cfca96f55528ea46f",
+        "proxyCreationCodeHash": "0x941b3e88811b2f33b8e26783c7407d2e978404581a21c9f07abf2cad9cb87e12"
+      }
+    },
+    {
+      "prefix": "0xdef1000",
+      "address": "0xdef1000259e08a6b0b01212c48fbd03d962bdb25",
+      "saltNonce": "564597434",
+      "run": "defi",
+      "deploymentStatus": "verified-deployed",
+      "reportedDeployer": "0xcae438c8505be86b1a200d1c737A580170d5bF22",
+      "transactionHash": "0xdf6b8144aa865623bccb72d057b1698748f2f30c3f50bb57eac4333fabf3650b",
+      "blockNumber": "26257097",
+      "onchainVerifiedAt": "2026-10-23T18:31:55.565Z",
+      "explorer": "https://etherscan.io/address/0xdef1000259e08a6b0b01212c48fbd03d962bdb25",
+      "verification": {
+        "blockNumber": "26257137",
+        "blockHash": "0xc33b155c532bf51f1c76b3195a18e898e3025256fd4043fa8abbaa67b23858a3",
+        "transactionFrom": "0xcae438c8505be86b1a200d1c737a580170d5bf22",
+        "owners": [
+          "0xcae438c8505be86b1a200d1c737A580170d5bF22"
+        ],
+        "threshold": "1",
+        "version": "1.5.0",
+        "singleton": "0xFf51A5898e281Db6DfC7855790607438dF2ca44b",
+        "fallbackHandler": "0x3efcbb83a4a7afcb4f68d501e2c2203a38be77f4",
+        "runtimeCodeHash": "0x4e381985ca68b3e5d27b4425fa581c19cf33146d3f887a3cfca96f55528ea46f",
+        "proxyCreationCodeHash": "0x941b3e88811b2f33b8e26783c7407d2e978404581a21c9f07abf2cad9cb87e12"
+      }
+    }
+  ]
+}

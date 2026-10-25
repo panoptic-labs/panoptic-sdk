@@ -1,0 +1,37 @@
+[
+  {
+    "originalPath": "checkpoint-vast.json",
+    "path": "records/ethereum-mainnet/checkpoints/vanity.json",
+    "sha256": "468cc036d5ec7fd6e2c871872a7e61661021f97c7fa74fc258527acbc5a14d57"
+  },
+  {
+    "originalPath": "checkpoint-vast-arian.json",
+    "path": "records/ethereum-mainnet/checkpoints/defi.json",
+    "sha256": "cbfed3390eeba9692df18ca3bc89ad8ef41bb04217204f9122f671ddd1276bdb"
+  },
+  {
+    "originalPath": "packages/sdk/tools/safe-vanity/config.mainnet-vast.json",
+    "path": "records/ethereum-mainnet/configs/vanity.json",
+    "sha256": "1fcf82f15ada8ba34a6651372332e0e238647e616047f1673a3d9577f73ed735"
+  },
+  {
+    "originalPath": "packages/sdk/tools/safe-vanity/config.mainnet-defi.json",
+    "path": "records/ethereum-mainnet/configs/defi.json",
+    "sha256": "a78cba2fe40b44f007633daaa168c2afee2972f184eddf9af550bd1f6220e8a5"
+  },
+  {
+    "originalPath": "packages/sdk/tools/safe-vanity/checkpoint-mainnet-1.5.0.json",
+    "path": "archive/seven-digit/checkpoint.json",
+    "sha256": "ef8d9ed856cd1b1cf479af3c9be5ae933bddcccb2e030815bc9a91b2c5187658"
+  },
+  {
+    "originalPath": "packages/sdk/tools/safe-vanity/config.mainnet-1.5.0.json",
+    "path": "archive/seven-digit/config.json",
+    "sha256": "20a5cb9e310ec0a50c5e1b9b0390e90859e6e5db1030621b7eea80fb578196ef"
+  },
+  {
+    "originalPath": "packages/sdk/tools/safe-vanity/config.json",
+    "path": "archive/local-config.json",
+    "sha256": "4e0cede27e81427ad114fb161127ac583252aa7488d753fb2da8679c192d575c"
+  }
+]

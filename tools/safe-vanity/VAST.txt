@@ -1,0 +1,134 @@
+Vast.ai: Safe 1.5.0, Ethereum mainnet, nine-digit prefixes
+
+VALIDATION STATUS
+The Mac host build of cuda.cu passes independent viem comparisons, including
+nine-digit and full-address exact matches, negative matches, nonce byte boundaries,
+and nonces above 2^63. This exercises the same Keccak function as the CUDA kernel.
+CUDA compilation, device execution, atomic result capture and GPU performance have
+NOT been exercised on the Mac. They remain assumptions until the commands below
+pass on NVIDIA hardware. Do not skip the test and benchmark before a long run.
+
+PREPARE ON YOUR MAC (from repository root)
+
+  pnpm --dir packages/sdk/tools/safe-vanity pack:vast
+
+Bundle: packages/sdk/tools/safe-vanity/target/safe-vanity-vast.tar.gz
+Public deployment config: records/ethereum-mainnet/configs/vanity.json (one owner, threshold 1).
+The bundle contains only explicit mining files and this public configuration.
+No RPC secrets, wallet keys, SSH private keys or monorepo .env files are included.
+It uses a pinned pnpm dependency lock. Do not upload the whole repository.
+
+RENT
+Use one NVIDIA GPU, initially a single RTX 4090 offer, with an SSH-enabled CUDA
+DEVELOPMENT image: nvcc and a C++ compiler must be installed (runtime-only images
+are insufficient). CUDA 12.x with a compatible NVIDIA driver is suitable for
+RTX 4090. Select an offer based on its CURRENT total hourly cost and availability;
+no GPU price or throughput has been measured for this implementation yet.
+No Vast.ai API key is needed by the miner. Do not put wallet keys on the instance.
+Use the SSH host and forwarded port displayed by Vast.ai.
+
+Upload from your Mac (replace PORT and HOST with Vast's connection details):
+
+  scp -P PORT packages/sdk/tools/safe-vanity/target/safe-vanity-vast.tar.gz root@HOST:/root/
+  ssh -p PORT root@HOST
+
+ON THE INSTANCE
+Use Node.js 22.22.0 and pnpm 10.29.2. Ubuntu packages may install an obsolete
+Node version. On an Ubuntu CUDA devel image, install the pinned official binary:
+
+  apt-get update
+  apt-get install -y curl xz-utils g++ ca-certificates tmux
+  bash <<'NODE_SETUP'
+  set -eu
+  case "$(uname -m)" in
+    x86_64) node_arch=x64 ;;
+    aarch64) node_arch=arm64 ;;
+    *) echo "Unsupported architecture"; exit 1 ;;
+  esac
+  node_tmp=$(mktemp -d)
+  cd "$node_tmp"
+  node_archive="node-v22.22.0-linux-${node_arch}.tar.xz"
+  curl -fSLO "https://nodejs.org/dist/v22.22.0/$node_archive"
+  curl -fSLO https://nodejs.org/dist/v22.22.0/SHASUMS256.txt
+  grep "  $node_archive\$" SHASUMS256.txt | sha256sum -c -
+  mkdir -p /opt/safe-vanity-node
+  tar -xJf "$node_archive" -C /opt/safe-vanity-node --strip-components=1
+  NODE_SETUP
+  export PATH="/opt/safe-vanity-node/bin:$PATH"
+  hash -r
+  node --version
+  npm install -g pnpm@10.29.2
+  pnpm --version
+
+Repeat the export PATH command in new SSH/tmux shells before running pnpm.
+Node should report v22.22.0 and pnpm should report 10.29.2.
+Continue setup:
+
+  nvidia-smi
+  nvcc --version
+  mkdir -p /root/safe-vanity
+  tar -xzf /root/safe-vanity-vast.tar.gz -C /root/safe-vanity
+  cd /root/safe-vanity
+  pnpm install --frozen-lockfile --ignore-scripts
+  pnpm build:cuda
+  pnpm test:cuda config.json
+  pnpm bench:cuda config.json
+
+The CUDA compiler's -arch=native targets this rented GPU. A native build is not
+portable to another GPU model; rebuild after moving. If a test fails, do not mine.
+Both bench:cuda and mine:cuda also run the independent self-tests automatically.
+One GPU is used, even if the rented instance has more. Multiple GPUs require
+separate processes with CUDA_VISIBLE_DEVICES, disjoint ranges and checkpoints.
+
+BUDGET AND EXPECTATIONS
+Each nine-digit prefix needs 16^9 = 68,719,476,736 candidates on average.
+All four share the same search; expected completion is 143,165,576,533 candidates.
+Approximately 95% of runs finish all four within 299.8 billion candidates.
+The config range is one trillion candidates; the previous 10-billion range was
+too small. Even one trillion is a probability bound, not a guarantee.
+
+Illustrations ONLY, using an assumed TOTAL rental price of $0.50/hour:
+  Measured rate     Expected all four    Approx. 95% time     95% compute cost
+  10 million/s      3.98 hours           8.33 hours           $4.17
+  50 million/s      47.7 minutes         99.9 minutes         $0.83
+  100 million/s     23.9 minutes         50.0 minutes         $0.42
+These are model calculations, NOT measured GPU performance or current quotes.
+For your offer, compute cost = elapsed hours * actual hourly rate, plus charges
+for setup, storage and transfers. Reserve $2 of the $10 budget for overhead and
+stop early if the measured rate makes the remaining budget unlikely to suffice.
+
+RUN
+Use tmux so disconnecting SSH does not end the run:
+
+  tmux new -s safe-miner
+  SAFE_VANITY_MAX_SECONDS=3600 pnpm mine:cuda config.json checkpoint-vast.json --production
+
+Detach: Ctrl-B then D. Reattach: tmux attach -t safe-miner.
+Repeat the identical command to resume; the runtime cap resets each invocation.
+The default cap is one hour. Choose a cap from your actual remaining dollar budget
+and hourly rental price, allowing for setup time and one final batch. A one-billion
+candidate batch finishes before a graceful stop; a killed batch is replayed.
+A leftover checkpoint-vast.json.lockfile after a forced kill can be removed only
+after confirming no mining process is still using that checkpoint.
+
+IMPORTANT: The miner's runtime cap stops computation, NOT Vast.ai billing. Set an
+external reminder to retrieve the results and stop/destroy the instance. Do not
+assume a $10 credit balance is a hard spending cap. Stopped instances still incur
+storage fees. Download the checkpoint before destroying the instance.
+
+RETRIEVE AND VERIFY ON YOUR TRUSTED MAC (from repository root)
+
+  scp -P PORT root@HOST:/root/safe-vanity/checkpoint-vast.json packages/sdk/tools/safe-vanity/checkpoint-vast.json
+  pnpm --dir packages/sdk/tools/safe-vanity verify checkpoint-vast.json records/ethereum-mainnet/configs/vanity.json
+
+The verifier compares configuration with your trusted records/ethereum-mainnet/configs/vanity.json;
+a compromised rental can alter public configuration as well as results. Local
+verification recomputes all reported addresses and deployment calldata, checks
+prefixes, and reports the number of targets found. A partial result is resumable.
+Do not trust a remote 'verified' message without this local check. Before deploying,
+perform the on-chain code/proxyCreationCode checks, simulation, and owner/threshold/
+singleton verification described in README.txt. No deployment is automatic.
+
+Sources:
+https://docs.vast.ai/guides/instances/manage-instances
+https://docs.vast.ai/guides/reference/billing

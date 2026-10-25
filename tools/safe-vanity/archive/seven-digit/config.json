@@ -1,0 +1,26 @@
+{
+  "development": false,
+  "chainId": "1",
+  "safeVersion": "1.5.0",
+  "factory": "0x14F2982D601c9458F93bd70B218933A6f8165e7b",
+  "singleton": "0xFf51A5898e281Db6DfC7855790607438dF2ca44b",
+  "owners": [
+    "0xcae438c8505be86b1a200d1c737A580170d5bF22"
+  ],
+  "threshold": "1",
+  "to": "0x0000000000000000000000000000000000000000",
+  "data": "0x",
+  "fallbackHandler": "0x3EfCBb83A4A7AfcB4F68D501E2c2203a38be77f4",
+  "paymentToken": "0x0000000000000000000000000000000000000000",
+  "payment": "0",
+  "paymentReceiver": "0x0000000000000000000000000000000000000000",
+  "prefixes": [
+    "0x15abe1a",
+    "0xca11000",
+    "0xde17a00",
+    "0x7e7a000"
+  ],
+  "start": "0",
+  "count": "10000000000",
+  "threads": "8"
+}
