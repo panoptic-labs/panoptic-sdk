@@ -155,6 +155,7 @@ function pickUniqueTinyCreditLeg(
   legIndex: bigint,
   positionSize: bigint,
   tickSpacing: bigint,
+  isAvailable: (candidateTokenId: bigint) => boolean = () => true,
 ): {
   index: bigint
   asset: bigint
@@ -187,7 +188,8 @@ function pickUniqueTinyCreditLeg(
         break
       }
     }
-    if (!collides) break
+    if (!collides && isAvailable(addLegToTokenId(baseTokenId, tinyCreditLeg(legIndex, candidate))))
+      break
     signedStrike += 1n
   }
   if (signedStrike > maxSafe) {
@@ -196,12 +198,14 @@ function pickUniqueTinyCreditLeg(
     )
   }
 
-  const encodedStrike = asset === 0n ? signedStrike : -signedStrike
+  return tinyCreditLeg(legIndex, asset === 0n ? signedStrike : -signedStrike)
+}
 
+function tinyCreditLeg(legIndex: bigint, encodedStrike: bigint) {
   return {
     index: legIndex,
-    asset,
-    tokenType,
+    asset: 1n,
+    tokenType: 0n,
     optionRatio: 1n,
     isLong: 1n,
     riskPartner: legIndex,
@@ -309,3 +313,33 @@ export function planDeriveStrategy(baseTokenId: bigint): DeriveStrategy {
 
 // Re-export used by consumers who only need the leg-count helper.
 export { decodeLeg }
+
+/**
+ * Make `tokenId` mintable next to `existingPositionIds`: dispatch treats a held tokenId as
+ * a settle/resize, so a held one gets the tiny credit leg appended (size unchanged).
+ * Returns `tokenId` itself when it is not held, and `undefined` when it is held with all
+ * 4 leg slots used.
+ */
+export function ensureUniqueTokenId(
+  tokenId: bigint,
+  existingPositionIds: readonly bigint[],
+  positionSize: bigint,
+  tickSpacing: bigint = DEFAULT_TICK_SPACING,
+): bigint | undefined {
+  const held = new Set(existingPositionIds)
+  if (!held.has(tokenId)) return tokenId
+  const legCount = countLegs(tokenId)
+  if (legCount === 0n || legCount >= MAX_LEGS || positionSize <= 0n) return undefined
+  try {
+    const leg = pickUniqueTinyCreditLeg(
+      tokenId,
+      legCount,
+      positionSize,
+      tickSpacing,
+      (candidate) => !held.has(candidate),
+    )
+    return addLegToTokenId(tokenId, leg)
+  } catch {
+    return undefined
+  }
+}

@@ -218,6 +218,7 @@ export {
   // Low-level encoding
   encodePoolId,
   encodeV4PoolId,
+  ensureUniqueTokenId,
   generateOverlappingTokenIds,
   getAssetIndex,
   getSimpleLoanTokenIndex,

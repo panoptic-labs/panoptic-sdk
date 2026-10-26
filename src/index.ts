@@ -70,6 +70,7 @@ export {
   calculateVaultNetLendingYieldUnderlyingFromTrackerInputs,
   fetchVaultLendingAllocation,
   fetchVaultNetLendingApyPct,
+  fetchVaultNetLendingApyTrackerInputs,
   fetchVaultNetLendingYieldUnderlying,
 } from './hypoVault/analytics/vaultLendingAllocation'
 export {
@@ -298,6 +299,13 @@ export {
   ROBINHOOD_USDG_30BPS_MANAGE_ROOT,
   ROBINHOOD_USDG_30BPS_POOL_HASH,
 } from './hypoVault/robinhoodSpyUsdgAuthorization'
+export {
+  type HypoVaultRoleAccount,
+  type HypoVaultRoles,
+  type HypoVaultSignerAccount,
+  fetchHypoVaultRoles,
+  parseMinimalProxyImplementation,
+} from './hypoVault/roles/hypoVaultRoles'
 export {
   getVaultApyErrorMessage,
   isExpectedHistoricalReadMiss,

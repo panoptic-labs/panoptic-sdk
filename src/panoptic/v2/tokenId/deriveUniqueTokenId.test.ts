@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { MAX_TICK, MIN_TICK } from '../utils/constants'
 import { createTokenIdBuilder } from './builder'
 import { LEG_LIMITS, TOKEN_ID_BITS } from './constants'
-import { deriveUniqueTokenId, planDeriveStrategy } from './deriveUniqueTokenId'
+import { deriveUniqueTokenId, ensureUniqueTokenId, planDeriveStrategy } from './deriveUniqueTokenId'
 import { countLegs, decodeAllLegs, decodeLeg } from './encoding'
 
 const POOL_ID = 0x1234567890abcdefn
@@ -150,5 +150,43 @@ describe('planDeriveStrategy', () => {
   })
   it('predicts ratio-scale for 4 legs', () => {
     expect(planDeriveStrategy(makeFourLegSpread(1n))).toBe('ratio-scale')
+  })
+})
+
+describe('ensureUniqueTokenId', () => {
+  const SIZE = 10n ** 18n
+
+  it('returns the tokenId unchanged when it is not held', () => {
+    const put = makeSimplePut()
+    expect(ensureUniqueTokenId(put, [], SIZE)).toBe(put)
+  })
+
+  it('appends one tiny credit leg to a held tokenId, keeping the base legs', () => {
+    const put = makeSimplePut()
+    const unique = ensureUniqueTokenId(put, [put], SIZE)
+    expect(unique).toBeDefined()
+    if (unique === undefined) return
+    const legs = decodeAllLegs(unique)
+    expect(legs).toHaveLength(2)
+    expect(legs[0]).toEqual(decodeAllLegs(put)[0])
+    expect(legs[1]).toMatchObject({ width: 0n, isLong: true, riskPartner: 1n, optionRatio: 1n })
+  })
+
+  it('steps past a held uniqueness variant', () => {
+    const put = makeSimplePut()
+    const first = ensureUniqueTokenId(put, [put], SIZE)
+    expect(first).toBeDefined()
+    if (first === undefined) return
+    const second = ensureUniqueTokenId(put, [put, first], SIZE)
+    expect(second).toBeDefined()
+    if (second === undefined) return
+    expect(second).not.toBe(first)
+    expect(second).not.toBe(put)
+    expect(countLegs(second)).toBe(2n)
+  })
+
+  it('returns undefined for a held 4-leg tokenId', () => {
+    const fourLegs = makeFourLegSpread(1n)
+    expect(ensureUniqueTokenId(fourLegs, [fourLegs], SIZE)).toBeUndefined()
   })
 })

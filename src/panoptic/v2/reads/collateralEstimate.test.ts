@@ -647,6 +647,43 @@ describe('Collateral Estimation with PanopticQuery', () => {
       expect(result.neutralizedTokenFlow).toBeDefined()
     })
 
+    it('returns a unique tokenId when the OTM base is already held', async () => {
+      const tokenId = singleCall()
+      const client = clientWithFlow(1000n, 2000n, 900n, 2100n)
+      const result = await createFlowNeutralTokenId({
+        client,
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        tokenId,
+        positionSize: ONE,
+        existingPositionIds: [tokenId],
+      })
+      expect(result.tokenId).not.toBe(tokenId)
+      expect(result.neutralLegs).toHaveLength(0)
+      expect(decodeAllLegs(result.tokenId)[0]).toEqual(decodeAllLegs(tokenId)[0])
+      expect(countLegs(result.tokenId)).toBe(2n)
+    })
+
+    it('makes the neutralized tokenId unique when that exact position is already held', async () => {
+      const tokenId = singlePut()
+      const flow = () => clientWithFlow(ONE, ONE, ONE, 2n * ONE)
+      const params = {
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        tokenId,
+        positionSize: ONE,
+      }
+      const first = await createFlowNeutralTokenId({ client: flow(), ...params })
+      expect(first.neutralLegs).toHaveLength(1)
+      const second = await createFlowNeutralTokenId({
+        client: flow(),
+        ...params,
+        existingPositionIds: [first.tokenId],
+      })
+      expect(second.tokenId).not.toBe(first.tokenId)
+      expect(countLegs(second.tokenId)).toBe(3n)
+    })
+
     it('appends the neutral leg after the option leg for a PUT (credit, positive delta1)', async () => {
       const tokenId = singlePut()
       // delta1 = +ONE (user receives USDC) → creditAmount1 = -ONE → credit leg tokenType1/asset0
@@ -816,6 +853,27 @@ describe('Collateral Estimation with PanopticQuery', () => {
       expect(legs[3].index).toBe(3n)
       expect(legs[3].width).toBe(0n)
       expect(legs[3].riskPartner).toBe(3n)
+    })
+
+    it('drops the measurement-only uniqueness leg for a held two-leg base under Cover', async () => {
+      const tokenId = createTokenIdBuilder(POOL_ID)
+        .addCall({ strike: 0n, width: 2n, optionRatio: 1n, isLong: false })
+        .addPut({ strike: 0n, width: 2n, optionRatio: 1n, isLong: false })
+        .build()
+      const client = clientWithFlow(ONE, ONE, 2n * ONE, 2n * ONE)
+      const result = await createFlowNeutralTokenId({
+        client,
+        poolAddress: POOL_ADDRESS,
+        account: ACCOUNT_ADDRESS,
+        tokenId,
+        positionSize: ONE,
+        swapAtMint: false,
+        existingPositionIds: [tokenId],
+      })
+      expect(result.neutralLegs).toHaveLength(2)
+      const legs = decodeAllLegs(result.tokenId)
+      expect(legs).toHaveLength(4)
+      expect(legs.slice(0, 2)).toEqual(decodeAllLegs(tokenId))
     })
 
     it('adds only ONE (dominant) neutral leg for a two-sided flow under Zap (swapAtMint=true)', async () => {

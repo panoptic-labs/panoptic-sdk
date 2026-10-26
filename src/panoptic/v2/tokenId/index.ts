@@ -41,6 +41,7 @@ export {
   type DeriveUniqueTokenIdParams,
   type DeriveUniqueTokenIdResult,
   deriveUniqueTokenId,
+  ensureUniqueTokenId,
   planDeriveStrategy,
 } from './deriveUniqueTokenId'
 export {

@@ -53,6 +53,6 @@ export const UsdgPlpVaultRobinhoodProdConfig: HypoVaultManagerConfig = {
   },
   reporting: {
     assetSymbol: 'USDG',
-    vaultLabel: '0DTE +67∆ Vault',
+    vaultLabel: '0DTE +67∆ Covered Call Vault',
   },
 }

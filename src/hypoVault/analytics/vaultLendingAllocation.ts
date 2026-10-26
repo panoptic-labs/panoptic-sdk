@@ -87,6 +87,8 @@ export type VaultNetLendingApyTrackerInput = {
   token1Address: Address
   underlyingPoolTokenAddress: Address
   twapTick: number
+  /** Set by `fetchVaultNetLendingApyTrackerInputs` so callers can refresh rates later. */
+  collateralTrackerAddress?: Address
 }
 
 export function adjustUnderlyingIdleBalance({
@@ -460,7 +462,19 @@ export function calculateVaultNetLendingYieldUnderlyingFromTrackerInputs({
   return sawAssets ? totalNetYieldUnderlying : null
 }
 
-export async function fetchVaultNetLendingApyPct({
+export async function fetchVaultNetLendingApyPct(args: {
+  client: PublicClient
+  chainId: number
+  vaultAddress: Address
+  underlyingTokenAddress: Address
+  blockNumber?: bigint
+}): Promise<number | null> {
+  const inputs = await fetchVaultNetLendingApyTrackerInputs(args)
+  return inputs === null ? null : calculateVaultNetLendingApyPctFromTrackerInputs(inputs)
+}
+
+/** Per-tracker inputs to `calculateVaultNetLendingApyPctFromTrackerInputs`; null when the vault has no pools. */
+export async function fetchVaultNetLendingApyTrackerInputs({
   client,
   chainId,
   vaultAddress,
@@ -472,7 +486,7 @@ export async function fetchVaultNetLendingApyPct({
   vaultAddress: Address
   underlyingTokenAddress: Address
   blockNumber?: bigint
-}): Promise<number | null> {
+}): Promise<VaultNetLendingApyTrackerInput[] | null> {
   blockNumber ??= await client.getBlockNumber()
   const poolAddresses = await discoverPoolAddresses({
     client,
@@ -590,14 +604,13 @@ export async function fetchVaultNetLendingApyPct({
           token1Address: context.token1Address,
           underlyingPoolTokenAddress,
           twapTick,
+          collateralTrackerAddress: trackerAddress,
         }
       }),
     ),
   )
 
-  return calculateVaultNetLendingApyPctFromTrackerInputs(
-    trackerInputs.filter((input): input is VaultNetLendingApyTrackerInput => input !== null),
-  )
+  return trackerInputs.filter((input): input is VaultNetLendingApyTrackerInput => input !== null)
 }
 
 export async function fetchVaultNetLendingYieldUnderlying({

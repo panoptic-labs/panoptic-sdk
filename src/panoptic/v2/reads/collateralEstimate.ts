@@ -23,6 +23,7 @@ import {
 import { getNotEnoughTokensError } from '../simulations/tokenShortfallRecovery'
 import type { StorageAdapter } from '../storage'
 import { getTrackedPositionIds } from '../sync/getTrackedPositionIds'
+import { ensureUniqueTokenId } from '../tokenId/deriveUniqueTokenId'
 import { addLegToTokenId, countLegs, decodeAllLegs } from '../tokenId/encoding'
 import type { BlockMeta } from '../types'
 import { MAX_TICK, MIN_TICK } from '../utils/constants'
@@ -1034,7 +1035,7 @@ export async function createFlowNeutralTokenId(
     client,
     poolAddress,
     account,
-    tokenId,
+    tokenId: requestedTokenId,
     positionSize,
     existingPositionIds,
     swapAtMint = true,
@@ -1055,20 +1056,34 @@ export async function createFlowNeutralTokenId(
       ? referenceSize
       : positionSize
 
-  const legCount = countLegs(tokenId)
+  const legCount = countLegs(requestedTokenId)
   if (legCount >= 4n) {
     throw new PanopticError('Cannot append neutralizing leg: tokenId already has 4 legs')
   }
 
-  const poolId = tokenId & POOL_ID_MASK
+  const poolId = requestedTokenId & POOL_ID_MASK
+  const ensureUnmintedOrThrow = (candidate: bigint): bigint => {
+    const unique = ensureUniqueTokenId(candidate, existingPositionIds ?? [], measureSize)
+    if (unique === undefined) {
+      throw new PanopticError('Cannot create flow-neutral position: this position is already held')
+    }
+    return unique
+  }
+  // A held base cannot be dispatched as a mint, so its flow is measured on a unique
+  // variant; the final position is rebuilt from the requested base plus the neutral legs.
+  const tokenId = ensureUnmintedOrThrow(requestedTokenId)
 
   // Leg-0 placement of the neutral leg is asset-directed (it sets the mint's swap frame /
   // positionSize denomination). For a single-leg CALL (option leg's tokenType === asset)
   // the credit leg must lead so the swap sources the asset token; for a PUT the option leg
   // stays at index 0 and the neutral leg is appended. Multi-leg bases always append (their
   // neutralization is handled in a separate commit).
-  const baseLegs = decodeAllLegs(tokenId)
+  const baseLegs = decodeAllLegs(requestedTokenId)
   const prependNeutral = baseLegs.length === 1 && baseLegs[0].tokenType === baseLegs[0].asset
+  const assembleUnique = (neutralLegs: NeutralLeg[]): bigint =>
+    ensureUnmintedOrThrow(
+      assembleNeutralTokenId(poolId, requestedTokenId, neutralLegs, prependNeutral),
+    )
 
   // Size the neutral leg against the REALIZED (post-swap) net flow, measured by dispatch
   // under the mint's own `swapAtMint`. Empirically (verified on-chain against a live pool)
@@ -1175,7 +1190,7 @@ export async function createFlowNeutralTokenId(
       const neutralLegs = activeIndices.map((index) =>
         buildNeutralLeg(index, targets[Number(index)], measureSize),
       )
-      const combined = assembleNeutralTokenId(poolId, tokenId, neutralLegs, prependNeutral)
+      const combined = assembleUnique(neutralLegs)
       if (combined === previousTokenId) break
       previousTokenId = combined
 
@@ -1334,7 +1349,7 @@ export async function createFlowNeutralTokenId(
   // Legs sized from the flow measured at `measureSize`; strikes are size-independent so
   // they hold at the full positionSize.
   const neutralLegs = indices.map((i) => buildNeutralLeg(i, flowFor(i), measureSize))
-  const combined = assembleNeutralTokenId(poolId, tokenId, neutralLegs, prependNeutral)
+  const combined = assembleUnique(neutralLegs)
 
   // Verify/display: measure the COMBINED (neutralized) position's residual flow under the
   // ACTUAL mint swap mode at the FULL positionSize so the Account-Balances display and mint

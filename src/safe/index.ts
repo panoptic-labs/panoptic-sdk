@@ -1,3 +1,4 @@
+export { isSafeAccount } from './isSafeAccount'
 export {
   type SafeCall,
   type SafeTx,

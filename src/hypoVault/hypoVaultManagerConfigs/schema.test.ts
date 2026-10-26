@@ -119,7 +119,7 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
       },
       reporting: {
         assetSymbol: 'USDG',
-        vaultLabel: '0DTE +67∆ Vault',
+        vaultLabel: '0DTE +67∆ Covered Call Vault',
       },
     })
     expect(parsed.manualTxDefaults?.collateralAllocations).toEqual([
@@ -275,10 +275,12 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
     )
     expect(WethPlpVaultMainnetProdConfig.poolDeploymentBlock).toBe(25_302_077)
     expect(UsdcPlpVaultMainnetProdConfig.poolDeploymentBlock).toBe(25_302_077)
-    expect(WethPlpVaultMainnetProdConfig.vaultCapInUnderlying).toBe(75_000_000_000_000_000_000n)
-    expect(WethPlpVaultMainnetProdConfig.vaultCapInShares).toBe(75_000_000_000_000_000_000_000_000n)
-    expect(UsdcPlpVaultMainnetProdConfig.vaultCapInUnderlying).toBe(350_000_000_000n)
-    expect(UsdcPlpVaultMainnetProdConfig.vaultCapInShares).toBe(350_000_000_000_000_000n)
+    expect(WethPlpVaultMainnetProdConfig.vaultCapInUnderlying).toBe(200_000_000_000_000_000_000n)
+    expect(WethPlpVaultMainnetProdConfig.vaultCapInShares).toBe(
+      200_000_000_000_000_000_000_000_000n,
+    )
+    expect(UsdcPlpVaultMainnetProdConfig.vaultCapInUnderlying).toBe(1_500_000_000_000n)
+    expect(UsdcPlpVaultMainnetProdConfig.vaultCapInShares).toBe(1_500_000_000_000_000_000n)
     expect(MainnetWETHPLPStrategistLeaves.metadata.ManageRoot).toBe(
       '0x99baae2a0ddf55db31bf2e340856e6e76c87d37add86e95483bd7d1bad93e95c',
     )
@@ -314,6 +316,10 @@ describe('HypoVaultManagerConfigSchema manualTxDefaults', () => {
   })
 
   it('resolves Ethereum mainnet legacy configs to beta vault and pool artifacts', () => {
+    expect(WethPlpVaultMainnetLegacyConfig.vaultCapInUnderlying).toBe(75_000_000_000_000_000_000n)
+    expect(WethPlpVaultMainnetLegacyConfig.vaultCapInShares).toBe(
+      75_000_000_000_000_000_000_000_000n,
+    )
     expect(WethPlpVaultMainnetLegacyConfig.artifactSet).toBe('mainnet-legacy')
     expect(UsdcPlpVaultMainnetLegacyConfig.artifactSet).toBe('mainnet-legacy')
     expect(WethPlpVaultMainnetLegacyConfig.hypoVaultAddress).toBe(
