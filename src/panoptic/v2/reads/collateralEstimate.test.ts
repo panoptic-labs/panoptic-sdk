@@ -894,6 +894,13 @@ describe('Collateral Estimation with PanopticQuery', () => {
       expect(result.neutralLegs).toHaveLength(1)
     })
 
+    const poolReadsMulticall = (trackers: readonly string[], tokens: readonly string[]) =>
+      vi.fn(async ({ contracts }: { contracts: readonly { functionName: string }[] }) => {
+        const functionName = contracts[0]?.functionName
+        if (functionName === 'owedInterest') return [0n, 0n]
+        return functionName === 'asset' ? tokens : trackers
+      })
+
     it('seeds an ITM-neutralizing leg from a zero-balance token shortfall', async () => {
       const tokenId = singlePut()
       const tracker0 = '0x4444444444444444444444444444444444444444' as const
@@ -914,10 +921,7 @@ describe('Collateral Estimation with PanopticQuery', () => {
           ],
         })
       const readContract = vi.fn().mockResolvedValue([0n, ONE / 2n])
-      const multicall = vi
-        .fn()
-        .mockResolvedValueOnce([tracker0, tracker1])
-        .mockResolvedValueOnce([token0, token1])
+      const multicall = poolReadsMulticall([tracker0, tracker1], [token0, token1])
       const shortfallClient = {
         ...client,
         simulateContract,
@@ -968,10 +972,7 @@ describe('Collateral Estimation with PanopticQuery', () => {
       const shortfallClient: PublicClient = Object.assign(client, {
         simulateContract,
         readContract: vi.fn().mockResolvedValue([0n, ONE / 2n]),
-        multicall: vi
-          .fn()
-          .mockResolvedValueOnce([tracker0, tracker1])
-          .mockResolvedValueOnce([token0, token1]),
+        multicall: poolReadsMulticall([tracker0, tracker1], [token0, token1]),
         estimateGas: vi.fn().mockResolvedValue(100000n),
       })
 

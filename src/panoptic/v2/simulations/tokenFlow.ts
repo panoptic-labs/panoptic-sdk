@@ -15,7 +15,7 @@ import {
   encodeFunctionData,
 } from 'viem'
 
-import { panopticPoolV2Abi } from '../../../generated'
+import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import { panopticErrorsAbi } from '../errors/errorsAbi'
 
 /**
@@ -72,6 +72,13 @@ export interface TokenFlow {
   tickBefore: bigint | null
   /** Pool tick after the operation */
   tickAfter: bigint | null
+  /**
+   * Token 0 borrow interest owed before the call, included in delta0 when the call settles it.
+   * Unset when unknown, which does not mean zero: delta0 may still include interest.
+   */
+  interestOwed0?: bigint
+  /** Token 1 equivalent of interestOwed0, with the same unset semantics. */
+  interestOwed1?: bigint
 }
 
 /**
@@ -124,6 +131,62 @@ export interface SimulateWithTokenFlowResult {
   postCallResults?: Hex[]
   /** Raw results from preCallData entries (only if success and preCallData was provided) */
   preCallResults?: Hex[]
+}
+
+const collateralTrackersByClient = new WeakMap<
+  PublicClient,
+  Map<Address, Promise<readonly [Address, Address]>>
+>()
+
+const readCollateralTrackers = (
+  client: PublicClient,
+  poolAddress: Address,
+): Promise<readonly [Address, Address]> => {
+  const collateralTrackersByPool =
+    collateralTrackersByClient.get(client) ??
+    new Map<Address, Promise<readonly [Address, Address]>>()
+  collateralTrackersByClient.set(client, collateralTrackersByPool)
+  const cached = collateralTrackersByPool.get(poolAddress)
+  if (cached) return cached
+  const trackers = client.multicall({
+    contracts: [
+      { address: poolAddress, abi: panopticPoolV2Abi, functionName: 'collateralToken0' },
+      { address: poolAddress, abi: panopticPoolV2Abi, functionName: 'collateralToken1' },
+    ],
+    allowFailure: false,
+  }) as Promise<readonly [Address, Address]>
+  collateralTrackersByPool.set(poolAddress, trackers)
+  trackers.catch(() => collateralTrackersByPool.delete(poolAddress))
+  return trackers
+}
+
+// PanopticPool.multicall delegatecalls itself, so tracker reads cannot join the simulation's
+// eth_call. Failure leaves the interest fields unset so consumers can treat it as unknown.
+const readInterestOwed = async (
+  client: PublicClient,
+  poolAddress: Address,
+  user: Address,
+  blockNumber?: bigint,
+): Promise<{ interestOwed0: bigint; interestOwed1: bigint } | undefined> => {
+  try {
+    const [tracker0, tracker1] = await readCollateralTrackers(client, poolAddress)
+    const read = {
+      abi: collateralTrackerV2Abi,
+      functionName: 'owedInterest',
+      args: [user],
+    } as const
+    const [interestOwed0, interestOwed1] = await client.multicall({
+      contracts: [
+        { ...read, address: tracker0 },
+        { ...read, address: tracker1 },
+      ],
+      allowFailure: false,
+      blockNumber,
+    })
+    return { interestOwed0, interestOwed1 }
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -202,14 +265,17 @@ export async function simulateWithTokenFlow(
 
   try {
     // Execute via simulateContract on PanopticPool's multicall
-    const { result } = await client.simulateContract({
-      address: poolAddress,
-      abi: multicallAbi,
-      functionName: 'multicall',
-      args: [multicallData],
-      account: user,
-      blockNumber,
-    })
+    const [{ result }, interestOwed] = await Promise.all([
+      client.simulateContract({
+        address: poolAddress,
+        abi: multicallAbi,
+        functionName: 'multicall',
+        args: [multicallData],
+        account: user,
+        blockNumber,
+      }),
+      readInterestOwed(client, poolAddress, user, blockNumber),
+    ])
 
     // Decode getAssetsOf results
     const decodeAssets = (data: Hex): { assets0: bigint; assets1: bigint } => {
@@ -272,6 +338,7 @@ export async function simulateWithTokenFlow(
         balanceAfter1: assetsAfter.assets1,
         tickBefore,
         tickAfter,
+        ...interestOwed,
       },
       gasEstimate,
       postCallResults,

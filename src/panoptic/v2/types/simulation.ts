@@ -29,6 +29,13 @@ export interface TokenFlow {
   tickBefore: bigint | null
   /** Pool tick after the operation */
   tickAfter: bigint | null
+  /**
+   * Token 0 borrow interest owed before the call, included in delta0 when the call settles it.
+   * Unset when unknown, which does not mean zero: delta0 may still include interest.
+   */
+  interestOwed0?: bigint
+  /** Token 1 equivalent of interestOwed0, with the same unset semantics. */
+  interestOwed1?: bigint
 }
 
 /**
