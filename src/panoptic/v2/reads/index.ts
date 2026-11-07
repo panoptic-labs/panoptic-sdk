@@ -401,5 +401,6 @@ export {
   getPositionEnrichmentData,
 } from './enrichment'
 export { type HedgeLimitEstimate, getHedgeLimits } from './hedgeLimits'
+export { fitsAccountLegCapacity, getAccountLegCapacity } from './legCapacity'
 export { type LpFundingPolicy, assertLpPositionFunded } from './lpFunding'
 export { type PositionMintFundingParams, getPositionMintFunding } from './positionMintFunding'

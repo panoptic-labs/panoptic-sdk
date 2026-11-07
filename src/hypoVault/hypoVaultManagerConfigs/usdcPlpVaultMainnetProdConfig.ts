@@ -50,7 +50,8 @@ export const UsdcPlpVaultMainnetProdConfig: HypoVaultManagerConfig = {
   },
   deltaHedge: {
     deltaThresholdBps: 1500n,
-    maxHedgeSlots: 3,
+    maxHedgeSlots: 5,
+    executionPolicy: 'volatility-capture',
     timedRehedge: {
       elapsedMinutes: 1440,
       jitterMinutes: 60,

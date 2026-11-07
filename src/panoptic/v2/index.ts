@@ -1249,6 +1249,7 @@ export {
   getCollateralCurveInputs,
 } from './reads/collateralCurve'
 export { type HedgeLimitEstimate, getHedgeLimits } from './reads/hedgeLimits'
+export { fitsAccountLegCapacity, getAccountLegCapacity } from './reads/legCapacity'
 export { type PositionMintFundingParams, getPositionMintFunding } from './reads/positionMintFunding'
 export {
   type PositionValueCurve,

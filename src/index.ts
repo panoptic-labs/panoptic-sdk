@@ -368,6 +368,7 @@ export {
   type VaultDeltaHedgeFeeQuote,
   type VaultSignedTransactionFeeCaps,
   type VaultSignedTransactionFeeValidationResult,
+  type VaultTransactionFeePolicy,
   type VaultTransactionFeeQuote,
   applyVaultTransactionGasCostLimit,
   bufferVaultTransactionGasEstimate,
@@ -469,6 +470,14 @@ export {
 
 // Panoptic V2 IRM helpers
 export {
+  getAdaptiveHedgeFeeQuote,
+  getHedgeShock,
+  resolveAdaptiveHedgeFeeQuote,
+  resolveHedgeShock,
+  VOLUSDC_HEDGE_FEE_POLICY,
+  VOLUSDC_INCIDENT_GAS_ENVELOPE,
+} from './hypoVault/adaptiveHedgeFees'
+export {
   getVaultDonationSources,
   getVaultDonationTransfers,
   valueVaultDonationBlock,
@@ -488,11 +497,30 @@ export {
   calculateLongOptionNotionalPct,
   fetchVaultPositionExposureHistory,
 } from './hypoVault/analytics/positionExposure'
+export { selectBudgetedHedgeFees } from './hypoVault/budgetedHedgeFees'
+export {
+  type FrozenHedgeBook,
+  estimateProtectedHedgeGain,
+  getProtectedHedgeGasBudget,
+  valueFrozenHedgeBook,
+} from './hypoVault/hedgeGain'
+export {
+  type VaultHedgeBookSnapshot,
+  getVaultHedgeAccountActivity,
+  quoteProtectedVaultHedge,
+  readVaultHedgeBook,
+  valueVaultHedgeGas,
+} from './hypoVault/hedgeGainQuote'
 export {
   MAINNET_USDC_REPLACEMENT_ARTIFACTS,
   MAINNET_WETH_REPLACEMENT_ARTIFACTS,
   ROBINHOOD_USDG_REPLACEMENT_ARTIFACTS,
 } from './hypoVault/hypoVaultManagerArtifacts/replacementPoolArtifacts'
+export {
+  type VaultTransactionIntent,
+  withVaultTransactionFeePolicy,
+} from './hypoVault/signingFeePolicy'
+export { withVaultTransactionPreflight } from './hypoVault/signingPreflight'
 export {
   BORROW_INDEX_BITS,
   BPS_SCALE,

@@ -2,6 +2,7 @@ export type {
   VaultDeltaHedgeFeeQuote,
   VaultSignedTransactionFeeCaps,
   VaultSignedTransactionFeeValidationResult,
+  VaultTransactionFeePolicy,
   VaultTransactionFeeQuote,
 } from './hypoVault/transactionFees'
 export {
