@@ -49,6 +49,17 @@ const IMPLEMENTATIONS: Readonly<Record<string, Readonly<Record<string, bigint | 
     MAX_TICKS_DELTA: 953n,
     MAINT_MARGIN_RATE: 2_500_000n,
   },
+  // 2026-11 upgrades: same constants except BUYER_COLLATERAL_RATIO (verified from runtime bytecode).
+  '0x000000000000f69c150afea8cc4f8fc4462adbb4': { ...BLUE_CHIP, BUYER_COLLATERAL_RATIO: 200_000n },
+  '0x000000000000f7d509a1583a2947059683137bca': {
+    ...BLUE_CHIP,
+    CROSS_BUFFER_0: 7_500_000n,
+    CROSS_BUFFER_1: 7_500_000n,
+    EMA_PERIODS: 9066943782217711657943160n,
+    MAX_TICKS_DELTA: 953n,
+    MAINT_MARGIN_RATE: 2_500_000n,
+    BUYER_COLLATERAL_RATIO: 200_000n,
+  },
 }
 
 /** Resolve immutable getters from the implementation manifest and read dynamic state at the same block. */
