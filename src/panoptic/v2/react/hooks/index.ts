@@ -3,6 +3,8 @@
  * @module v2/react/hooks
  */
 
+export { useWithdrawalPreview } from './withdrawalPreview'
+
 // Read hooks
 export {
   type PriceHistoryTimeRange,
@@ -17,6 +19,7 @@ export {
   useCollateralBreakdown,
   useCollateralData,
   useCurrentRates,
+  useErc20Allowance,
   useEstimateCollateralRequired,
   useFactoryConstructMetadata,
   useFactoryOwnerOf,
@@ -24,6 +27,7 @@ export {
   useFlowNeutralTokenId,
   useForfeitablePremium,
   useGuardianUnlockState,
+  useInterestShortfall,
   useInterestState,
   useIsLiquidatable,
   useLiquidationPrices,
@@ -38,6 +42,7 @@ export {
   useOpenPositionPreview,
   useOptimizeRiskPartners,
   useOracleState,
+  useOwedInterest,
   usePanopticPoolAddress,
   usePool,
   usePoolLiquidities,

@@ -107,7 +107,8 @@ export async function readBlockAndAggregate({
 
   return {
     _meta: {
-      blockNumber: aggregateBlockNumber,
+      // Some rollups expose an L1 block.number; the pinned RPC block identifies this read.
+      blockNumber: blockNumber ?? aggregateBlockNumber,
       blockHash,
       blockTimestamp,
     },

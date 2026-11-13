@@ -4,6 +4,7 @@
  */
 
 import type { Hash, PublicClient } from 'viem'
+import { TransactionReceiptNotFoundError } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
 
 import { createNonceManager, createTxResult, parsePanopticEvents } from './index'
@@ -114,6 +115,56 @@ describe('parsePanopticEvents', () => {
 })
 
 describe('createTxResult', () => {
+  it('keeps waiting when a mined transaction receipt is not indexed yet', async () => {
+    vi.useFakeTimers()
+    try {
+      const hash = `0x${'ab'.repeat(32)}` as Hash
+      const waitForTransactionReceipt = vi
+        .fn()
+        .mockRejectedValueOnce(new TransactionReceiptNotFoundError({ hash }))
+        .mockResolvedValue({
+          transactionHash: hash,
+          blockNumber: 10n,
+          blockHash: hash,
+          gasUsed: 100n,
+          status: 'success',
+          logs: [],
+        })
+      const client = createMockPublicClient({ waitForTransactionReceipt, pollingInterval: 1000 })
+      const pending = createTxResult(client, hash).wait(3n)
+      await vi.runAllTimersAsync()
+      expect(await pending).toMatchObject({ hash, status: 'success' })
+      expect(waitForTransactionReceipt).toHaveBeenCalledTimes(2)
+      expect(waitForTransactionReceipt).toHaveBeenLastCalledWith({ hash, confirmations: 3 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds retries when a receipt stays unavailable', async () => {
+    vi.useFakeTimers()
+    try {
+      const hash = `0x${'ab'.repeat(32)}` as Hash
+      const error = new TransactionReceiptNotFoundError({ hash })
+      const waitForTransactionReceipt = vi.fn().mockRejectedValue(error)
+      const client = createMockPublicClient({ waitForTransactionReceipt, pollingInterval: 1000 })
+      const failure = expect(createTxResult(client, hash).wait()).rejects.toBe(error)
+      await vi.runAllTimersAsync()
+      await failure
+      expect(waitForTransactionReceipt).toHaveBeenCalledTimes(4)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves other RPC failures without retrying or confirming the transaction', async () => {
+    const error = new Error('RPC unavailable')
+    const waitForTransactionReceipt = vi.fn().mockRejectedValue(error)
+    const client = createMockPublicClient({ waitForTransactionReceipt })
+    await expect(createTxResult(client, '0x1234').wait()).rejects.toBe(error)
+    expect(waitForTransactionReceipt).toHaveBeenCalledTimes(1)
+  })
+
   it('should create a TxResult with hash', () => {
     const client = createMockPublicClient()
     const hash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' as Hash

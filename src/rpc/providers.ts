@@ -67,7 +67,7 @@ export const RPC_PROVIDER_PRESETS: Readonly<Record<RpcProviderName, RpcProviderP
     // Uniblock accepts the key only as a header, and serves keyless requests
     // from an anonymous tier — callers must never send it without one.
     endpoint: (chainId, apiKey) => ({
-      url: `https://api.uniblock.dev/uni/v1/json-rpc?chainId=${chainId}`,
+      url: `https://rpc.uniblock.dev/?chainId=${chainId}`,
       headers: { 'x-api-key': apiKey },
     }),
   },

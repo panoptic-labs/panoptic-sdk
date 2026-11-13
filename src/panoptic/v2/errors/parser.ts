@@ -308,6 +308,20 @@ function buildParsedError(
   const constructor = errorConstructors[errorName]
   const cause = originalError instanceof Error ? originalError : undefined
 
+  if (errorName === 'Panic') {
+    const code = args[0]
+    const reason =
+      code === 0x11n
+        ? 'Arithmetic overflow or underflow'
+        : code === 0x12n
+          ? 'Division by zero'
+          : 'Contract execution failed'
+    const label = typeof code === 'bigint' ? ` (0x${code.toString(16)})` : ''
+    const panic = new PanopticError(`Contract panic${label}: ${reason}.`, cause)
+    panic.errorName = errorName
+    return { error: panic, errorName, args }
+  }
+
   if (!constructor) {
     const unknownError = new PanopticError(`Unknown contract error: ${errorName}`)
     unknownError.errorName = errorName

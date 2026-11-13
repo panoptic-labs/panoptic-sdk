@@ -4,6 +4,12 @@
  */
 
 export {
+  type RequiredWithdrawal,
+  assertDispatchWithdrawal,
+  WithdrawalShortfallError,
+} from './dispatchWithdrawal'
+export { getPremiumDustTolerance } from './premiumDust'
+export {
   type SimulateBatchDispatchParams,
   type SimulateBatchDispatchResult,
   simulateBatchDispatch,
@@ -17,6 +23,11 @@ export {
 export { type SimulateDispatchParams, simulateDispatch } from './simulateDispatch'
 export { type SimulateForceExerciseParams, simulateForceExercise } from './simulateForceExercise'
 export { type SimulateLiquidateParams, simulateLiquidate } from './simulateLiquidate'
+export {
+  type ManagedSettleSimulation,
+  type SimulateManagedSettleParams,
+  simulateManagedSettle,
+} from './simulateManagedSettle'
 export { type SimulateOpenPositionParams, simulateOpenPosition } from './simulateOpenPosition'
 export { type SimulateSettleParams, simulateSettle } from './simulateSettle'
 export {
@@ -101,5 +112,6 @@ export {
   type TokenShortfallRecoveryUnavailableReason,
   buildTokenShortfallRecoveryDispatch,
   getNotEnoughTokensError,
+  getTokenShortfallAmount,
   quoteTokenShortfallRecovery,
 } from './tokenShortfallRecovery'

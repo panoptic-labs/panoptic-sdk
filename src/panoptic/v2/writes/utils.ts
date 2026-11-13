@@ -4,7 +4,7 @@
  */
 
 import type { Abi, Address, Hash, Log, PublicClient, WalletClient } from 'viem'
-import { decodeEventLog, encodeFunctionData } from 'viem'
+import { decodeEventLog, encodeFunctionData, TransactionReceiptNotFoundError } from 'viem'
 
 import { collateralTrackerV2Abi, panopticPoolV2Abi } from '../../../generated'
 import { PanopticError, panopticErrorsAbi, parsePanopticError } from '../errors'
@@ -274,10 +274,7 @@ export function createTxResult(client: PublicClient, hash: Hash): TxResult {
   return {
     hash,
     wait: async (confirmations?: bigint): Promise<TxReceipt> => {
-      const receipt = await client.waitForTransactionReceipt({
-        hash,
-        confirmations: confirmations !== undefined ? Number(confirmations) : undefined,
-      })
+      const receipt = await waitForReceipt(client, hash, confirmations)
 
       const events = parsePanopticEvents(receipt.logs)
 
@@ -290,6 +287,21 @@ export function createTxResult(client: PublicClient, hash: Hash): TxResult {
         events,
       }
     },
+  }
+}
+
+async function waitForReceipt(client: PublicClient, hash: Hash, confirmations?: bigint) {
+  for (let retry = 0; ; retry++) {
+    try {
+      return await client.waitForTransactionReceipt({
+        hash,
+        confirmations: confirmations !== undefined ? Number(confirmations) : undefined,
+      })
+    } catch (error) {
+      // Replacement detection can race RPC receipt indexing even after block inclusion.
+      if (!(error instanceof TransactionReceiptNotFoundError) || retry >= 3) throw error
+      await new Promise<void>((resolve) => setTimeout(resolve, client.pollingInterval))
+    }
   }
 }
 

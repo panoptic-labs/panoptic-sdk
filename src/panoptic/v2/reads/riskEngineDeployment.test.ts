@@ -9,6 +9,8 @@ const blueChip = '0x000000000000ffE5eFdB5AE76b9200263C58b4c0'
 const xStocks = '0x000000000000FfADa7c641E2aD6B13b51b50Cc94'
 const blueChipImplementation = '0x000000000000F0b287c19f606bC3A471F260c502'
 const xStocksImplementation = '0x000000000000F4901018445c697e1e358DAb8dAD'
+const upgradedBlueChipImplementation = '0x000000000000f69c150aFEa8Cc4f8fC4462AdBB4'
+const upgradedXStocksImplementation = '0x000000000000F7D509a1583A2947059683137BcA'
 const poolAddress = '0x1111111111111111111111111111111111111111'
 const blockNumber = 123n
 const meta = { blockNumber, blockTimestamp: 1000n, blockHash: padHex('0x01') }
@@ -16,6 +18,7 @@ const tiers = [
   {
     address: blueChip,
     implementation: blueChipImplementation,
+    buyerCollateralRatio: 100_000n,
     margin: 1_000_000n,
     ticks: 724n,
     spot: 60n,
@@ -23,6 +26,23 @@ const tiers = [
   {
     address: xStocks,
     implementation: xStocksImplementation,
+    buyerCollateralRatio: 100_000n,
+    margin: 2_500_000n,
+    ticks: 953n,
+    spot: 120n,
+  },
+  {
+    address: blueChip,
+    implementation: upgradedBlueChipImplementation,
+    buyerCollateralRatio: 200_000n,
+    margin: 1_000_000n,
+    ticks: 724n,
+    spot: 60n,
+  },
+  {
+    address: xStocks,
+    implementation: upgradedXStocksImplementation,
+    buyerCollateralRatio: 200_000n,
     margin: 2_500_000n,
     ticks: 953n,
     spot: 120n,
@@ -59,7 +79,7 @@ describe('proxy RiskEngine parameters', () => {
       collateralRequirement: 2_000_000n,
       maintenanceMargin: tier.margin,
       commissionRate: 3n,
-      itmSpreadMultiplier: 100_000n,
+      itmSpreadMultiplier: tier.buyerCollateralRatio,
       targetUtilization: 6_666_667n,
       saturatedUtilization: 9_000_000n,
       mintBuffer: { numerator: 10_750_000n, denominator: 10_000_000n },
@@ -175,6 +195,28 @@ describe('proxy RiskEngine parameters', () => {
     ).toEqual([2_500_000n])
     expect(getStorageAt.mock.calls.map(([params]) => params.blockNumber)).toEqual([100n, 200n])
   })
+
+  it.each([
+    [blueChip, blueChipImplementation, upgradedBlueChipImplementation],
+    [xStocks, xStocksImplementation, upgradedXStocksImplementation],
+  ] as const)(
+    'resolves buyer collateral across upgrades for %s',
+    async (address, previous, current) => {
+      const { client, getStorageAt, multicall } = fixture()
+      getStorageAt.mockResolvedValueOnce(padHex(previous)).mockResolvedValueOnce(padHex(current))
+      const contracts = [
+        { address, abi: riskEngineAbi, functionName: 'BUYER_COLLATERAL_RATIO' },
+      ] as const
+      expect(
+        await riskEngineMulticall(client, { contracts, blockNumber: 100n, allowFailure: false }),
+      ).toEqual([100_000n])
+      expect(
+        await riskEngineMulticall(client, { contracts, blockNumber: 200n, allowFailure: false }),
+      ).toEqual([200_000n])
+      expect(getStorageAt.mock.calls.map(([params]) => params.blockNumber)).toEqual([100n, 200n])
+      expect(multicall).not.toHaveBeenCalled()
+    },
+  )
 
   it.each([undefined, padHex(zeroAddress), padHex(poolAddress)])(
     'rejects an unknown implementation (%s)',

@@ -378,4 +378,8 @@ export const queryKeys = {
    */
   interestState: (chainId: bigint, poolAddress: Address, account: Address) =>
     [...queryKeys.all, 'interestState', chainId.toString(), poolAddress, account] as const,
+  interestShortfall: (chainId: bigint, poolAddress: Address, account: Address) =>
+    [...queryKeys.all, 'interestShortfall', chainId.toString(), poolAddress, account] as const,
+  owedInterest: (chainId: bigint, collateralTracker: Address, account: Address) =>
+    [...queryKeys.all, 'owedInterest', chainId.toString(), collateralTracker, account] as const,
 } as const

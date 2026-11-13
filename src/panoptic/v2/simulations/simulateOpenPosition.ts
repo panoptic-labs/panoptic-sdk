@@ -14,12 +14,14 @@ import { getPool } from '../reads/pool'
 import { decodeTokenId } from '../tokenId/decode'
 import type { OpenPositionSimulation, SimulationResult } from '../types'
 import { decodeLeftRightUnsigned } from '../writes/utils'
+import { type RequiredWithdrawal, assertDispatchWithdrawal } from './dispatchWithdrawal'
 import { simulateWithTokenFlow } from './tokenFlow'
 
 /**
  * Parameters for simulating position opening.
  */
 export interface SimulateOpenPositionParams {
+  requiredWithdrawal?: RequiredWithdrawal
   /** Skip gas estimation for interactive previews; defaults to true. */
   estimateGas?: boolean
   /** Public client */
@@ -176,6 +178,25 @@ export async function simulateOpenPosition(
     }
 
     const tokenFlow = flowResult.tokenFlow
+    if (params.requiredWithdrawal)
+      await assertDispatchWithdrawal({
+        client,
+        poolAddress,
+        account,
+        blockNumber: targetBlockNumber,
+        tokenFlow,
+        requiredWithdrawal: params.requiredWithdrawal,
+        dispatch: {
+          positionIdList,
+          finalPositionIdList,
+          positionSizes: [positionSize],
+          tickAndSpreadLimits: [
+            [BigInt(tickLimits[0]), BigInt(tickLimits[1]), BigInt(tickLimits[2])],
+          ],
+          usePremiaAsCollateral,
+          builderCode,
+        },
+      })
 
     // Decode post-mint collateral requirements from getFullPositionsData result
     let postMintCollateralReqToken0 = 0n

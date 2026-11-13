@@ -10,6 +10,8 @@
  * @module v2/reads
  */
 
+export { getWithdrawalPreview } from './withdrawalPreview'
+
 // Factory reads
 export {
   type GetFactoryConstructMetadataParams,
@@ -127,7 +129,18 @@ export {
   getCollateralData,
   getCurrentRates,
   getInterestState,
+  getOwedInterest,
 } from './collateral'
+
+// Interest shortfall reads
+export {
+  type ComputeInterestShortfallParams,
+  type GetInterestShortfallParams,
+  type InterestShortfall,
+  type TokenInterestShortfall,
+  computeInterestShortfall,
+  getInterestShortfall,
+} from './interestShortfall'
 
 // IRM reads
 export {
@@ -392,6 +405,12 @@ export {
 } from './closePositionTransferEstimate'
 
 // Position enrichment (batched reads for UI display)
+export {
+  type CoveredCallPayment,
+  type CoveredCallWithdrawal,
+  getCoveredCallPayments,
+  matchCoveredCallPayments,
+} from './coveredCallPayments'
 export {
   type GetPositionEnrichmentDataParams,
   type GetPositionEnrichmentDataResult,

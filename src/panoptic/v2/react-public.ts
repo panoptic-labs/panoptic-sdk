@@ -26,7 +26,6 @@ export {
   mutationEffects,
   PanopticProvider,
   queryKeys,
-  // Hooks — reads
   useAccountCollateral,
   useAccountGreeks,
   useAccountPremia,
@@ -58,6 +57,8 @@ export {
   useDeployNewPool as useDeployNewPoolHook,
   useDeposit as useDepositHook,
   useDispatch as useDispatchHook,
+  // Hooks — reads
+  useErc20Allowance,
   useEstimateCollateralRequired,
   // Hooks — events
   useEventPoller,
@@ -71,6 +72,7 @@ export {
   useForceExercise as useForceExerciseHook,
   useForfeitablePremium,
   useGuardianUnlockState,
+  useInterestShortfall,
   useInterestState,
   useIsLiquidatable,
   useLiquidate as useLiquidateHook,
@@ -88,6 +90,7 @@ export {
   useOpenPositionPreview,
   useOptimizeRiskPartners,
   useOracleState,
+  useOwedInterest,
   usePanopticContext,
   usePanopticPoolAddress,
   usePokeOracle as usePokeOracleHook,
@@ -160,6 +163,7 @@ export {
   useUtilization,
   useValidateBuilderCode,
   useWatchEvents,
+  useWithdrawalPreview,
   useWithdraw as useWithdrawHook,
   useWithdrawWithPositions as useWithdrawWithPositionsHook,
   useWrapEth,

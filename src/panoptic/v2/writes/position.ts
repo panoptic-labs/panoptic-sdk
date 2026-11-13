@@ -8,6 +8,10 @@ import { encodeFunctionData } from 'viem'
 
 import { panopticPoolV2Abi } from '../../../generated'
 import { InvalidTickLimitsError, MissingPositionIdsError } from '../errors'
+import {
+  type RequiredWithdrawal,
+  assertDispatchWithdrawal,
+} from '../simulations/dispatchWithdrawal'
 import type { StorageAdapter } from '../storage'
 import { getPositionsKey, jsonSerializer } from '../storage'
 import { getTrackedPositionIds } from '../sync/getTrackedPositionIds'
@@ -72,6 +76,7 @@ export type TickAndSpreadLimits = readonly [bigint, bigint, bigint]
  * Parameters for opening a position.
  */
 export interface OpenPositionParams extends Partial<PositionStorageParams> {
+  requiredWithdrawal?: RequiredWithdrawal
   /** Public client */
   client: PublicClient
   /** Wallet client */
@@ -185,6 +190,24 @@ export async function openPosition(params: OpenPositionParams): Promise<TxResult
   const tickLimits: readonly [number, number, number] = swapAtMint
     ? [Number(tickLimitHigh), Number(tickLimitLow), Number(spreadLimit)]
     : [Number(tickLimitLow), Number(tickLimitHigh), Number(spreadLimit)]
+
+  if (params.requiredWithdrawal)
+    await assertDispatchWithdrawal({
+      client,
+      poolAddress,
+      account,
+      requiredWithdrawal: params.requiredWithdrawal,
+      dispatch: {
+        positionIdList,
+        finalPositionIdList,
+        positionSizes,
+        tickAndSpreadLimits: [
+          [BigInt(tickLimits[0]), BigInt(tickLimits[1]), BigInt(tickLimits[2])],
+        ],
+        usePremiaAsCollateral,
+        builderCode,
+      },
+    })
 
   return submitWrite({
     client,

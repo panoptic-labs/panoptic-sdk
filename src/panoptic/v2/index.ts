@@ -9,6 +9,11 @@
 // ============================================================================
 // Utilities
 // ============================================================================
+export {
+  type ClosedCallProceeds,
+  getClosedCallProceeds,
+  spendClosedCallProceeds,
+} from './reads/closedCallProceeds'
 export { type LpFundingPolicy, assertLpPositionFunded } from './reads/lpFunding'
 export { getExecutableLpMaxSize } from './reads/lpMaxSize'
 export type { DecodedOraclePack, OracleTiming } from './utils'
@@ -329,6 +334,7 @@ export type {
   GetChunkLiquiditiesResult,
   // Collateral read params
   GetCollateralDataParams,
+  GetCurrentPositionSizesParams,
   GetCurrentRatesParams,
   // Delta hedge params
   GetDeltaHedgeParamsInput,
@@ -371,6 +377,7 @@ export type {
   GetSafeModeParams,
   GetUtilizationParams,
   GuardianUnlockState,
+  InterestShortfall,
   InterestState,
   IrmCurrent,
   IrmMarketStateInputs,
@@ -394,6 +401,7 @@ export type {
   PositionsWithPremiaResult,
   PositionWithPremia,
   RequiredCreditForITM,
+  TokenInterestShortfall,
   TokenInterestState,
 } from './reads'
 export {
@@ -415,6 +423,7 @@ export {
   BPS_SCALE,
   calculateAccountGreeksPure,
   checkCollateralAcrossTicks,
+  computeInterestShortfall,
   convertToAssets,
   convertToShares,
   // Collateral estimation
@@ -444,6 +453,7 @@ export {
   getCollateralSharePrices,
   // Collateral total assets
   getCollateralTotalAssetsBatch,
+  getCurrentPositionSizes,
   getCurrentRates,
   // Delta hedging
   getDeltaHedgeParams,
@@ -452,6 +462,7 @@ export {
   getForfeitablePremium,
   // Guardian unlock state
   getGuardianUnlockState,
+  getInterestShortfall,
   getInterestState,
   getIrmCurrent,
   getIrmCurve,
@@ -469,6 +480,7 @@ export {
   getOpenPositionPreview,
   getOracleRiskParameters,
   getOracleState,
+  getOwedInterest,
   getPool,
   getPoolCurrentTick,
   // Pool liquidity
@@ -487,6 +499,7 @@ export {
   // Safe mode
   getSafeMode,
   getUtilization,
+  getWithdrawalPreview,
   // Checks
   isLiquidatable,
   MARKET_EPOCH_BITS,
@@ -864,6 +877,7 @@ export type {
   CreditWrapDirection,
   CreditWrapPlacement,
   DispatchIntent,
+  ManagedSettleSimulation,
   OneTokenFlowQuote,
   OneTokenFlowQuoteParams,
   OneTokenFlowResult,
@@ -880,6 +894,7 @@ export type {
   SimulateDispatchParams,
   SimulateForceExerciseParams,
   SimulateLiquidateParams,
+  SimulateManagedSettleParams,
   SimulateOpenPositionParams,
   SimulateSettleParams,
   SimulateSettlePremiumBatchParams,
@@ -909,6 +924,8 @@ export {
   encodePoolKeyBytes,
   encodeV3PoolKeyBytes,
   getNotEnoughTokensError,
+  getPremiumDustTolerance,
+  getTokenShortfallAmount,
   quoteOneTokenFlow,
   quoteTemporaryLoanRecovery,
   quoteTokenShortfallRecovery,
@@ -920,6 +937,7 @@ export {
   simulateDispatch,
   simulateForceExercise,
   simulateLiquidate,
+  simulateManagedSettle,
   simulateOpenPosition,
   simulateSettle,
   simulateSettlePremiumBatch,
@@ -932,6 +950,11 @@ export {
   simulateWithdraw,
   simulateWithTokenFlow,
 } from './simulations'
+export {
+  type RequiredWithdrawal,
+  assertDispatchWithdrawal,
+  WithdrawalShortfallError,
+} from './simulations/dispatchWithdrawal'
 
 // ============================================================================
 // Events
@@ -1225,6 +1248,14 @@ export {
   isSupportedChain,
   requireChainDeployment,
 } from '../../hypoVault/chainDeployments'
+export type { PositionMintProofParams } from './events/mintProof'
+export {
+  getPositionMintHistory,
+  getPositionMintProof,
+  mintedLegsEqualPosition,
+  mintedShortsCoverPosition,
+  mintedShortsOverlapPosition,
+} from './events/mintProof'
 export {
   marketPnlInQuote,
   marketRiskFromValues,
@@ -1248,8 +1279,17 @@ export {
   getCollateralCurve,
   getCollateralCurveInputs,
 } from './reads/collateralCurve'
+export {
+  type CoveredCallPayment,
+  type CoveredCallWithdrawal,
+  getCoveredCallPayments,
+  matchCoveredCallPayments,
+} from './reads/coveredCallPayments'
+export { getDailyFeeEstimate } from './reads/dailyFeeEstimate'
 export { type HedgeLimitEstimate, getHedgeLimits } from './reads/hedgeLimits'
 export { fitsAccountLegCapacity, getAccountLegCapacity } from './reads/legCapacity'
+export type { FillabilityChunks, FillabilityPosition } from './reads/positionFillability'
+export { getPositionsFillability, isPositionFillable } from './reads/positionFillability'
 export { type PositionMintFundingParams, getPositionMintFunding } from './reads/positionMintFunding'
 export {
   type PositionValueCurve,
@@ -1260,3 +1300,23 @@ export {
   preparePositionValueCurve,
 } from './reads/positionValueCurve'
 export { getPositionVolatilityHistory } from './reads/positionVolatilityHistory'
+export {
+  buildCoveredCallPositions,
+  buildCoveredCallTokenId,
+  buildEarnCoveredCallTokenId,
+  buildUpfrontCoveredCallTokenId,
+  computeLoanStrikeForNotional,
+  estimateCoveredCallPremium,
+  getCoveredCallAdvance,
+  getCoveredCallOutcome,
+  getEarnCoveredCallLiquidity,
+  isCoveredCallTokenId,
+  isEarnCoveredCallTokenId,
+  isUpfrontCoveredCallTokenId,
+} from './tokenId/coveredCall'
+export { getEarnCoveredCallCloseSummary } from './tokenId/coveredCallCloseSummary'
+export { getCoveredCallPerformance } from './tokenId/coveredCallPerformance'
+export {
+  allocateCoveredCallCollateral,
+  getEarnCollateralFunding,
+} from './tokenId/coveredCallPortfolio'

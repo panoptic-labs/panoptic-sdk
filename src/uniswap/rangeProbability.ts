@@ -78,28 +78,70 @@ export function pInRangeAt(input: RangeProbabilityInput): number {
   return Math.min(1, Math.max(0, hi - lo))
 }
 
-export interface ExpectedTimeInRangeInput extends RangeProbabilityInput {
-  /** Integration steps over [0, T]. Default 64 — smooth to <0.1% for these curves. */
-  steps?: number
+/** `(1/T)·∫₀ᵀ Φ(ln(bound/spot) / (σ√t)) dt`, as a function of `d = ln(bound/spot) / (σ√T)`. */
+function averageCdfOverHorizon(d: number): number {
+  const density = Math.exp((-d * d) / 2) / Math.sqrt(2 * Math.PI)
+  return normalCdf(d) + d * density - d * Math.abs(d) * normalCdf(-Math.abs(d))
 }
 
 /**
  * Expected fraction of `[0, tYears]` spent in range — the time-average of
- * {@link pInRangeAt}. Trapezoidal integration; the integrand starts at exactly
- * 1 (in-range now) or 0 (out-of-range now) at t=0, which the trapezoid endpoint
- * captures.
+ * {@link pInRangeAt}, in closed form because the integrand is singular at t=0
+ * for narrow ranges and numeric integration underestimates it there.
  */
-export function expectedTimeInRange(input: ExpectedTimeInRangeInput): number {
-  const { tYears, steps = 64 } = input
-  if (!(tYears > 0)) return pInRangeAt({ ...input, tYears: 0 })
-  const n = Math.max(2, Math.floor(steps))
-  const dt = tYears / n
-  let acc = 0
-  for (let i = 0; i <= n; i++) {
-    const p = pInRangeAt({ ...input, tYears: i * dt })
-    acc += i === 0 || i === n ? p / 2 : p
+export function expectedTimeInRange(input: RangeProbabilityInput): number {
+  const { spot, lower, upper, sigmaAnnual, tYears } = input
+  const boundedBelow = lower > 0 && Number.isFinite(lower)
+  const boundedAbove = Number.isFinite(upper) && upper > 0
+  const s = sigmaAnnual * Math.sqrt(Math.max(0, tYears))
+  if (!(s > 0) || !(spot > 0) || (!boundedBelow && !boundedAbove)) {
+    return pInRangeAt({ ...input, tYears: 0 })
   }
-  return Math.min(1, Math.max(0, (acc * dt) / tYears))
+  const hi = boundedAbove ? averageCdfOverHorizon(Math.log(upper / spot) / s) : 1
+  const lo = boundedBelow ? averageCdfOverHorizon(Math.log(lower / spot) / s) : 0
+  return Math.min(1, Math.max(0, hi - lo))
+}
+
+const LOG_TICK_BASE = Math.log(1.0001)
+
+/** Assumed annualized volatility for forecasts on pools without a usable realized vol. */
+export const DEFAULT_SIGMA_ANNUAL = 0.4
+
+export interface TickRangeForecast {
+  tickLower: number
+  tickUpper: number
+  currentTick: number
+  /** Annualized volatility as a fraction (e.g. 0.8 = 80%). */
+  sigmaAnnual: number
+  horizonDays: number
+}
+
+/** {@link expectedTimeInRange} for a tick range; invariant to token0/token1 orientation. */
+export function expectedTimeInTickRange({
+  tickLower,
+  tickUpper,
+  currentTick,
+  sigmaAnnual,
+  horizonDays,
+}: TickRangeForecast): number {
+  return expectedTimeInRange({
+    spot: 1,
+    lower: Math.exp((Math.min(tickLower, tickUpper) - currentTick) * LOG_TICK_BASE),
+    upper: Math.exp((Math.max(tickLower, tickUpper) - currentTick) * LOG_TICK_BASE),
+    sigmaAnnual,
+    tYears: horizonDays / 365,
+  })
+}
+
+/**
+ * Expected premium accrued over the horizon by a leg earning `fullDailyRate` while in range.
+ * Grows like √T rather than T once the horizon outlasts the time price stays in the range.
+ */
+export function expectedPremium({
+  fullDailyRate,
+  ...forecast
+}: TickRangeForecast & { fullDailyRate: number }): number {
+  return fullDailyRate * forecast.horizonDays * expectedTimeInTickRange(forecast)
 }
 
 export interface RangeStatsInput {
@@ -133,3 +175,80 @@ export function rangeStats(input: RangeStatsInput, horizonsYears: readonly numbe
 /** Horizons used by the LP portfolio display, in years. */
 export const LP_RANGE_HORIZONS_DAYS = [7, 30, 365] as const
 export const LP_RANGE_HORIZONS_YEARS = LP_RANGE_HORIZONS_DAYS.map((d) => d / 365)
+
+/** Probability of never touching an upper strike under zero-drift log Brownian motion. */
+export function pStayBelow({
+  spot,
+  strike,
+  sigmaAnnual,
+  tYears,
+}: {
+  spot: number
+  strike: number
+  sigmaAnnual: number
+  tYears: number
+}): number | undefined {
+  if (
+    ![spot, strike, sigmaAnnual, tYears].every(Number.isFinite) ||
+    spot <= 0 ||
+    strike <= 0 ||
+    sigmaAnnual < 0 ||
+    tYears < 0
+  )
+    return undefined
+  if (spot >= strike) return 0
+  if (tYears === 0 || sigmaAnnual === 0) return 1
+  return Math.max(
+    0,
+    Math.min(1, 2 * normalCdf(Math.log(strike / spot) / (sigmaAnnual * Math.sqrt(tYears))) - 1),
+  )
+}
+
+/** Probability of never touching either range boundary under zero-drift log Brownian motion. */
+export function pStayInRange({
+  spot,
+  lower,
+  upper,
+  sigmaAnnual,
+  tYears,
+}: RangeProbabilityInput): number | undefined {
+  if (
+    ![spot, lower, sigmaAnnual, tYears].every(Number.isFinite) ||
+    Number.isNaN(upper) ||
+    spot <= 0 ||
+    lower < 0 ||
+    upper <= lower ||
+    sigmaAnnual < 0 ||
+    tYears < 0
+  )
+    return undefined
+  if (spot <= lower || spot >= upper) return 0
+  const deviation = sigmaAnnual * Math.sqrt(tYears)
+  if (deviation === 0 || (lower === 0 && upper === Infinity)) return 1
+  const below = Math.log(spot) - Math.log(lower)
+  const above = Math.log(upper) - Math.log(spot)
+  if (lower === 0 || upper === Infinity)
+    return Math.max(0, Math.min(1, 2 * normalCdf(Math.min(below, above) / deviation) - 1))
+  const width = below + above
+  const position = Math.min(below, above) / width
+  const scaledDeviation = deviation / width
+  let probability = 0
+  // Images converge at short horizons; the absorbing-boundary sine series converges at long ones.
+  if (scaledDeviation < 0.5) {
+    for (let image = -2; image <= 2; image++) {
+      const shift = 2 * image
+      probability +=
+        normalCdf((1 - position + shift) / scaledDeviation) -
+        normalCdf((-position + shift) / scaledDeviation) -
+        normalCdf((1 + position + shift) / scaledDeviation) +
+        normalCdf((position + shift) / scaledDeviation)
+    }
+  } else {
+    for (let harmonic = 1; harmonic < 32; harmonic += 2) {
+      probability +=
+        ((4 * Math.sin(harmonic * Math.PI * position)) / (harmonic * Math.PI)) *
+        Math.exp(-0.5 * (harmonic * Math.PI * scaledDeviation) ** 2)
+    }
+  }
+  return Math.max(0, Math.min(1, probability))
+}

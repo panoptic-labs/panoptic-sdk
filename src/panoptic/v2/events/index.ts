@@ -3,6 +3,14 @@
  * @module v2/events
  */
 
+export type { PositionMintProofParams } from './mintProof'
+export {
+  getPositionMintHistory,
+  getPositionMintProof,
+  mintedLegsEqualPosition,
+  mintedShortsCoverPosition,
+  mintedShortsOverlapPosition,
+} from './mintProof'
 // Simple WebSocket watching
 export type { WatchEventsParams } from './watchEvents'
 export { watchEvents } from './watchEvents'

@@ -4,7 +4,7 @@
  */
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { type Address, type PublicClient, zeroAddress } from 'viem'
+import { type Address, type PublicClient, erc20Abi, zeroAddress } from 'viem'
 
 import { estimateBlockNumbers, resolveBlockNumbers } from '../../clients/blocksByTimestamp'
 import { PanopticValidationError } from '../../errors'
@@ -37,6 +37,7 @@ import {
   getFactoryTokenURI,
   getForfeitablePremium,
   getGuardianUnlockState,
+  getInterestShortfall,
   getInterestState,
   getLiquidationPrices,
   getMarginBuffer,
@@ -48,6 +49,7 @@ import {
   getNetLiquidationValues,
   getOpenPositionPreview,
   getOracleState,
+  getOwedInterest,
   getPanopticPoolAddress,
   getPanopticPoolFromPoolId,
   getPool,
@@ -118,6 +120,42 @@ export interface QueryOptions {
   staleTime?: number
   /** Time in milliseconds that unused data is kept in cache */
   gcTime?: number
+}
+
+/** Read the exact ERC20 allowance for an owner and spender. */
+export function useErc20Allowance(
+  token: Address,
+  owner: Address | undefined,
+  spender: Address,
+  options?: QueryOptions,
+) {
+  const { publicClient, chainId, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'erc20Allowance',
+      chainId,
+      token,
+      owner,
+      spender,
+      getClientCacheScopeKey(publicClient, clientScope),
+    ],
+    queryFn: () => {
+      if (!owner) throw new Error('Allowance requires an owner')
+      return publicClient.readContract({
+        address: token,
+        abi: erc20Abi,
+        functionName: 'allowance',
+        args: [owner, spender],
+      })
+    },
+    enabled:
+      options?.enabled !== false &&
+      owner !== undefined &&
+      token !== zeroAddress &&
+      spender !== zeroAddress,
+    staleTime: options?.staleTime ?? 0,
+  })
 }
 
 // --- Pool reads ---
@@ -474,6 +512,61 @@ export function useInterestState(poolAddress: Address, account?: Address, option
       })
     },
     enabled: (options?.enabled ?? true) && !!resolvedAccount,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+/** Reads per-token interest coverage for a pool account, with optional background refresh. */
+export function useInterestShortfall(
+  poolAddress: Address,
+  account?: Address,
+  options?: QueryOptions,
+) {
+  const ctx = usePanopticContext()
+  const resolvedAccount = account ?? ctx.account
+  return useQuery({
+    queryKey: [
+      ...queryKeys.interestShortfall(ctx.chainId, poolAddress, resolvedAccount ?? ('' as Address)),
+      getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
+    ],
+    queryFn: () => {
+      if (!resolvedAccount) throw new Error('account required for getInterestShortfall')
+      return getInterestShortfall({
+        client: ctx.publicClient,
+        poolAddress,
+        account: resolvedAccount,
+      })
+    },
+    enabled: (options?.enabled ?? true) && resolvedAccount !== undefined,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+export function useOwedInterest(
+  collateralTracker: Address,
+  account?: Address,
+  options?: QueryOptions,
+) {
+  const ctx = usePanopticContext()
+  const resolvedAccount = account ?? ctx.account
+  return useQuery({
+    queryKey: [
+      ...queryKeys.owedInterest(ctx.chainId, collateralTracker, resolvedAccount ?? ('' as Address)),
+      getClientCacheScopeKey(ctx.publicClient, ctx.clientScope),
+    ],
+    queryFn: () => {
+      if (!resolvedAccount) throw new Error('account required for getOwedInterest')
+      return getOwedInterest({
+        client: ctx.publicClient,
+        collateralTracker,
+        account: resolvedAccount,
+      })
+    },
+    enabled: (options?.enabled ?? true) && resolvedAccount !== undefined,
     refetchInterval: options?.refetchInterval,
     staleTime: options?.staleTime,
     gcTime: options?.gcTime,

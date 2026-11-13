@@ -14,6 +14,18 @@ const data = encodeErrorResult({
 })
 
 describe('undecoded viem errors', () => {
+  it.each([0x11n, 0x12n, 0x32n])('preserves Solidity panic code %s and its cause', (code) => {
+    const data = `0x4e487b71${code.toString(16).padStart(64, '0')}` as const
+    const cause = new ContractFunctionRevertedError({ abi: [], functionName: 'dispatch', data })
+    const error = new BaseError('Simulation failed', { cause })
+    const parsed = parsePanopticError(error)
+    expect(parsed?.error.message).toContain(`Contract panic (0x${code.toString(16)})`)
+    expect(parsed?.error.cause).toBe(error)
+    expect(parsed?.args).toEqual([code])
+    if (code === 0x11n) expect(parsed?.error.message).toContain('Arithmetic overflow or underflow')
+    if (code === 0x12n) expect(parsed?.error.message).toContain('Division by zero')
+  })
+
   it.each(['viem', 'plain'] as const)(
     'recovers full arguments from raw revert data through a %s wrapper',
     (wrapper) => {

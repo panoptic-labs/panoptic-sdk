@@ -33,7 +33,7 @@ describe('resolveRpcEndpoints', () => {
       expect(resolveRpcEndpoints(4663, { UNIBLOCK_API_KEY: 'uniblock-key' })).toEqual([
         {
           source: 'uniblock',
-          url: 'https://api.uniblock.dev/uni/v1/json-rpc?chainId=4663',
+          url: 'https://rpc.uniblock.dev/?chainId=4663',
           headers: { 'x-api-key': 'uniblock-key' },
         },
       ])
@@ -126,7 +126,7 @@ describe('resolveRpcEndpoints', () => {
         },
         {
           source: 'uniblock',
-          url: 'https://api.uniblock.dev/uni/v1/json-rpc?chainId=1',
+          url: 'https://rpc.uniblock.dev/?chainId=1',
           headers: { 'x-api-key': 'uniblock-key' },
         },
         {
@@ -300,7 +300,7 @@ describe('redactRpcSecrets', () => {
   it('keeps only the origin of every URL and masks credential headers', () => {
     const out = redactRpcSecrets(
       'failed https://eth-mainnet.g.alchemy.com/v2/secret-1 and https://mainnet.infura.io/v3/secret-2 ' +
-        'and https://api.uniblock.dev/uni/v1/json-rpc?chainId=1 with x-api-key: secret-3',
+        'and https://rpc.uniblock.dev/?chainId=1 with x-api-key: secret-3',
     )
     expect(out).not.toMatch(/secret-\d/)
     expect(out).toContain('https://eth-mainnet.g.alchemy.com/<redacted>')

@@ -11,6 +11,12 @@ import {
   type DispatchIntent,
   buildCreditWrappedDispatch,
 } from './creditWrap'
+import {
+  type RequiredWithdrawal,
+  assertDispatchWithdrawal,
+  WithdrawalShortfallError,
+} from './dispatchWithdrawal'
+import { getEarnMintCalls, getEarnRecoveryInputBudget } from './earnRecoveryBudget'
 import { type SimulateDispatchParams, simulateDispatch } from './simulateDispatch'
 
 const BPS_DENOMINATOR = 10_000n
@@ -19,6 +25,7 @@ const MAX_RECOVERY_QUOTE_ATTEMPTS = 8
 export type { DispatchIntent }
 
 export interface TokenShortfallRecoveryQuoteParams {
+  requiredWithdrawal?: RequiredWithdrawal
   /** Buyer settlements included in the quoted transaction. */
   settleSequence?: SimulateDispatchParams['settleSequence']
   client: PublicClient
@@ -45,6 +52,7 @@ export interface TokenShortfallRecoveryQuoteParams {
 }
 
 export interface TokenShortfallRecoveryQuote {
+  requiredWithdrawal?: RequiredWithdrawal
   tokenIn: Address
   tokenOut: Address
   /** Swap construction used by the temporary credit wrapper. */
@@ -59,6 +67,7 @@ export interface TokenShortfallRecoveryQuote {
   /** Output measured for the temporary swap alone. May exceed `amountOut` for exact-in. */
   estimatedAmountOut: bigint
   estimatedAmountIn: bigint
+  /** Reviewed input budget; a fixed-input dispatch can spend less than this cap. */
   maximumAmountIn: bigint
   slippageBps: bigint
   /**
@@ -142,21 +151,30 @@ export function getNotEnoughTokensError(error: unknown): NotEnoughTokensError | 
   while (current !== undefined && current !== null && !visited.has(current)) {
     visited.add(current)
     const decoded = parsePanopticError(current)
-    const parsed = current instanceof NotEnoughTokensError ? current : decoded?.error
-    const candidate = parsed instanceof NotEnoughTokensError ? parsed : null
-    if (candidate !== null) {
-      // Selector-only decodes yield undefined args at runtime despite the types.
-      const args: Partial<
-        Pick<NotEnoughTokensError, 'tokenAddress' | 'assetsRequested' | 'assetBalance'>
-      > = candidate
-      if (
-        typeof args.tokenAddress === 'string' &&
-        isAddress(args.tokenAddress) &&
-        typeof args.assetsRequested === 'bigint' &&
-        typeof args.assetBalance === 'bigint'
-      ) {
-        return candidate
-      }
+    // Public entry points can carry separate class identities after bundling.
+    const candidate =
+      current instanceof Error && current.name === 'NotEnoughTokensError' ? current : decoded?.error
+    if (
+      candidate?.name === 'NotEnoughTokensError' &&
+      'tokenAddress' in candidate &&
+      typeof candidate.tokenAddress === 'string' &&
+      isAddress(candidate.tokenAddress) &&
+      'assetsRequested' in candidate &&
+      typeof candidate.assetsRequested === 'bigint' &&
+      'assetBalance' in candidate &&
+      typeof candidate.assetBalance === 'bigint'
+    ) {
+      if (candidate instanceof NotEnoughTokensError) return candidate
+      const Constructor =
+        'fundingStage' in candidate && candidate.fundingStage === 'withdrawal'
+          ? WithdrawalShortfallError
+          : NotEnoughTokensError
+      return new Constructor(
+        candidate.tokenAddress,
+        candidate.assetsRequested,
+        candidate.assetBalance,
+        candidate,
+      )
     }
 
     const innerData = decoded?.errorName === 'ExecuteError' ? decoded.args[1] : undefined
@@ -193,14 +211,26 @@ function getOutputAmount(tokenFlow: TokenFlow, tokenOutIndex: 0n | 1n): bigint {
   return delta > 0n ? delta : 0n
 }
 
+export function getTokenShortfallAmount(error: unknown) {
+  const shortfall = getNotEnoughTokensError(error)
+  if (!shortfall || shortfall.assetsRequested <= shortfall.assetBalance) return undefined
+  return {
+    tokenAddress: shortfall.tokenAddress,
+    amount: shortfall.assetsRequested - shortfall.assetBalance,
+    ...(shortfall instanceof WithdrawalShortfallError
+      ? { fundingStage: 'withdrawal' as const }
+      : {}),
+  }
+}
+
 export async function quoteTokenShortfallRecovery(
   params: TokenShortfallRecoveryQuoteParams,
 ): Promise<TokenShortfallRecoveryResult> {
-  const shortfallError = getNotEnoughTokensError(params.error)
-  if (shortfallError === null) {
+  const initialShortfallError = getNotEnoughTokensError(params.error)
+  if (initialShortfallError === null) {
     return { available: false, reason: 'not-token-shortfall' }
   }
-
+  let shortfallError = initialShortfallError
   let amountOut = shortfallError.assetsRequested - shortfallError.assetBalance
   if (amountOut <= 0n) {
     return {
@@ -262,6 +292,92 @@ export async function quoteTokenShortfallRecovery(
   }
 
   const tokenInIndex = tokenOutIndex === 0n ? 1n : 0n
+  const withdrawal = params.requiredWithdrawal
+  if (withdrawal && (withdrawal.assets < 0n || withdrawal.tokenIndex !== tokenOutIndex))
+    return {
+      available: false,
+      reason: 'unsupported-token',
+      detail: 'The funding token must match the requested withdrawal.',
+    }
+  const reserve =
+    withdrawal && withdrawal.assets > 0n
+      ? withdrawal.assets + (ceilDiv(withdrawal.assets * params.slippageBps, BPS_DENOMINATOR) || 1n)
+      : 0n
+  const reserveShortfall = (flow: TokenFlow) => {
+    if (!withdrawal || withdrawal.assets === 0n) return 0n
+    const balance = tokenOutIndex === 0n ? flow.balanceAfter0 : flow.balanceAfter1
+    return reserve > balance ? reserve - balance : 0n
+  }
+  const refreshEarnFunding =
+    withdrawal !== undefined &&
+    withdrawal.assets > 0n &&
+    getEarnMintCalls(params.dispatch, params.existingPositionIds, tokenOutIndex) !== undefined
+  if (refreshEarnFunding) {
+    const current = await simulateDispatch({
+      client: params.client,
+      poolAddress: params.poolAddress,
+      account: params.account,
+      existingPositionIdList: params.existingPositionIds,
+      ...params.dispatch,
+      settleSequence: params.settleSequence,
+      measurePremia: true,
+      blockNumber: targetBlockNumber,
+    })
+    if (current.success && current.tokenFlow) {
+      amountOut = reserveShortfall(current.tokenFlow)
+      if (amountOut === 0n)
+        return {
+          available: false,
+          reason: 'not-token-shortfall',
+          detail: 'A funding swap is no longer required. Refresh the opening quote.',
+        }
+      const balance =
+        tokenOutIndex === 0n ? current.tokenFlow.balanceAfter0 : current.tokenFlow.balanceAfter1
+      shortfallError = new WithdrawalShortfallError(shortfallError.tokenAddress, reserve, balance)
+    } else {
+      const currentError = current.success ? null : getNotEnoughTokensError(current.error)
+      if (!currentError || shortfallTokenIndex(currentError) !== tokenOutIndex)
+        return {
+          available: false,
+          reason: 'recovery-unavailable',
+          detail: 'Could not refresh the covered call funding requirement.',
+          error: current.success ? undefined : current.error,
+        }
+      shortfallError = currentError
+      amountOut = currentError.assetsRequested - currentError.assetBalance
+      if (amountOut <= 0n)
+        return { available: false, reason: 'invalid-shortfall', error: currentError }
+    }
+  }
+  const verifyWithdrawal = async (dispatch: DispatchIntent, tokenFlow: TokenFlow) => {
+    if (!withdrawal) return undefined
+    try {
+      await assertDispatchWithdrawal({
+        client: params.client,
+        poolAddress: params.poolAddress,
+        account: params.account,
+        dispatch,
+        requiredWithdrawal: withdrawal,
+        tokenFlow,
+        blockNumber: targetBlockNumber,
+        settleSequence: params.settleSequence,
+      })
+      return undefined
+    } catch (error) {
+      return {
+        available: false as const,
+        reason: 'recovery-unavailable' as const,
+        detail: 'The full upfront payment could not be verified.',
+        error:
+          error instanceof PanopticError
+            ? error
+            : new PanopticError(
+                'Could not verify the full upfront payment.',
+                error instanceof Error ? error : undefined,
+              ),
+      }
+    }
+  }
   const tokenOut = tokenOutIndex === 0n ? token0 : token1
   const tokenIn = tokenInIndex === 0n ? token0 : token1
   const collisionIds = Array.from(
@@ -359,18 +475,40 @@ export async function quoteTokenShortfallRecovery(
         blockNumber: targetBlockNumber,
       })
       if (recoverySimulation.success && recoverySimulation.tokenFlow !== undefined) {
+        const missingReserve = reserveShortfall(recoverySimulation.tokenFlow)
+        if (missingReserve > 0n) {
+          requiredOutput += missingReserve
+          creditInput = ceilDiv(creditInput * requiredOutput, estimatedAmountOut) + 1n
+          continue
+        }
+        const unavailableWithdrawal = await verifyWithdrawal(
+          recoveredDispatch,
+          recoverySimulation.tokenFlow,
+        )
+        if (unavailableWithdrawal) return unavailableWithdrawal
         return {
           available: true,
           quote: {
             tokenIn,
+            requiredWithdrawal: withdrawal,
             tokenOut,
             direction: 'exact-in',
             amountOut: requiredOutput,
             estimatedAmountOut,
             estimatedAmountIn,
-            // The input credit has a fixed size. Its tick limit protects output;
-            // unlike exact-out, execution cannot consume an unbounded input.
-            maximumAmountIn: estimatedAmountIn,
+            maximumAmountIn: getEarnRecoveryInputBudget({
+              dispatch: params.dispatch,
+              existingPositionIds: params.existingPositionIds,
+              tokenOutIndex,
+              currentTick: pool.currentTick,
+              sqrtPriceX96: pool.sqrtPriceX96,
+              tickSpacing: pool.tickSpacing,
+              tickLimitLow,
+              tickLimitHigh,
+              estimatedAmountIn,
+              estimatedAmountOut,
+              slippageBps: params.slippageBps,
+            }),
             slippageBps: params.slippageBps,
             netTokenInChange:
               tokenInIndex === 0n
@@ -520,10 +658,22 @@ export async function quoteTokenShortfallRecovery(
     })
     if (recoverySimulation.success) {
       if (recoverySimulation.tokenFlow !== undefined) {
+        const missingReserve = reserveShortfall(recoverySimulation.tokenFlow)
+        if (missingReserve > 0n) {
+          amountOut += missingReserve
+          creditOutSize = ceilDiv(creditOutSize * amountOut, swapOutput) + 1n
+          continue
+        }
+        const unavailableWithdrawal = await verifyWithdrawal(
+          recoveredDispatch,
+          recoverySimulation.tokenFlow,
+        )
+        if (unavailableWithdrawal) return unavailableWithdrawal
         return {
           available: true,
           quote: {
             tokenIn,
+            requiredWithdrawal: withdrawal,
             tokenOut,
             direction: 'exact-out',
             amountOut,

@@ -3,17 +3,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { NotEnoughTokensError, PanopticError } from '../errors'
 import { getPool } from '../reads/pool'
+import { buildEarnCoveredCallTokenId } from '../tokenId/coveredCall'
 import type { Pool } from '../types'
+import { assertDispatchWithdrawal } from './dispatchWithdrawal'
 import { simulateDispatch } from './simulateDispatch'
 import {
   type DispatchIntent,
   buildTokenShortfallRecoveryDispatch,
   getNotEnoughTokensError,
+  getTokenShortfallAmount,
   quoteTokenShortfallRecovery,
 } from './tokenShortfallRecovery'
 
 vi.mock('../reads/pool', () => ({ getPool: vi.fn() }))
 vi.mock('./simulateDispatch', () => ({ simulateDispatch: vi.fn() }))
+vi.mock(import('./dispatchWithdrawal'), async (original) => ({
+  ...(await original()),
+  assertDispatchWithdrawal: vi.fn().mockResolvedValue(undefined),
+}))
 
 const baseDispatch: DispatchIntent = {
   positionIdList: [11n, 12n],
@@ -27,13 +34,37 @@ const baseDispatch: DispatchIntent = {
   builderCode: 77n,
 }
 
+it.each([false, true])(
+  'recognizes validated funding errors across public entry points (withdrawal: %s)',
+  (withdrawal) => {
+    const foreignError = Object.assign(new Error('Shortfall'), {
+      name: 'NotEnoughTokensError',
+      tokenAddress: '0x0000000000000000000000000000000000000006',
+      assetsRequested: 52305n,
+      assetBalance: 1597n,
+      ...(withdrawal ? { fundingStage: 'withdrawal' } : {}),
+    })
+    expect(getNotEnoughTokensError(foreignError)).toBeInstanceOf(NotEnoughTokensError)
+    expect(getTokenShortfallAmount(foreignError)).toEqual({
+      tokenAddress: foreignError.tokenAddress,
+      amount: 50708n,
+      ...(withdrawal ? { fundingStage: 'withdrawal' } : {}),
+    })
+    expect(
+      getNotEnoughTokensError(
+        Object.assign(new Error('Invalid'), { ...foreignError, assetsRequested: '52305' }),
+      ),
+    ).toBeNull()
+  },
+)
+
 const PREFIX_TOKEN0 = '0x0000000000000000000000000000000000000010'
 const PREFIX_TOKEN1 = '0x0000000000000000000000000000000000000011'
 const PREFIX_TRACKER0 = '0x0000000000000000000000000000000000000020'
 const PREFIX_TRACKER1 = '0x0000000000000000000000000000000000000021'
 const PREFIX_META = { blockNumber: 123n, blockTimestamp: 456n, blockHash: '0x01' as const }
 const PREFIX_POOL_ADDRESS = '0x0000000000000000000000000000000000000030' as const
-const PREFIX_RISK_ENGINE = '0x0000000000000000000000000000000000000050'
+const PREFIX_RISK_ENGINE = '0x0000000000000000000000000000000000000050' as const
 
 const collateralTracker = (address: `0x${string}`, token: `0x${string}`, symbol: string) => ({
   address,
@@ -216,6 +247,27 @@ describe('buildTokenShortfallRecoveryDispatch', () => {
     expect(baseDispatch.positionIdList).toEqual([11n, 12n])
     expect(baseDispatch.finalPositionIdList).toEqual([9n, 12n])
   })
+})
+
+describe('getTokenShortfallAmount', () => {
+  it.each([
+    '0x0000000000000000000000000000000000000001',
+    '0x0000000000000000000000000000000000000002',
+  ] as const)('sizes only missing collateral for %s', (tokenAddress) => {
+    expect(
+      getTokenShortfallAmount(
+        Object.assign(new Error('wrapped'), {
+          cause: new NotEnoughTokensError(tokenAddress, 600003n, 100000n),
+        }),
+      ),
+    ).toEqual({ tokenAddress, amount: 500003n })
+    expect(
+      getTokenShortfallAmount(new NotEnoughTokensError(tokenAddress, 10n, 10n)),
+    ).toBeUndefined()
+    expect(getTokenShortfallAmount(new NotEnoughTokensError(tokenAddress, 9n, 10n))).toBeUndefined()
+  })
+  it('does not invent a deposit amount for an unknown failure', () =>
+    expect(getTokenShortfallAmount(new Error('unavailable'))).toBeUndefined())
 })
 
 describe('getNotEnoughTokensError', () => {
@@ -870,5 +922,173 @@ describe('quoteTokenShortfallRecovery', () => {
     const limits = result.quote.dispatch.tickAndSpreadLimits
     expect(limits[0]).toEqual([50n, -50n, 0n])
     expect(limits[limits.length - 1]).toEqual([-50n, 50n, 0n])
+  })
+})
+
+describe('funding the complete requested withdrawal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPrefixedPool()
+    vi.mocked(simulateDispatch).mockReset()
+    vi.mocked(assertDispatchWithdrawal).mockReset().mockResolvedValue(undefined)
+  })
+  it.each([0n, 1n] as const)(
+    'sizes current funding at one snapshot and preserves the advance in token frame %s',
+    async (tokenIndex) => {
+      const tokenId = buildEarnCoveredCallTokenId({
+        poolId: 1n,
+        assetIdx: tokenIndex === 0n ? 1n : 0n,
+        strike: 0n,
+        width: 10n,
+        loanStrike: 0n,
+      })
+      const tracker = tokenIndex === 0n ? PREFIX_TRACKER0 : PREFIX_TRACKER1
+      const flow = (output: bigint, input: bigint) =>
+        prefixedSuccess({
+          delta0: tokenIndex === 0n ? output : -input,
+          delta1: tokenIndex === 1n ? output : -input,
+          balanceBefore0: tokenIndex === 0n ? 0n : 1000n,
+          balanceBefore1: tokenIndex === 1n ? 0n : 1000n,
+        })
+      vi.mocked(simulateDispatch)
+        .mockResolvedValueOnce({
+          success: false,
+          error: new NotEnoughTokensError(tracker, 70n, 0n),
+          _meta: PREFIX_META,
+        })
+        .mockResolvedValueOnce({
+          success: false,
+          error: new NotEnoughTokensError(tracker, 1n, 0n),
+          _meta: PREFIX_META,
+        })
+        .mockResolvedValueOnce(flow(72n, 73n))
+        .mockResolvedValueOnce(flow(13n, 73n))
+      const params = {
+        client: prefixedClient(),
+        poolAddress: PREFIX_POOL_ADDRESS,
+        account: PREFIX_RISK_ENGINE,
+        chainId: 1n,
+        existingPositionIds: [],
+        dispatch: {
+          positionIdList: [tokenId],
+          finalPositionIdList: [tokenId],
+          positionSizes: [100n],
+          tickAndSpreadLimits: [[-50n, 50n, 0n] as const],
+          usePremiaAsCollateral: false,
+          builderCode: 0n,
+        },
+        error: new NotEnoughTokensError(tracker, 100n, 0n),
+        slippageBps: 30n,
+        requiredWithdrawal: { tokenIndex, assets: 10n },
+      }
+      const result = await quoteTokenShortfallRecovery(params)
+      expect(result).toMatchObject({
+        available: true,
+        quote: { direction: 'exact-in', amountOut: 70n, estimatedAmountIn: 73n },
+      })
+      expect(assertDispatchWithdrawal).toHaveBeenCalledOnce()
+      expect(assertDispatchWithdrawal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requiredWithdrawal: { tokenIndex, assets: 10n },
+          tokenFlow: expect.objectContaining(
+            tokenIndex === 0n ? { balanceAfter0: 13n } : { balanceAfter1: 13n },
+          ),
+        }),
+      )
+      expect(simulateDispatch).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ ...params.dispatch, blockNumber: 123n }),
+      )
+      vi.mocked(simulateDispatch).mockClear().mockResolvedValueOnce(flow(13n, 0n))
+      await expect(quoteTokenShortfallRecovery(params)).resolves.toMatchObject({
+        available: false,
+        reason: 'not-token-shortfall',
+      })
+      expect(simulateDispatch).toHaveBeenCalledOnce()
+    },
+  )
+  it.each([
+    { tokenIndex: 0n, prefixed: false },
+    { tokenIndex: 1n, prefixed: false },
+    { tokenIndex: 0n, prefixed: true },
+    { tokenIndex: 1n, prefixed: true },
+  ] as const)(
+    'reserves the complete principal in token frame $tokenIndex, prefixed=$prefixed',
+    async ({ tokenIndex, prefixed }) => {
+      const flow = (output: bigint) =>
+        prefixedSuccess({
+          delta0: tokenIndex === 0n ? output : -7n,
+          delta1: tokenIndex === 1n ? output : -7n,
+          balanceBefore0: tokenIndex === 0n ? 0n : 100n,
+          balanceBefore1: tokenIndex === 1n ? 0n : 100n,
+        })
+      if (prefixed)
+        vi.mocked(simulateDispatch).mockResolvedValueOnce({
+          success: false,
+          error: new NotEnoughTokensError(
+            tokenIndex === 0n ? PREFIX_TRACKER0 : PREFIX_TRACKER1,
+            1n,
+            0n,
+          ),
+          _meta: PREFIX_META,
+        })
+      vi.mocked(simulateDispatch)
+        .mockResolvedValueOnce(flow(6n))
+        .mockResolvedValueOnce(flow(1n))
+        .mockResolvedValueOnce(flow(50n))
+        .mockResolvedValueOnce(flow(11n))
+      const result = await quoteTokenShortfallRecovery({
+        client: prefixedClient(),
+        poolAddress: PREFIX_POOL_ADDRESS,
+        account: PREFIX_RISK_ENGINE,
+        chainId: 1n,
+        existingPositionIds: [9n],
+        dispatch: baseDispatch,
+        error: new NotEnoughTokensError(
+          tokenIndex === 0n ? PREFIX_TRACKER0 : PREFIX_TRACKER1,
+          6n,
+          0n,
+        ),
+        slippageBps: 50n,
+        requiredWithdrawal: { tokenIndex, assets: 10n },
+      })
+      expect(result).toMatchObject({
+        available: true,
+        quote: {
+          amountOut: 16n,
+          requiredWithdrawal: { tokenIndex, assets: 10n },
+          dispatch: { finalPositionIdList: baseDispatch.finalPositionIdList },
+        },
+      })
+      expect(assertDispatchWithdrawal).toHaveBeenCalledOnce()
+      expect(assertDispatchWithdrawal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requiredWithdrawal: { tokenIndex, assets: 10n },
+          blockNumber: 123n,
+        }),
+      )
+    },
+  )
+  it('does not offer a mint-only success when the withdrawal itself reverts', async () => {
+    vi.mocked(simulateDispatch).mockResolvedValue(prefixedSuccess({ delta0: 30n, delta1: -7n }))
+    vi.mocked(assertDispatchWithdrawal).mockRejectedValue(
+      new Error('Withdrawal would make account insolvent'),
+    )
+    const result = await quoteTokenShortfallRecovery({
+      client: prefixedClient(),
+      poolAddress: PREFIX_POOL_ADDRESS,
+      account: PREFIX_RISK_ENGINE,
+      chainId: 1n,
+      existingPositionIds: [9n],
+      dispatch: baseDispatch,
+      error: new NotEnoughTokensError(PREFIX_TRACKER0, 6n, 0n),
+      slippageBps: 50n,
+      requiredWithdrawal: { tokenIndex: 0n, assets: 10n },
+    })
+    expect(result).toMatchObject({
+      available: false,
+      reason: 'recovery-unavailable',
+      detail: 'The full upfront payment could not be verified.',
+    })
   })
 })

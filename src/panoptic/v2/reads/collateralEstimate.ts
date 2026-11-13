@@ -1452,6 +1452,19 @@ export async function getMaxWithdrawable(
     return { maxWithdrawable: maxWithdraw, _meta }
   }
 
+  if (
+    await tryWithdrawSimulation({
+      client,
+      collateralTrackerAddress,
+      account,
+      assets: totalAssets,
+      positionIdList,
+      usePremiaAsCollateral,
+    })
+  ) {
+    return { maxWithdrawable: totalAssets, _meta }
+  }
+
   const precisionDivisor = BigInt(Math.floor(100 / precisionPct))
   let low = 0n
   let high = totalAssets

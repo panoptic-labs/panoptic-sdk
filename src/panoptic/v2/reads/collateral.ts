@@ -342,6 +342,27 @@ export async function getCurrentRates(params: GetCurrentRatesParams): Promise<Cu
   }
 }
 
+/** Preview currently unpaid interest for an account, including accrual through the queried block. */
+export async function getOwedInterest({
+  client,
+  collateralTracker,
+  account,
+  blockNumber,
+}: {
+  client: PublicClient
+  collateralTracker: Address
+  account: Address
+  blockNumber?: bigint
+}) {
+  return client.readContract({
+    address: collateralTracker,
+    abi: collateralTrackerV2Abi,
+    functionName: 'previewOwedInterest',
+    args: [account],
+    blockNumber,
+  })
+}
+
 // ─── Interest State (per-user borrows) ───────────────────────────────────────
 
 /**
