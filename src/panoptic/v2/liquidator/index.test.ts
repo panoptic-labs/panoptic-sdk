@@ -27,54 +27,56 @@ describe('emptyLiquidateParams', () => {
   })
 })
 
-/** Build a fake client whose call() answers Multicall3.blockAndAggregate. */
+const ZERO_HASH = `0x${'00'.repeat(32)}` as Hex
+
+/**
+ * Build a fake client whose call() answers Multicall3.blockAndAggregate and whose
+ * getBlock() answers the block header. Like the real contract, blockAndAggregate
+ * returns `aggregateBlockNumber` (block.number) and a zero hash (blockhash of the
+ * current block).
+ */
 function mockAggregateClient(
   answer: (target: string, callData: Hex) => Hex,
   onBlockNumber?: (blockNumber: bigint | undefined) => void,
-  blockHashForCall: (callIndex: number) => Hex = () => `0x${'ab'.repeat(32)}`,
+  blockHashForGetBlock: (getBlockIndex: number) => Hex = () => `0x${'ab'.repeat(32)}`,
+  {
+    headerBlockNumber = 12345n,
+    aggregateBlockNumber = headerBlockNumber,
+    onGetBlock,
+  }: {
+    headerBlockNumber?: bigint
+    aggregateBlockNumber?: bigint
+    onGetBlock?: (blockNumber: bigint | undefined) => void
+  } = {},
 ) {
-  let callIndex = 0
+  let getBlockIndex = 0
   return {
+    getBlock: async ({ blockNumber }: { blockNumber?: bigint }) => {
+      onGetBlock?.(blockNumber)
+      return {
+        number: blockNumber ?? headerBlockNumber,
+        hash: blockHashForGetBlock(getBlockIndex++),
+        timestamp: 1_700_000_000n,
+      }
+    },
     call: async ({ data, blockNumber }: { to: string; data: Hex; blockNumber?: bigint }) => {
       onBlockNumber?.(blockNumber)
       const decoded = decodeFunctionData({ abi: Multicall3Abi, data })
       if (decoded.functionName !== 'blockAndAggregate') throw new Error('unexpected call')
       const calls = decoded.args[0] as readonly { target: string; callData: Hex }[]
-      const results = calls.map((c) => {
-        // The trailing call readBlockAndAggregate appends for the timestamp.
-        const inner = decodeSafe(c.callData)
-        if (inner === 'getCurrentBlockTimestamp') {
-          return {
-            success: true,
-            returnData: encodeFunctionResult({
-              abi: Multicall3Abi,
-              functionName: 'getCurrentBlockTimestamp',
-              result: 1_700_000_000n,
-            }),
-          }
-        }
-        return { success: true, returnData: answer(c.target, c.callData) }
-      })
+      const results = calls.map((c) => ({
+        success: true,
+        returnData: answer(c.target, c.callData),
+      }))
       return {
         data: encodeFunctionResult({
           abi: Multicall3Abi,
           functionName: 'blockAndAggregate',
-          result: [12345n, blockHashForCall(callIndex++), results],
+          result: [aggregateBlockNumber, ZERO_HASH, results],
         }),
       }
     },
   }
-}
-
-function decodeSafe(callData: Hex): string {
-  for (const abi of [Multicall3Abi, panopticPoolV2Abi, panopticQueryAbi] as const) {
-    try {
-      return decodeFunctionData({ abi, data: callData }).functionName
-    } catch {
-      /* try next */
-    }
-  }
-  return 'unknown'
 }
 
 const oracleTicks = encodeFunctionResult({
@@ -166,7 +168,37 @@ describe('screenAccountExact', () => {
       account: ALICE,
       tokenIds: [7n],
     })
-    expect(pins).toEqual([undefined, 12345n]) // phase 1 latest, phase 2 pinned
+    expect(pins).toEqual([12345n, 12345n]) // both phases pinned to the latest header
+  })
+
+  it('pins to the block header, not blockAndAggregate block.number (Arbitrum chains)', async () => {
+    // On Arbitrum chains block.number is the parent chain's block number.
+    const pins: (bigint | undefined)[] = []
+    const headers: (bigint | undefined)[] = []
+    const client = mockAggregateClient(
+      solvencyAnswer(new Set()),
+      (bn) => pins.push(bn),
+      () => `0x${'ab'.repeat(32)}`,
+      {
+        headerBlockNumber: 93_282_136n,
+        aggregateBlockNumber: 26_232_335n,
+        onGetBlock: (bn) => headers.push(bn),
+      },
+    )
+    const result = await screenAccountExact({
+      client: client as never,
+      poolAddress: POOL,
+      queryAddress: QUERY,
+      account: ALICE,
+      tokenIds: [7n],
+    })
+    expect(pins).toEqual([93_282_136n, 93_282_136n])
+    expect(headers).toEqual([undefined, 93_282_136n])
+    expect(result._meta).toEqual({
+      blockNumber: 93_282_136n,
+      blockHash: `0x${'ab'.repeat(32)}`,
+      blockTimestamp: 1_700_000_000n,
+    })
   })
 })
 
@@ -175,7 +207,7 @@ describe('screenAccountExact error paths', () => {
     const client = mockAggregateClient(
       solvencyAnswer(new Set()),
       undefined,
-      (callIndex) => `0x${(callIndex === 0 ? 'ab' : 'cd').repeat(32)}`,
+      (getBlockIndex) => `0x${(getBlockIndex === 0 ? 'ab' : 'cd').repeat(32)}`,
     )
 
     await expect(
@@ -191,6 +223,7 @@ describe('screenAccountExact error paths', () => {
 
   it('rejects when a sub-call fails (requireReturnData)', async () => {
     const client = {
+      getBlock: async () => ({ number: 1n, hash: `0x${'ab'.repeat(32)}`, timestamp: 1n }),
       call: async ({ data }: { data: Hex }) => {
         const decoded = decodeFunctionData({ abi: Multicall3Abi, data })
         const calls = decoded.args[0] as readonly { callData: Hex }[]

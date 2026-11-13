@@ -1,12 +1,13 @@
 import type { Address, Client, Hex } from 'viem'
 import { decodeFunctionResult, encodeFunctionData } from 'viem'
-import { call } from 'viem/actions'
+import { call, getBlock } from 'viem/actions'
 
 import { Multicall3Abi } from '../../../abis/multicall3'
 import {
   MulticallNoDataError,
   MulticallResultFailedError,
   MulticallResultMissingError,
+  PanopticError,
 } from '../errors'
 import type { BlockMeta } from '../types'
 
@@ -28,6 +29,38 @@ interface ClientWithCall extends Client {
 
 function hasCall(client: Client): client is ClientWithCall {
   return 'call' in client && typeof (client as Record<'call', unknown>).call === 'function'
+}
+
+interface ClientWithGetBlock extends Client {
+  getBlock: (parameters: {
+    blockNumber?: bigint
+    includeTransactions?: false
+  }) => Promise<{ number: bigint | null; hash: Hex | null; timestamp: bigint }>
+}
+
+function hasGetBlock(client: Client): client is ClientWithGetBlock {
+  return (
+    'getBlock' in client && typeof (client as Record<'getBlock', unknown>).getBlock === 'function'
+  )
+}
+
+/**
+ * Header of the block the aggregate is pinned to: `blockNumber`, or the latest block.
+ *
+ * `blockAndAggregate`'s own block number and hash are not usable as block metadata:
+ * its hash is `blockhash(block.number)`, which is always zero, and on Arbitrum
+ * chains (Arbitrum One, Robinhood Chain) `block.number` is the parent chain's
+ * block number, not the number `eth_call` and `eth_getBlockByNumber` use.
+ */
+async function readBlockHeader(client: Client, blockNumber?: bigint): Promise<BlockMeta> {
+  const parameters = { blockNumber, includeTransactions: false as const }
+  const block = hasGetBlock(client)
+    ? await client.getBlock(parameters)
+    : await getBlock(client, parameters)
+  if (block.number === null || block.hash === null) {
+    throw new PanopticError('eth_getBlockByNumber returned a block without a number or hash')
+  }
+  return { blockNumber: block.number, blockHash: block.hash, blockTimestamp: block.timestamp }
 }
 
 function requireResult(
@@ -62,23 +95,14 @@ export async function readBlockAndAggregate({
   calls: readonly MulticallBlockCall[]
   blockNumber?: bigint
 }): Promise<{ _meta: BlockMeta; results: readonly MulticallBlockResult[] }> {
-  const aggregateCalls = [
-    ...calls,
-    {
-      target: MULTICALL3_ADDRESS,
-      callData: encodeFunctionData({
-        abi: Multicall3Abi,
-        functionName: 'getCurrentBlockTimestamp',
-      }),
-    },
-  ]
+  const _meta = await readBlockHeader(client, blockNumber)
 
   const data = encodeFunctionData({
     abi: Multicall3Abi,
     functionName: 'blockAndAggregate',
-    args: [aggregateCalls],
+    args: [calls],
   })
-  const parameters = { to: MULTICALL3_ADDRESS, data, blockNumber }
+  const parameters = { to: MULTICALL3_ADDRESS, data, blockNumber: blockNumber ?? _meta.blockNumber }
   const response = hasCall(client) ? await client.call(parameters) : await call(client, parameters)
 
   if (response.data === undefined) {
@@ -89,28 +113,14 @@ export async function readBlockAndAggregate({
     functionName: 'blockAndAggregate',
     data: response.data,
   })
-  const [aggregateBlockNumber, blockHash, rawResults] = aggregateResult as readonly [
+  const [, , rawResults] = aggregateResult as readonly [
     bigint,
     Hex,
     readonly MulticallBlockResult[],
   ]
-  const timestampResult = requireReturnData(
-    rawResults,
-    calls.length,
-    'Multicall3.getCurrentBlockTimestamp',
-  )
-  const blockTimestamp = decodeFunctionResult({
-    abi: Multicall3Abi,
-    functionName: 'getCurrentBlockTimestamp',
-    data: timestampResult,
-  })
 
   return {
-    _meta: {
-      blockNumber: aggregateBlockNumber,
-      blockHash,
-      blockTimestamp,
-    },
+    _meta,
     results: rawResults.slice(0, calls.length),
   }
 }
