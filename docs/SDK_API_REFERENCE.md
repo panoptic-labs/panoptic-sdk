@@ -139,6 +139,21 @@ All return `Promise<SimulationResult<T>>` — either `{ success: true, data, gas
 
 ---
 
+## Direct SFPM (`sfpmLp/`, `sfpmSwap/`)
+
+Uniswap v3 only. See [SFPM_DIRECT.md](SFPM_DIRECT.md) for fee attribution, the fee-collection flow, slippage limits, and v4 status.
+
+| Function | Purpose |
+| --- | --- |
+| `buildSfpmLpTokenId` / `decodeSfpmLpLegs` | Token ID for 1-4 liquidity-adding ranges, and back |
+| `getSfpmLpPosition` | Account balance, per-range liquidity, chunk-level and token-ID-level pending fees |
+| `prepareSfpmLpCall` | Calldata for increase / decrease / close / collect |
+| `simulateSfpmLp` | Net token flows, fees paid out, final tick |
+| `createSfpmLpPosition`, `increaseSfpmLpPosition`, `decreaseSfpmLpPosition`, `closeSfpmLpPosition`, `collectSfpmLpFees` | Writes |
+| `fetchSfpmV3PoolId` / `ensureSfpmV3PoolInitialized` | Resolve or register the SFPM poolId |
+| `buildSfpmSwapPlan` / `buildSfpmSwapCalldata` / `quoteSfpmSwap` / `executeSfpmSwap` | Atomic mint + burn swap: plan, calldata, quote, send |
+| `simulateSFPMMint` / `simulateSFPMBurn` | Raw SFPM simulations as `account` (or as a PanopticPool via `poolAddress`) |
+
 ## TokenId Encoding/Decoding (`tokenId/`)
 
 | Function | Description |

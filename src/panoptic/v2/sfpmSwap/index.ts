@@ -11,6 +11,7 @@
  * @module v2/sfpmSwap
  */
 export { type SfpmSwapCalldata, buildSfpmSwapCalldata } from './calldata'
+export { type ExecuteSfpmSwapParams, executeSfpmSwap } from './execute'
 export {
   type EnsureSfpmV3PoolInitializedParams,
   type EnsureSfpmV3PoolInitializedResult,

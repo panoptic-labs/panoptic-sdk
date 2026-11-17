@@ -2,6 +2,7 @@ import { hashKey } from '@tanstack/react-query'
 import type { Address } from 'viem'
 import { describe, expect, it } from 'vitest'
 
+import { getParamsCacheKey } from './cacheScopes'
 import { mutationEffects } from './mutationEffects'
 import { queryKeys } from './queryKeys'
 
@@ -323,5 +324,23 @@ describe('mutationEffects', () => {
 
       expect(keys.some((k) => k.includes('position') && k.includes(tokenId.toString()))).toBe(true)
     })
+  })
+})
+
+describe('getParamsCacheKey', () => {
+  it('keeps every input field and serializes nested bigints as strings', () => {
+    const params = {
+      tokenId: 2n ** 200n,
+      tickLimitLow: -100n,
+      action: { kind: 'decrease', positionSize: 5n },
+      account: '0x3333333333333333333333333333333333333333',
+    }
+    const key = getParamsCacheKey(params)
+
+    expect(key).toBe(
+      `{"tokenId":"${2n ** 200n}","tickLimitLow":"-100","action":{"kind":"decrease","positionSize":"5"},"account":"0x3333333333333333333333333333333333333333"}`,
+    )
+    expect(() => hashKey(['panoptic-v2', key])).not.toThrow()
+    expect(getParamsCacheKey(undefined)).toBeUndefined()
   })
 })

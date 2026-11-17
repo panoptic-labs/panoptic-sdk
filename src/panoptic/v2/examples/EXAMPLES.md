@@ -20,6 +20,8 @@ It is intentionally high-level so individual example READMEs can focus on implem
 - `07-chunk-tracking`: Scan/track chunks and inspect spread dynamics.
 - `08-pending-positions`: Optimistic position state before confirmation.
 - `09-reorg-handling`: Detect and recover from chain reorganizations.
+- `10-sfpm-direct-lp`: Hold Uniswap v3 liquidity directly through the SFPM: create, collect fees, decrease, close.
+- `11-sfpm-direct-swap`: Swap in a Uniswap v3 pool through the SFPM (exact-in/exact-out, both directions).
 
 ## Intermediate Examples
 

@@ -222,8 +222,11 @@ export {
 
 // Safe mode
 export {
+  type GetGuardianLockAuthorityParams,
   type GetGuardianUnlockStateParams,
+  type GuardianLockAuthority,
   type GuardianUnlockState,
+  getGuardianLockAuthority,
   getGuardianUnlockState,
 } from './guardian'
 export {

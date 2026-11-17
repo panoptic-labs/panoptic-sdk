@@ -11,9 +11,12 @@ import {
   buildEarnCoveredCallTokenId,
   buildUpfrontCoveredCallTokenId,
   computeLoanStrikeForNotional,
+  COVERED_CALL_CREDIT_RATIO,
   estimateCoveredCallPremium,
+  findCoveredCallTokenIds,
   getCoveredCallAdvance,
   getCoveredCallOutcome,
+  hasCoveredCallFingerprint,
   isCoveredCallTokenId,
   isEarnCoveredCallTokenId,
   isUpfrontCoveredCallTokenId,
@@ -335,5 +338,101 @@ describe('upfront covered call', () => {
     expect(
       isUpfrontCoveredCallTokenId(buildCoveredCallTokenId({ ...args, loanStrike: 199930n })),
     ).toBe(false)
+  })
+
+  it.each([0n, 1n] as const)(
+    'fingerprints the credit and keeps the ratio-1 notional for asset %s',
+    (assetIdx) => {
+      const { sign, ...args } = market(assetIdx)
+      const currentTick = args.strike + sign * 800n
+      const built = buildUpfrontCoveredCallTokenId({ ...args, positionSize: size, currentTick })
+      const credit = decodeTokenId(built.tokenId).legs.find((leg) => leg.width === 0n)
+      const legacyNotional =
+        getCoveredCallAdvance(
+          -getLegTokenInventory(
+            {
+              asset: assetIdx,
+              optionRatio: 1n,
+              isLong: false,
+              tokenType: assetIdx,
+              strike: args.strike,
+              width: args.width,
+            },
+            currentTick,
+            size,
+            args.tickSpacing,
+            assetIdx,
+          ),
+          currentTick,
+          assetIdx,
+        ) -
+        getLegTokenInventory(
+          {
+            asset: assetIdx,
+            optionRatio: 1n,
+            isLong: false,
+            tokenType: assetIdx,
+            strike: args.strike,
+            width: args.width,
+          },
+          currentTick,
+          size,
+          args.tickSpacing,
+          assetIdx === 0n ? 1n : 0n,
+        )
+      const legacyStrike = computeLoanStrikeForNotional({
+        positionSize: size,
+        targetNotional: legacyNotional,
+        assetIdx,
+      })
+
+      expect(credit?.optionRatio).toBe(COVERED_CALL_CREDIT_RATIO)
+      expect(hasCoveredCallFingerprint(built.tokenId)).toBe(true)
+      expect(built.creditStrike).not.toBe(legacyStrike)
+      expect(built.upfrontQuote).toBeLessThanOrEqual(legacyNotional)
+      // One tick of strike rounding moves the notional by at most one basis point.
+      expect((legacyNotional - built.upfrontQuote) * 10_000n).toBeLessThanOrEqual(legacyNotional)
+    },
+  )
+})
+
+describe('covered call fingerprint', () => {
+  const poolId = 0x000a0888e6a0c2ddn
+  const call = { asset: 1n, optionRatio: 1n, isLong: false, strike: 199710n, width: 240n }
+
+  it('ignores credits at other ratios and positions without credits', () => {
+    const legacy = createTokenIdBuilder(poolId)
+      .addCall(call)
+      .addCredit({ asset: 1n, tokenType: 0n, strike: 199930n })
+      .build()
+    const loanAtRatio = createTokenIdBuilder(poolId)
+      .addCall(call)
+      .addLoan({
+        asset: 1n,
+        tokenType: 0n,
+        strike: 199930n,
+        optionRatio: COVERED_CALL_CREDIT_RATIO,
+      })
+      .build()
+    expect(hasCoveredCallFingerprint(legacy)).toBe(false)
+    expect(hasCoveredCallFingerprint(loanAtRatio)).toBe(false)
+    expect(hasCoveredCallFingerprint(createTokenIdBuilder(poolId).addCall(call).build())).toBe(
+      false,
+    )
+  })
+
+  it('flags only the fingerprinted ids in a positionIdList', () => {
+    const fingerprinted = createTokenIdBuilder(poolId)
+      .addCall(call)
+      .addCredit({
+        asset: 1n,
+        tokenType: 0n,
+        strike: 244817n,
+        optionRatio: COVERED_CALL_CREDIT_RATIO,
+      })
+      .build()
+    const plain = createTokenIdBuilder(poolId).addCall(call).build()
+    expect(findCoveredCallTokenIds([plain, fingerprinted])).toEqual(new Set([fingerprinted]))
+    expect(isUpfrontCoveredCallTokenId(fingerprinted)).toBe(true)
   })
 })

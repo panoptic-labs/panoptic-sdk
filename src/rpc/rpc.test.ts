@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getAlchemyRpcUrl,
   getAlchemyWsRpcUrl,
+  getPrivateTxEndpoint,
   ponderRpc,
   redactRpcSecrets,
   resolveRpcEndpoints,
@@ -306,5 +307,12 @@ describe('redactRpcSecrets', () => {
     expect(out).toContain('https://eth-mainnet.g.alchemy.com/<redacted>')
     expect(out).toContain('https://mainnet.infura.io/<redacted>')
     expect(out).toContain('x-api-key: <redacted>')
+  })
+})
+
+describe('getPrivateTxEndpoint', () => {
+  it('serves mainnet through Flashbots Protect and nothing elsewhere', () => {
+    expect(getPrivateTxEndpoint(1)).toBe('https://rpc.flashbots.net/fast')
+    expect(getPrivateTxEndpoint(4663)).toBeUndefined()
   })
 })

@@ -60,6 +60,14 @@ export function decodeOraclePack(oraclePack: bigint, blockTimestamp: bigint): De
   }
 }
 
+/**
+ * True when the oracle's stored `epoch` is the one containing `blockTimestamp`;
+ * `pokeOracle()` is then a no-op until the next 64-second epoch.
+ */
+export function isOracleUpdatedThisEpoch(epoch: bigint, blockTimestamp: bigint): boolean {
+  return epoch === oracleEpochAt(blockTimestamp)
+}
+
 /** Return the contract's modulo-2^24 64-second epoch for a block timestamp. */
 export function oracleEpochAt(timestamp: bigint): bigint {
   return (timestamp / ORACLE_EPOCH_SECONDS) & ORACLE_EPOCH_MASK

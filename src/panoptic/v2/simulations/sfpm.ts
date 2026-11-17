@@ -2,8 +2,8 @@
  * SFPM simulation functions for the Panoptic v2 SDK.
  *
  * These simulate `mintTokenizedPosition` and `burnTokenizedPosition` on the
- * SemiFungiblePositionManager, called with `account: poolAddress` (the pool
- * is the caller in the actual protocol flow).
+ * SemiFungiblePositionManager as a given caller: a PanopticPool in the
+ * protocol flow, or any account that uses the SFPM directly.
  *
  * @module v2/simulations/sfpm
  */
@@ -51,16 +51,28 @@ export function encodeV3PoolKeyBytes(v3PoolAddress: Address): Hex {
   return encodeAbiParameters([{ type: 'address' }], [v3PoolAddress])
 }
 
+/** Who calls the SFPM in the simulation. */
+type SFPMCaller =
+  | {
+      /** PanopticPool address, used as the caller unless `account` is given. */
+      poolAddress: Address
+      /** Explicit caller; takes precedence over `poolAddress`. */
+      account?: Address
+    }
+  | {
+      poolAddress?: undefined
+      /** Caller: the account that owns the liquidity and moves the tokens. */
+      account: Address
+    }
+
 /**
  * Parameters for simulating an SFPM mint or burn.
  */
-export interface SimulateSFPMParams {
+export type SimulateSFPMParams = SFPMCaller & {
   /** Public client */
   client: PublicClient
   /** SemiFungiblePositionManager address */
   sfpmAddress: Address
-  /** PanopticPool address (used as `account` — the pool is the caller) */
-  poolAddress: Address
   /** Encoded pool key (bytes) */
   poolKey: Hex
   /** TokenId to mint/burn */
@@ -87,16 +99,8 @@ export type SFPMSimulationResult = readonly [
  * @returns The result tuple: [collectedAmounts[4], totalSwapped, newTick]
  */
 export async function simulateSFPMMint(params: SimulateSFPMParams): Promise<SFPMSimulationResult> {
-  const {
-    client,
-    sfpmAddress,
-    poolAddress,
-    poolKey,
-    tokenId,
-    positionSize,
-    tickLimitLow,
-    tickLimitHigh,
-  } = params
+  const { client, sfpmAddress, poolKey, tokenId, positionSize, tickLimitLow, tickLimitHigh } =
+    params
 
   const { result } = await client.simulateContract({
     address: sfpmAddress,
@@ -109,7 +113,7 @@ export async function simulateSFPMMint(params: SimulateSFPMParams): Promise<SFPM
       tickLimitLow,
       tickLimitHigh,
     ],
-    account: poolAddress,
+    account: params.account ?? params.poolAddress,
   })
 
   return result
@@ -122,16 +126,8 @@ export async function simulateSFPMMint(params: SimulateSFPMParams): Promise<SFPM
  * @returns The result tuple: [collectedAmounts[4], totalSwapped, newTick]
  */
 export async function simulateSFPMBurn(params: SimulateSFPMParams): Promise<SFPMSimulationResult> {
-  const {
-    client,
-    sfpmAddress,
-    poolAddress,
-    poolKey,
-    tokenId,
-    positionSize,
-    tickLimitLow,
-    tickLimitHigh,
-  } = params
+  const { client, sfpmAddress, poolKey, tokenId, positionSize, tickLimitLow, tickLimitHigh } =
+    params
 
   const { result } = await client.simulateContract({
     address: sfpmAddress,
@@ -144,7 +140,7 @@ export async function simulateSFPMBurn(params: SimulateSFPMParams): Promise<SFPM
       tickLimitLow,
       tickLimitHigh,
     ],
-    account: poolAddress,
+    account: params.account ?? params.poolAddress,
   })
 
   return result

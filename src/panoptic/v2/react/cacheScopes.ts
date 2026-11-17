@@ -30,6 +30,13 @@ export function getAtTickCacheKey(atTick?: bigint): string {
   return atTick === undefined ? 'latest' : atTick.toString()
 }
 
+/** Every field of a hook input as one JSON-serializable key part, with bigints as strings. */
+export function getParamsCacheKey(params: unknown): string | undefined {
+  return JSON.stringify(params, (_key, value: unknown) =>
+    typeof value === 'bigint' ? value.toString() : value,
+  )
+}
+
 /** Preserve position order while making the query key JSON-serializable. */
 export function getPositionIdsCacheKey(positionIds: readonly bigint[] = []): string {
   return positionIds.map(String).join(',')

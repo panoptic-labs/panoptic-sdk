@@ -124,3 +124,60 @@ export async function getGuardianUnlockState(
     _meta,
   }
 }
+
+export interface GetGuardianLockAuthorityParams {
+  client: PublicClient
+  poolAddress: Address
+  /** Account that would call `lockPoolAsBuilder` */
+  account: Address
+  builderCode: bigint
+  blockNumber?: bigint
+}
+
+export interface GuardianLockAuthority {
+  guardianAddress: Address
+  /** `account` administers the builder wallet `builderCode` resolves to on the pool's RiskEngine */
+  isBuilderAdmin: boolean
+  /** The guardian admin revoked `account`'s lock authority */
+  revoked: boolean
+  /** `account` can call `lockPoolAsBuilder(poolAddress, builderCode)` */
+  canLock: boolean
+}
+
+/** Resolve the pool's guardian and whether `account` may lock the pool with `builderCode`. */
+export async function getGuardianLockAuthority(
+  params: GetGuardianLockAuthorityParams,
+): Promise<GuardianLockAuthority> {
+  const { client, poolAddress, account, builderCode, blockNumber } = params
+  const riskEngineAddress = await client.readContract({
+    address: poolAddress,
+    abi: panopticPoolV2Abi,
+    functionName: 'riskEngine',
+    blockNumber,
+  })
+  const guardianAddress = await client.readContract({
+    address: riskEngineAddress,
+    abi: riskEngineAbi,
+    functionName: 'GUARDIAN',
+    blockNumber,
+  })
+  const [isBuilderAdmin, revoked] = await client.multicall({
+    contracts: [
+      {
+        address: guardianAddress,
+        abi: panopticGuardianAbi,
+        functionName: 'isBuilderAdmin',
+        args: [account, poolAddress, builderCode],
+      },
+      {
+        address: guardianAddress,
+        abi: panopticGuardianAbi,
+        functionName: 'builderAdminRevoked',
+        args: [account],
+      },
+    ],
+    blockNumber,
+    allowFailure: false,
+  })
+  return { guardianAddress, isBuilderAdmin, revoked, canLock: isBuilderAdmin && !revoked }
+}

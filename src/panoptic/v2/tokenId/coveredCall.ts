@@ -8,6 +8,9 @@ import { decodeTokenId } from './decode'
 
 const QuoteDecimal = Decimal.clone({ precision: 80 })
 
+/** Credit-leg optionRatio that fingerprints covered calls; the strike is shifted to keep notional. */
+export const COVERED_CALL_CREDIT_RATIO = 89n
+
 export function computeLoanStrikeForNotional({
   positionSize,
   targetNotional,
@@ -123,7 +126,12 @@ export function buildUpfrontCoveredCallTokenId({
   const assetSurplus = -getLegTokenInventory(call, currentTick, positionSize, tickSpacing, assetIdx)
   const quoteOwed = getLegTokenInventory(call, currentTick, positionSize, tickSpacing, quoteIdx)
   const targetNotional = getCoveredCallAdvance(assetSurplus, currentTick, assetIdx) - quoteOwed
-  const creditStrike = computeLoanStrikeForNotional({ positionSize, targetNotional, assetIdx })
+  const creditSize = positionSize * COVERED_CALL_CREDIT_RATIO
+  const creditStrike = computeLoanStrikeForNotional({
+    positionSize: creditSize,
+    targetNotional,
+    assetIdx,
+  })
   if (creditStrike === undefined)
     throw new RangeError(
       'Upfront covered calls cannot be minted while the call is fully out of the money',
@@ -131,10 +139,15 @@ export function buildUpfrontCoveredCallTokenId({
   return {
     tokenId: createTokenIdBuilder(poolId)
       .addCall({ asset: assetIdx, optionRatio: 1n, isLong: false, strike, width })
-      .addCredit({ asset: assetIdx, tokenType: quoteIdx, strike: creditStrike })
+      .addCredit({
+        asset: assetIdx,
+        tokenType: quoteIdx,
+        strike: creditStrike,
+        optionRatio: COVERED_CALL_CREDIT_RATIO,
+      })
       .build(),
     creditStrike,
-    upfrontQuote: getCoveredCallAdvance(positionSize, creditStrike, assetIdx),
+    upfrontQuote: getCoveredCallAdvance(creditSize, creditStrike, assetIdx),
   }
 }
 
@@ -152,8 +165,20 @@ export function isUpfrontCoveredCallTokenId(tokenId: bigint): boolean {
     credit.isLong &&
     credit.asset === call.asset &&
     credit.tokenType !== call.asset &&
-    credit.optionRatio === 1n
+    (credit.optionRatio === 1n || credit.optionRatio === COVERED_CALL_CREDIT_RATIO)
   )
+}
+
+/** True when the token carries the credit-leg optionRatio that only covered call builders mint. */
+export function hasCoveredCallFingerprint(tokenId: bigint): boolean {
+  return decodeTokenId(tokenId).legs.some(
+    (leg) => leg.width === 0n && leg.isLong && leg.optionRatio === COVERED_CALL_CREDIT_RATIO,
+  )
+}
+
+/** Fingerprinted covered calls in a positionIdList; ratio-1 credits minted earlier are excluded. */
+export function findCoveredCallTokenIds(positionIdList: readonly bigint[]): Set<bigint> {
+  return new Set(positionIdList.filter(hasCoveredCallFingerprint))
 }
 
 type FundingTracker = Pick<CollateralTracker, 'totalAssets' | 'insideAMM' | 'symbol' | 'decimals'>

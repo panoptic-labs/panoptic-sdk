@@ -87,6 +87,7 @@ import { optimizeTokenIdRiskPartners } from '../../reads/queryUtils'
 import type { StreamiaLeg } from '../../reads/streamiaHistory'
 import { getStreamiaHistory } from '../../reads/streamiaHistory'
 import { getUniswapFeeHistory } from '../../reads/uniswapFeeHistory'
+import { type GetSfpmLpPositionParams, getSfpmLpPosition } from '../../sfpmLp'
 import {
   getChunkSpreads,
   getClosedPositions,
@@ -102,6 +103,7 @@ import { previewBorrow } from '../../writes/lending'
 import {
   getAtTickCacheKey,
   getClientCacheScopeKey,
+  getParamsCacheKey,
   getPositionIdsCacheKey,
   getStorageCacheScopeKey,
 } from '../cacheScopes'
@@ -2407,6 +2409,33 @@ export function useEnforcedTickLimits(
     queryFn: () => {
       if (!params) throw new PanopticValidationError('params is required')
       return getEnforcedTickLimits({ client: publicClient, ...params })
+    },
+    enabled: (options?.enabled ?? true) && params !== undefined,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+export function useSfpmLpPosition(
+  params?: OmitSfpmClient<GetSfpmLpPositionParams>,
+  options?: QueryOptions,
+) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sfpmLp',
+      'position',
+      params?.sfpmAddress,
+      params?.account,
+      params?.tokenId?.toString(),
+      getClientCacheScopeKey(publicClient, clientScope),
+      getParamsCacheKey(params),
+    ] as const,
+    queryFn: () => {
+      if (!params) throw new PanopticValidationError('params is required')
+      return getSfpmLpPosition({ client: publicClient, ...params })
     },
     enabled: (options?.enabled ?? true) && params !== undefined,
     refetchInterval: options?.refetchInterval,

@@ -16,7 +16,13 @@ export {
 } from './reads/closedCallProceeds'
 export { type LpFundingPolicy, assertLpPositionFunded } from './reads/lpFunding'
 export { getExecutableLpMaxSize } from './reads/lpMaxSize'
-export type { DecodedOraclePack, OracleTiming } from './utils'
+export type {
+  DecodedOraclePack,
+  OracleGap,
+  OracleLag,
+  OracleReference,
+  OracleTiming,
+} from './utils'
 export type {
   OracleEmaPeriods,
   OracleRiskParameters,
@@ -29,6 +35,8 @@ export {
   decodeOracleRiskParameters,
   decodeOracleTiming,
   diagnoseOracleSafeMode,
+  getOracleLag,
+  isOracleUpdatedThisEpoch,
   MAX_TICK,
   MAX_TRACKED_CHUNKS,
   MIN_TICK,
@@ -253,6 +261,7 @@ export {
 export type {
   EnsureSfpmV3PoolInitializedParams,
   EnsureSfpmV3PoolInitializedResult,
+  ExecuteSfpmSwapParams,
   FetchSfpmV3PoolIdParams,
   QuoteSfpmSwapParams,
   SfpmSwapCalldata,
@@ -265,10 +274,52 @@ export {
   buildSfpmSwapCalldata,
   buildSfpmSwapPlan,
   ensureSfpmV3PoolInitialized,
+  executeSfpmSwap,
   fetchSfpmV3PoolId,
   quoteSfpmSwap,
   slippageBpsToTickDistance,
 } from './sfpmSwap'
+
+// ============================================================================
+// SFPM Direct LP (Uniswap v3)
+// ============================================================================
+export type {
+  BuildSfpmLpTokenIdParams,
+  CloseSfpmLpPositionParams,
+  CollectSfpmLpFeesParams,
+  CreateSfpmLpPositionParams,
+  GetSfpmLpPositionParams,
+  PrepareSfpmLpCallParams,
+  ResizeSfpmLpPositionParams,
+  SfpmLpAction,
+  SfpmLpBurnPlan,
+  SfpmLpBurnTxResult,
+  SfpmLpCall,
+  SfpmLpChunk,
+  SfpmLpLeg,
+  SfpmLpPosition,
+  SfpmLpPositionLeg,
+  SfpmLpRange,
+  SfpmLpSimulation,
+  SfpmLpStep,
+  SfpmLpTarget,
+  SimulateSfpmLpParams,
+} from './sfpmLp'
+export {
+  buildSfpmLpTokenId,
+  closeSfpmLpPosition,
+  collectSfpmLpFees,
+  createSfpmLpPosition,
+  decodeSfpmLpLegs,
+  decreaseSfpmLpPosition,
+  getSfpmLpPosition,
+  increaseSfpmLpPosition,
+  minSfpmLpPositionSize,
+  planSfpmLpBurn,
+  prepareSfpmLpCall,
+  sfpmLpLegLiquidity,
+  simulateSfpmLp,
+} from './sfpmLp'
 // v3 QuoterV2 exact-in quote — used by the hedger to price the off-venue swap
 // without the Safe holding the input token (unlike quoteSfpmSwap, which simulates
 // the SFPM multicall and needs the caller funded).
@@ -341,6 +392,7 @@ export type {
   GetEnforcedTickLimitsParams,
   GetForfeitablePremiumParams,
   // Guardian unlock params + state
+  GetGuardianLockAuthorityParams,
   GetGuardianUnlockStateParams,
   GetInterestStateParams,
   // Collateral estimation params/result
@@ -376,6 +428,7 @@ export type {
   // Safe mode params
   GetSafeModeParams,
   GetUtilizationParams,
+  GuardianLockAuthority,
   GuardianUnlockState,
   InterestShortfall,
   InterestState,
@@ -461,6 +514,7 @@ export {
   getEnforcedTickLimits,
   getForfeitablePremium,
   // Guardian unlock state
+  getGuardianLockAuthority,
   getGuardianUnlockState,
   getInterestShortfall,
   getInterestState,
@@ -733,6 +787,7 @@ export type {
   ExecuteSettleSequenceParams,
   ForceExerciseParams,
   LiquidateParams,
+  LockPoolAsBuilderParams,
   MintParams,
   OpenPositionParams,
   PokeOracleParams,
@@ -809,13 +864,14 @@ export {
   // Liquidation
   liquidate,
   liquidateAndWait,
+  // Oracle
+  lockPoolAsBuilder,
   mint,
   mintAndWait,
   openPosition,
   openPositionAndWait,
   // Settlement
   orderListForSettle,
-  // Oracle
   pokeOracle,
   pokeOracleAndWait,
   previewBorrow,
@@ -1237,6 +1293,7 @@ export {
 } from '../../analytics/market-indicators'
 export {
   collateralTrackerV2Abi,
+  panopticGuardianAbi,
   panopticLiquidatorAbi,
   panopticPoolV2Abi,
   panopticQueryAbi,
@@ -1306,10 +1363,13 @@ export {
   buildEarnCoveredCallTokenId,
   buildUpfrontCoveredCallTokenId,
   computeLoanStrikeForNotional,
+  COVERED_CALL_CREDIT_RATIO,
   estimateCoveredCallPremium,
+  findCoveredCallTokenIds,
   getCoveredCallAdvance,
   getCoveredCallOutcome,
   getEarnCoveredCallLiquidity,
+  hasCoveredCallFingerprint,
   isCoveredCallTokenId,
   isEarnCoveredCallTokenId,
   isUpfrontCoveredCallTokenId,

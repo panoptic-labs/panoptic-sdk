@@ -73,6 +73,21 @@ export const RPC_PROVIDER_PRESETS: Readonly<Record<RpcProviderName, RpcProviderP
   },
 }
 
+// Flashbots Protect "fast" shares with every registered builder, so inclusion is as quick as the
+// public mempool while the transaction stays out of it.
+const privateTxEndpoints: Record<number, string> = {
+  1: 'https://rpc.flashbots.net/fast',
+}
+
+/**
+ * Keyless endpoint that accepts `eth_sendRawTransaction` and forwards it to block
+ * builders without the public mempool, or undefined when `chainId` has none.
+ * It serves no reads: sign against a regular endpoint, broadcast here.
+ */
+export function getPrivateTxEndpoint(chainId: number): string | undefined {
+  return privateTxEndpoints[chainId]
+}
+
 export function isRpcProviderName(name: string): name is RpcProviderName {
   return Object.prototype.hasOwnProperty.call(RPC_PROVIDER_PRESETS, name)
 }

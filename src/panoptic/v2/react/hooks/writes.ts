@@ -7,6 +7,19 @@ import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-q
 import type { Address, WalletClient } from 'viem'
 
 import {
+  type CloseSfpmLpPositionParams,
+  type CollectSfpmLpFeesParams,
+  type CreateSfpmLpPositionParams,
+  type ResizeSfpmLpPositionParams,
+  closeSfpmLpPosition,
+  collectSfpmLpFees,
+  createSfpmLpPosition,
+  decreaseSfpmLpPosition,
+  increaseSfpmLpPosition,
+} from '../../sfpmLp'
+import { type ExecuteSfpmSwapParams, executeSfpmSwap } from '../../sfpmSwap'
+import type { TxResult } from '../../types'
+import {
   type ApproveParams,
   type ApprovePoolParams,
   type BorrowParams,
@@ -846,4 +859,55 @@ export function useSwapExactIn(poolAddress: Address) {
       )
     },
   })
+}
+
+/** Wrap a direct-SFPM write as a mutation that refreshes direct-LP reads and simulations. */
+function useSfpmMutation<
+  TParams extends { client: unknown; walletClient: unknown },
+  TResult extends TxResult,
+>(write: (params: TParams) => Promise<TResult>) {
+  const { publicClient, walletClient, account } = usePanopticContext()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (params: Omit<TParams, 'client' | 'walletClient' | 'account'>) => {
+      const wallet = requireWallet({ walletClient, account })
+      // The injected fields complete TParams; TypeScript cannot prove that for a generic Omit.
+      return write({ client: publicClient, ...wallet, ...params } as unknown as TParams)
+    },
+    onSuccess: (tx) => {
+      const invalidate = () => {
+        for (const namespace of ['sfpmLp', 'sim']) {
+          void queryClient.invalidateQueries({ queryKey: [...queryKeys.all, namespace] })
+        }
+      }
+      invalidate()
+      // The mutation resolves at submission; on-chain state only changes once the receipt lands.
+      void tx.wait().then(invalidate, () => undefined)
+    },
+  })
+}
+
+export function useCreateSfpmLpPosition() {
+  return useSfpmMutation((params: CreateSfpmLpPositionParams) => createSfpmLpPosition(params))
+}
+
+export function useIncreaseSfpmLpPosition() {
+  return useSfpmMutation((params: ResizeSfpmLpPositionParams) => increaseSfpmLpPosition(params))
+}
+
+export function useDecreaseSfpmLpPosition() {
+  return useSfpmMutation((params: ResizeSfpmLpPositionParams) => decreaseSfpmLpPosition(params))
+}
+
+export function useCloseSfpmLpPosition() {
+  return useSfpmMutation((params: CloseSfpmLpPositionParams) => closeSfpmLpPosition(params))
+}
+
+export function useCollectSfpmLpFees() {
+  return useSfpmMutation((params: CollectSfpmLpFeesParams) => collectSfpmLpFees(params))
+}
+
+export function useExecuteSfpmSwap() {
+  return useSfpmMutation((params: ExecuteSfpmSwapParams) => executeSfpmSwap(params))
 }

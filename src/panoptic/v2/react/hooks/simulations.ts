@@ -6,6 +6,8 @@
 import { useQuery } from '@tanstack/react-query'
 import type { Address } from 'viem'
 
+import { type SimulateSfpmLpParams, simulateSfpmLp } from '../../sfpmLp'
+import { type QuoteSfpmSwapParams, quoteSfpmSwap } from '../../sfpmSwap'
 import {
   type SimulateBatchDispatchParams,
   type SimulateClosePositionParams,
@@ -39,11 +41,11 @@ import {
   simulateSwapExactOut,
   simulateWithdraw,
 } from '../../simulations'
-import { getClientCacheScopeKey } from '../cacheScopes'
+import { getClientCacheScopeKey, getParamsCacheKey } from '../cacheScopes'
 import { usePanopticContext } from '../provider'
 import { queryKeys } from '../queryKeys'
 
-type OmitClient<T> = Omit<T, 'client'>
+type OmitClient<T> = T extends unknown ? Omit<T, 'client'> : never
 type OmitClientAndPool<T> = Omit<T, 'client' | 'poolAddress'>
 
 export function useSimulateOpenPosition(
@@ -387,6 +389,50 @@ export function useSimulateSwapExactIn(
       params,
     ] as const,
     queryFn: () => simulateSwapExactIn({ client: publicClient, poolAddress, ...params! }),
+    enabled: params !== undefined,
+    staleTime: 0,
+  })
+}
+
+export function useSimulateSfpmLp(params?: OmitClient<SimulateSfpmLpParams>) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sim',
+      'sfpmLp',
+      params?.sfpmAddress,
+      params?.account,
+      params?.tokenId?.toString(),
+      getClientCacheScopeKey(publicClient, clientScope),
+      getParamsCacheKey(params),
+    ] as const,
+    queryFn: () => {
+      if (!params) throw new Error('params required for simulateSfpmLp')
+      return simulateSfpmLp({ client: publicClient, ...params })
+    },
+    enabled: params !== undefined,
+    staleTime: 0,
+  })
+}
+
+export function useQuoteSfpmSwap(params?: OmitClient<QuoteSfpmSwapParams>) {
+  const { publicClient, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sim',
+      'sfpmSwap',
+      params?.plan.sfpmAddress,
+      params?.account,
+      params?.plan.tokenId.toString(),
+      getClientCacheScopeKey(publicClient, clientScope),
+      getParamsCacheKey(params),
+    ] as const,
+    queryFn: () => {
+      if (!params) throw new Error('params required for quoteSfpmSwap')
+      return quoteSfpmSwap({ client: publicClient, ...params })
+    },
     enabled: params !== undefined,
     staleTime: 0,
   })

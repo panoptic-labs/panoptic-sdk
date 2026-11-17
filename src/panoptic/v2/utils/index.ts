@@ -32,8 +32,12 @@ export {
   type OracleTiming,
   decodeOraclePack,
   decodeOracleTiming,
+  isOracleUpdatedThisEpoch,
   oracleEpochAt,
 } from './oraclePack'
+
+// Oracle lag behind the live tick
+export { type OracleGap, type OracleLag, type OracleReference, getOracleLag } from './oracleLag'
 
 // SafeMode oracle diagnosis
 export {

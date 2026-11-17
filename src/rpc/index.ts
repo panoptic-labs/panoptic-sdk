@@ -4,6 +4,7 @@ export {
   type RpcProviderPreset,
   getAlchemyRpcUrl,
   getAlchemyWsRpcUrl,
+  getPrivateTxEndpoint,
   RPC_PROVIDER_PRESETS,
 } from './providers'
 export { redactRpcSecrets } from './redact'

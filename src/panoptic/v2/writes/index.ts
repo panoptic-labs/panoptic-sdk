@@ -114,6 +114,7 @@ export {
 } from './settle'
 
 // Oracle
+export { type LockPoolAsBuilderParams, lockPoolAsBuilder } from './lockPoolAsBuilder'
 export { type PokeOracleParams, pokeOracle, pokeOracleAndWait } from './pokeOracle'
 
 // Factory deployment

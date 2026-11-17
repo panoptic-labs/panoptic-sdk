@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { decodeOraclePack, decodeOracleTiming, oracleEpochAt } from './oraclePack'
+import {
+  decodeOraclePack,
+  decodeOracleTiming,
+  isOracleUpdatedThisEpoch,
+  oracleEpochAt,
+} from './oraclePack'
 
 const MASK_22 = (1n << 22n) - 1n
 
@@ -69,5 +74,20 @@ describe('OraclePack decoding', () => {
       epoch: (1n << 24n) - 1n,
       timestamp: (1n << 30n) - 64n,
     })
+  })
+})
+
+describe('isOracleUpdatedThisEpoch', () => {
+  const inEpoch1000 = 1_000n * 64n + 10n
+
+  it('is true only while the oracle epoch matches the block epoch', () => {
+    expect(isOracleUpdatedThisEpoch(1_000n, inEpoch1000)).toBe(true)
+    expect(isOracleUpdatedThisEpoch(999n, inEpoch1000)).toBe(false)
+  })
+
+  it('treats the 24-bit wraparound as a new epoch', () => {
+    const wrapped = (1n << 24n) * 64n + 1n
+    expect(isOracleUpdatedThisEpoch((1n << 24n) - 1n, wrapped)).toBe(false)
+    expect(isOracleUpdatedThisEpoch(0n, wrapped)).toBe(true)
   })
 })
