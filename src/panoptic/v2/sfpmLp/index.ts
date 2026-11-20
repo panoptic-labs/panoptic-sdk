@@ -47,5 +47,7 @@ export {
   type SfpmLpChunk,
   type SfpmLpPosition,
   type SfpmLpPositionLeg,
+  type SfpmLpSizeChange,
+  type SfpmLpSizeChangeAtTick,
   getSfpmLpPosition,
 } from './reads'

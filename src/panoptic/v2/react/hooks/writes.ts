@@ -4,8 +4,10 @@
  */
 
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { Address, WalletClient } from 'viem'
+import { type Address, type WalletClient, isAddressEqual } from 'viem'
 
+import { PanopticValidationError } from '../../errors'
+import { type ExecuteSfpmCoveredCallParams, executeSfpmCoveredCall } from '../../sfpmCoveredCall'
 import {
   type CloseSfpmLpPositionParams,
   type CollectSfpmLpFeesParams,
@@ -17,7 +19,12 @@ import {
   decreaseSfpmLpPosition,
   increaseSfpmLpPosition,
 } from '../../sfpmLp'
-import { type ExecuteSfpmSwapParams, executeSfpmSwap } from '../../sfpmSwap'
+import {
+  type EnsureSfpmV3PoolInitializedParams,
+  type ExecuteSfpmSwapParams,
+  ensureSfpmV3PoolInitialized,
+  executeSfpmSwap,
+} from '../../sfpmSwap'
 import type { TxResult } from '../../types'
 import {
   type ApproveParams,
@@ -870,8 +877,19 @@ function useSfpmMutation<
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (params: Omit<TParams, 'client' | 'walletClient' | 'account'>) => {
+    mutationFn: ({
+      expectedAccount,
+      ...params
+    }: Omit<TParams, 'client' | 'walletClient' | 'account'> & {
+      /** Refuse to sign when the connected wallet is not this account. */
+      expectedAccount?: Address
+    }) => {
       const wallet = requireWallet({ walletClient, account })
+      if (expectedAccount !== undefined && !isAddressEqual(expectedAccount, wallet.account)) {
+        throw new PanopticValidationError(
+          `The connected wallet ${wallet.account} is not the expected account ${expectedAccount}`,
+        )
+      }
       // The injected fields complete TParams; TypeScript cannot prove that for a generic Omit.
       return write({ client: publicClient, ...wallet, ...params } as unknown as TParams)
     },
@@ -910,4 +928,30 @@ export function useCollectSfpmLpFees() {
 
 export function useExecuteSfpmSwap() {
   return useSfpmMutation((params: ExecuteSfpmSwapParams) => executeSfpmSwap(params))
+}
+
+export function useExecuteSfpmCoveredCall() {
+  return useSfpmMutation((params: ExecuteSfpmCoveredCallParams) => executeSfpmCoveredCall(params))
+}
+
+/** Register a Uniswap v3 pool on the SFPM if it is not registered yet. */
+export function useEnsureSfpmV3PoolInitialized() {
+  const { publicClient, walletClient, account } = usePanopticContext()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (
+      params: Omit<EnsureSfpmV3PoolInitializedParams, 'client' | 'wallet' | 'account'>,
+    ) => {
+      const wallet = requireWallet({ walletClient, account })
+      return ensureSfpmV3PoolInitialized({
+        client: publicClient,
+        wallet: wallet.walletClient,
+        account: wallet.account,
+        ...params,
+      })
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.all, 'sfpm'] })
+    },
+  })
 }

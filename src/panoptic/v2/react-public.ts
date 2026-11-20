@@ -61,13 +61,16 @@ export {
   useDeployNewPool as useDeployNewPoolHook,
   useDeposit as useDepositHook,
   useDispatch as useDispatchHook,
+  useEnsureSfpmV3PoolInitialized,
   // Hooks — reads
   useErc20Allowance,
+  useErc20Balance,
   useEstimateCollateralRequired,
   // Hooks — events
   useEventPoller,
   useEventSubscription,
   useExecuteSettleSequence,
+  useExecuteSfpmCoveredCall,
   useExecuteSfpmSwap,
   useFactoryConstructMetadata,
   useFactoryOwnerOf,
@@ -128,6 +131,7 @@ export {
   useSettleAccumulatedPremia as useSettleAccumulatedPremiaHook,
   useSettlePremiumFrom as useSettlePremiumFromHook,
   useSfpmLpPosition,
+  useSfpmV3PoolRegistration,
   // Hooks — simulations
   useSimulateBatchDispatch,
   useSimulateClosePosition,

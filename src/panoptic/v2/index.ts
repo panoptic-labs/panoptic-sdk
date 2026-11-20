@@ -256,6 +256,31 @@ export {
 } from './tokenId'
 
 // ============================================================================
+// SFPM Covered Calls
+// ============================================================================
+export type {
+  ExecuteSfpmCoveredCallParams,
+  PlanSfpmCoveredCallCloseParams,
+  PlanSfpmCoveredCallCollectParams,
+  PlanSfpmCoveredCallIncreaseParams,
+  PlanSfpmCoveredCallOpenParams,
+  SfpmCoveredCallCall,
+  SfpmCoveredCallClose,
+  SfpmCoveredCallCollect,
+  SfpmCoveredCallFlows,
+  SfpmCoveredCallOpen,
+  SimulateSfpmCoveredCallParams,
+} from './sfpmCoveredCall'
+export {
+  executeSfpmCoveredCall,
+  planSfpmCoveredCallClose,
+  planSfpmCoveredCallCollect,
+  planSfpmCoveredCallIncrease,
+  planSfpmCoveredCallOpen,
+  simulateSfpmCoveredCall,
+} from './sfpmCoveredCall'
+
+// ============================================================================
 // SFPM Off-Venue Swap
 // ============================================================================
 export type {
@@ -301,6 +326,8 @@ export type {
   SfpmLpPositionLeg,
   SfpmLpRange,
   SfpmLpSimulation,
+  SfpmLpSizeChange,
+  SfpmLpSizeChangeAtTick,
   SfpmLpStep,
   SfpmLpTarget,
   SimulateSfpmLpParams,
@@ -1380,3 +1407,13 @@ export {
   allocateCoveredCallCollateral,
   getEarnCollateralFunding,
 } from './tokenId/coveredCallPortfolio'
+export {
+  type CoveredCallResizeDispatch,
+  type CoveredCallResizeDispatchParams,
+  type DispatchTickLimits,
+  buildCoveredCallCollectDispatch,
+  buildCoveredCallIncreaseDispatch,
+  buildCoveredCallResizeDispatch,
+  coveredCallSiblingTokenId,
+} from './tokenId/coveredCallResize'
+export { type ResizeCoveredCallParams, resizeCoveredCall } from './writes/coveredCallResize'

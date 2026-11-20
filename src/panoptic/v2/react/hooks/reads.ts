@@ -88,6 +88,7 @@ import type { StreamiaLeg } from '../../reads/streamiaHistory'
 import { getStreamiaHistory } from '../../reads/streamiaHistory'
 import { getUniswapFeeHistory } from '../../reads/uniswapFeeHistory'
 import { type GetSfpmLpPositionParams, getSfpmLpPosition } from '../../sfpmLp'
+import { type FetchSfpmV3PoolIdParams, fetchSfpmV3PoolId } from '../../sfpmSwap'
 import {
   getChunkSpreads,
   getClosedPositions,
@@ -157,6 +158,37 @@ export function useErc20Allowance(
       token !== zeroAddress &&
       spender !== zeroAddress,
     staleTime: options?.staleTime ?? 0,
+  })
+}
+
+export function useErc20Balance(
+  token: Address,
+  owner: Address | undefined,
+  options?: QueryOptions,
+) {
+  const { publicClient, chainId, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'erc20Balance',
+      chainId,
+      token,
+      owner,
+      getClientCacheScopeKey(publicClient, clientScope),
+    ],
+    queryFn: () => {
+      if (!owner) throw new Error('Balance requires an owner')
+      return publicClient.readContract({
+        address: token,
+        abi: erc20Abi,
+        functionName: 'balanceOf',
+        args: [owner],
+      })
+    },
+    enabled: options?.enabled !== false && owner !== undefined && token !== zeroAddress,
+    staleTime: options?.staleTime ?? 0,
+    refetchInterval: options?.refetchInterval,
+    gcTime: options?.gcTime,
   })
 }
 
@@ -1884,7 +1916,7 @@ export function usePriceHistory(
       return getPriceHistory({ client: publicClient, blockNumbers, poolConfig })
     },
     enabled: (options?.enabled ?? true) && timeRange.points > 0,
-    staleTime: options?.staleTime ?? Infinity,
+    staleTime: options?.staleTime,
     gcTime: options?.gcTime ?? 60 * 60_000,
     refetchInterval: options?.refetchInterval ?? false,
     refetchOnWindowFocus: false,
@@ -1964,7 +1996,7 @@ export function useStreamiaHistory(
       })
     },
     enabled: (options?.enabled ?? true) && timeRange.points > 0,
-    staleTime: options?.staleTime ?? Infinity,
+    staleTime: options?.staleTime,
     gcTime: options?.gcTime ?? 60 * 60_000,
     refetchInterval: options?.refetchInterval ?? false,
     refetchOnWindowFocus: false,
@@ -2016,7 +2048,7 @@ export function useUniswapFeeHistory(
       return getUniswapFeeHistory({ client: publicClient, blockNumbers, legs, poolConfig })
     },
     enabled: (options?.enabled ?? true) && timeRange.points > 0 && legs.length > 0,
-    staleTime: options?.staleTime ?? Infinity,
+    staleTime: options?.staleTime,
     gcTime: options?.gcTime ?? 60 * 60_000,
     refetchInterval: options?.refetchInterval ?? false,
     refetchOnWindowFocus: false,
@@ -2155,7 +2187,7 @@ export function useResolveUniswapV4PoolKey(
       }),
     enabled: (options?.enabled ?? true) && !!poolManager && !!poolId,
     // PoolKey is immutable — cache forever within the session.
-    staleTime: options?.staleTime ?? Infinity,
+    staleTime: options?.staleTime,
     gcTime: options?.gcTime,
     refetchInterval: options?.refetchInterval,
   })
@@ -2409,6 +2441,43 @@ export function useEnforcedTickLimits(
     queryFn: () => {
       if (!params) throw new PanopticValidationError('params is required')
       return getEnforcedTickLimits({ client: publicClient, ...params })
+    },
+    enabled: (options?.enabled ?? true) && params !== undefined,
+    refetchInterval: options?.refetchInterval,
+    staleTime: options?.staleTime,
+    gcTime: options?.gcTime,
+  })
+}
+
+/** A Uniswap v3 pool's SFPM poolId, and whether the pool is registered under it yet. */
+export function useSfpmV3PoolRegistration(
+  params?: OmitSfpmClient<FetchSfpmV3PoolIdParams>,
+  options?: QueryOptions,
+) {
+  const { publicClient, chainId, clientScope } = usePanopticContext()
+  return useQuery({
+    queryKey: [
+      ...queryKeys.all,
+      'sfpm',
+      'poolRegistration',
+      chainId,
+      params?.sfpmAddress,
+      params?.token0,
+      params?.token1,
+      params?.fee,
+      params?.vegoid,
+      getClientCacheScopeKey(publicClient, clientScope),
+      getParamsCacheKey(params),
+    ] as const,
+    queryFn: async () => {
+      if (!params) throw new PanopticValidationError('params is required')
+      const poolId = await fetchSfpmV3PoolId({ client: publicClient, ...params })
+      const pool = await getUniswapV3PoolFromId({
+        client: publicClient,
+        sfpmAddress: params.sfpmAddress,
+        poolId,
+      })
+      return { poolId, registered: pool !== zeroAddress }
     },
     enabled: (options?.enabled ?? true) && params !== undefined,
     refetchInterval: options?.refetchInterval,

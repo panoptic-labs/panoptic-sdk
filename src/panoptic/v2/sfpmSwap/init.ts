@@ -42,6 +42,8 @@ export async function fetchSfpmV3PoolId(params: FetchSfpmV3PoolIdParams): Promis
 
 export interface EnsureSfpmV3PoolInitializedParams extends FetchSfpmV3PoolIdParams {
   wallet: WalletClient
+  /** Signer to send from; defaults to the wallet client's own account. */
+  account?: Address
   /** Expected underlying Uniswap v3 pool; if provided, the resolved id is verified against it. */
   expectedPool?: Address
 }
@@ -77,7 +79,7 @@ export async function ensureSfpmV3PoolInitialized(
   let initialized = false
   let resolved = registered
   if (getAddress(registered) === zeroAddress) {
-    const account = wallet.account
+    const account = params.account ?? wallet.account
     if (account === undefined) throw new PanopticError('wallet client has no account')
     const hash = await wallet.writeContract({
       account,
